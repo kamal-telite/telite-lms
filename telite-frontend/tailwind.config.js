@@ -1,0 +1,78 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./src/pages/LandingPage.jsx",
+    "./src/pages/PlatformAdminPage.jsx",
+    "./src/components/**/*.jsx"
+  ],
+  corePlugins: {
+    preflight: false, // Don't reset existing styles — the app uses vanilla CSS
+  },
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+        "h1": ["Inter", "sans-serif"],
+        "h2": ["Inter", "sans-serif"],
+        "h3": ["Inter", "sans-serif"],
+        "body-lg": ["Inter", "sans-serif"],
+        "body-md": ["Inter", "sans-serif"],
+        "data-mono": ["Space Grotesk", "monospace"],
+        "label-caps": ["Space Grotesk", "sans-serif"],
+      },
+      fontSize: {
+        "h1": ["48px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "700" }],
+        "h2": ["32px", { lineHeight: "1.3", letterSpacing: "-0.01em", fontWeight: "600" }],
+        "h3": ["24px", { lineHeight: "1.4", letterSpacing: "0em", fontWeight: "600" }],
+        "body-lg": ["18px", { lineHeight: "1.6", letterSpacing: "0em", fontWeight: "400" }],
+        "body-md": ["16px", { lineHeight: "1.5", letterSpacing: "0em", fontWeight: "400" }],
+        "data-mono": ["14px", { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "500" }],
+        "label-caps": ["12px", { lineHeight: "1.0", letterSpacing: "0.1em", fontWeight: "600" }],
+      },
+      spacing: {
+        "base": "4px",
+        "xs": "8px",
+        "sm": "16px",
+        "md": "24px",
+        "lg": "40px",
+        "xl": "64px",
+        "container-padding": "32px",
+        "grid-gutter": "24px",
+      },
+      colors: {
+        brand: {
+          DEFAULT: "#534AB7",
+          dark: "#3c3489",
+          light: "#EEEDFE",
+          border: "#AFA9EC",
+        },
+        "background": "#f8f9ff",
+        "on-background": "#0b1c30",
+        "surface": "#f8f9ff",
+        "on-surface": "#0b1c30",
+        "surface-variant": "#d3e4fe",
+        "on-surface-variant": "#464554",
+        "surface-container": "#e5eeff",
+        "surface-container-low": "#eff4ff",
+        "surface-container-lowest": "#ffffff",
+        "surface-container-high": "#dce9ff",
+        "surface-container-highest": "#d3e4fe",
+        "primary": "#4648d4",
+        "on-primary": "#ffffff",
+        "primary-container": "#6063ee",
+        "on-primary-container": "#fffbff",
+        "secondary": "#5b598c",
+        "on-secondary": "#ffffff",
+        "secondary-container": "#c7c3fe",
+        "on-secondary-container": "#514f81",
+        "error": "#ba1a1a",
+        "on-error": "#ffffff",
+        "error-container": "#ffdad6",
+        "on-error-container": "#93000a",
+        "outline": "#767586",
+        "outline-variant": "#c7c4d7",
+      },
+    },
+  },
+  plugins: [],
+};

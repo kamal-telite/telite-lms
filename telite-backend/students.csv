@@ -1,0 +1,10 @@
+enrollment_number,name,branch,program,college
+1001,Rahul Sharma,CSE,B.Tech,college_A
+1002,Amit Verma,CSE,B.Tech,college_A
+1003,Priya Singh,ECE,B.Tech,college_A
+1004,Karan Mehta,ECE,B.Tech,college_A
+1005,Sneha Patel,Others,B.Tech,college_A
+1006,Arjun Nair,Maths,M.Tech,college_A
+1007,Divya Rao,Others,M.Tech,college_A
+2001,Neha Gupta,CSE,B.Tech,college_B
+2002,Rohan Das,ECE,B.Tech,college_B

@@ -1,0 +1,6 @@
+faculty_id,name,department,college,email_domain
+F101,Dr Sharma,CSE,college_A,collegea.edu.in
+F102,Dr Mehta,ECE,college_A,collegea.edu.in
+F103,Dr Roy,Maths,college_A,collegea.edu.in
+F104,Dr Patel,Others,college_A,collegea.edu.in
+F201,Dr Kumar,CSE,college_B,collegeb.edu.in

@@ -1,0 +1,13 @@
+# Python backend dependencies.
+# Kept in sync with telite-backend/requirements.txt for GitHub and deployment tools
+# that expect a root-level requirements file.
+
+fastapi==0.111.1
+uvicorn[standard]==0.30.6
+httpx==0.28.1
+python-dotenv==1.0.1
+python-multipart==0.0.22
+pydantic==2.12.5
+pandas==2.3.0
+openpyxl==3.1.5
+psycopg[binary]==3.2.4

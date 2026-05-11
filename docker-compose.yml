@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:14
+    container_name: telite_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  moodle:
+    image: ghcr.io/${GHCR_USERNAME}/telite-lms-moodle:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telite_moodle
+    restart: unless-stopped
+    ports:
+      - "${MOODLE_PORT:-8082}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MOODLE_DB_HOST: ${MOODLE_DB_HOST:-postgres}
+      MOODLE_DB_PORT: ${MOODLE_DB_PORT:-5432}
+      MOODLE_DB_NAME: ${MOODLE_DB_NAME}
+      MOODLE_DB_USER: ${MOODLE_DB_USER}
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD}
+      MOODLE_WWWROOT: ${MOODLE_WWWROOT:-http://localhost:8082}
+    volumes:
+      - moodledata:/var/www/moodledata
+
+  backend:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_backend
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TELITE_DB_BACKEND: ${TELITE_DB_BACKEND:-postgres}
+      TELITE_POSTGRES_HOST: postgres
+      TELITE_POSTGRES_PORT: 5432
+      TELITE_POSTGRES_DB: ${POSTGRES_DB}
+      TELITE_POSTGRES_USER: ${POSTGRES_USER}
+      TELITE_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MOODLE_INTERNAL_URL: ${MOODLE_INTERNAL_URL:-http://moodle}
+      MOODLE_WWWROOT: ${MOODLE_WWWROOT:-http://localhost:8082}
+      MOODLE_MODE: ${MOODLE_MODE:-mock}
+    ports:
+      - "${BACKEND_PORT:-8001}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      moodle:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./telite-frontend
+      dockerfile: Dockerfile
+    container_name: telite_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+    name: telite_pgdata
+  moodledata:
+    name: telite_moodledata
