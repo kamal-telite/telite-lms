@@ -1,201 +1,1287 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDefaultRoute } from "../../context/session";
 import "../../styles/landing.css";
+import { Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title as ChartTitle,
+  Tooltip,
+  Legend,
+  Filler
+} from "chart.js";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ChartTitle,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 const FEATURES = [
-  { title: "Role-based access control", desc: "Separate dashboards for super admins, category admins, and learners. Every user sees exactly what they need.", bg: "bg-indigo-50", stroke: "#4f46e5", icon: <><circle cx="8" cy="6" r="3"/><path d="M2 14c0-3 3-5 6-5s6 2 6 5"/></> },
-  { title: "Course and content management", desc: "Create, organise, and publish courses with module-level control. Manage tiers, statuses, and learner access in real time.", bg: "bg-teal-50", stroke: "#0d9488", icon: <><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 7h6M5 10h4"/></> },
-  { title: "Analytics and progress tracking", desc: "Real-time PAL scores, quiz averages, completion rates, and leaderboards. Identify at-risk learners before they fall behind.", bg: "bg-amber-50", stroke: "#d97706", icon: <><path d="M2 13V7l4-4 3 3 5-6"/></> },
-  { title: "Moodle and API integration", desc: "Sync categories, courses, and users directly with Moodle. Open API support for third-party integrations.", bg: "bg-indigo-50", stroke: "#4f46e5", icon: <><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><path d="M11.5 9v6M9 11.5h5"/></> },
-  { title: "Enrollment management", desc: "Manual and self-enrollment flows with approval queues, domain-based access control, and bulk CSV verification.", bg: "bg-teal-50", stroke: "#0d9488", icon: <><path d="M8 2v12M3 7l5-5 5 5"/><path d="M1 14h14"/></> },
-  { title: "Scalable multi-category architecture", desc: "Run ATS, DevOps, Cloud, and more as isolated categories — each with its own admin, courses, and learner pool.", bg: "bg-amber-50", stroke: "#d97706", icon: <><path d="M2 4h12M2 8h8M2 12h10"/><rect x="10" y="6" width="4" height="7" rx="1"/></> },
-];
-const COLLEGES = ["Manage students, courses, and departments","Academic analytics and attendance tracking","Role-based access per faculty and staff","Bulk enrollment and verification tools","Moodle integration for existing systems"];
-const COMPANIES = ["Onboarding and compliance training paths","Skill tracking and certification management","Team-level performance dashboards","Domain-restricted signup and access control","Export reports as CSV or PDF"];
-const STEPS = [
-  { n: "1", title: "Create your workspace", desc: "Set up your organisation, configure allowed domains, and invite your first admins. Under five minutes." },
-  { n: "2", title: "Add users and courses", desc: "Bulk-import learners, create learning categories, publish courses with modules, and assign tasks." },
-  { n: "3", title: "Track and optimise", desc: "Monitor real-time progress, PAL scores, and completion rates. Export reports and act on at-risk alerts." },
-];
-const TESTIMONIALS = [
-  { q: "The role-based dashboards made a huge difference. Our admins now manage their category independently without stepping on each other.", name: "Rohan Kumar", role: "L&D Head, TechCorp India", initials: "RK", bg: "bg-indigo-100", fg: "text-indigo-700" },
-  { q: "PAL tracking gave us visibility we never had before. We caught at-risk students early and improved completion rates by 22%.", name: "Sunita Arora", role: "Academic Director, Nexus College", initials: "SA", bg: "bg-teal-100", fg: "text-teal-700" },
-  { q: "We migrated from bare Moodle in under a week. The enrollment workflows and verification system saved hours of manual admin work.", name: "Vikram Pillai", role: "CTO, Skill Forward", initials: "VP", bg: "bg-amber-100", fg: "text-amber-700" },
-];
-const PLANS = [
-  { name: "Starter", price: "Free", period: "forever", desc: "For small teams and individual instructors getting started.", features: ["Up to 25 learners","1 learning category","5 courses","Basic analytics","Email support"], featured: false, cta: "Get started", link: "/signup" },
-  { name: "Pro", price: "₹2,499", period: "per month · billed annually", desc: "For growing organisations with multi-category and advanced analytics.", features: ["Up to 500 learners","5 learning categories","Unlimited courses","PAL tracking and reports","Moodle integration","Bulk verification tools","Priority support"], featured: true, cta: "Start 14-day trial", link: "/signup" },
-  { name: "Enterprise", price: "Custom", period: "talk to sales", desc: "For colleges and large enterprises with compliance needs.", features: ["Unlimited learners","Unlimited categories","Custom domain","SSO and LDAP","Dedicated account manager","SLA guarantee"], featured: false, cta: "Contact sales", link: null },
+  { id: "rbac", title: "Role-based access control", desc: "Separate dashboards for super admins, category admins, and learners. Every user sees exactly what they need.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#4648d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+  { id: "course", title: "Course and content management", desc: "Create, organise, and publish courses with module-level control. Manage tiers, statuses, and learner access in real time.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 10h16M4 14h10" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/><rect x="4" y="2" width="16" height="20" rx="2" stroke="#4648d4" strokeWidth="2"/></svg> },
+  { id: "analytics", title: "Analytics and progress tracking", desc: "Real-time PAL scores, quiz averages, completion rates, and leaderboards. Identify at-risk learners before they fall behind.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/><path d="M18 9l-5 5-3-3-4 4" stroke="#4648d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+  { id: "moodle", title: "Moodle and API integration", desc: "Sync categories, courses, and users directly with Moodle. Open API support for third-party integrations.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="#4648d4" strokeWidth="2"/><path d="M12 8v4l3 3" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/></svg> },
+  { id: "enrollment", title: "Enrollment management", desc: "Manual and self-enrollment flows with approval queues, domain-based access control, and built-in CSV verification.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke="#4648d4" strokeWidth="2"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/></svg> },
+  { id: "scale", title: "Scalable multi-category architecture", desc: "Run ATS, DevOps, Cloud and more as isolated categories - each with its own admin, courses, and learner pool.", svg: <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/></svg> },
 ];
 
-function SectionHeader({ eyebrow, title, sub }) {
+const TESTIMONIALS = [
+  { name: "Rohan Kumar", role: "L&D Manager, Infosys", stars: 5, quote: "The role-based dashboards made a huge difference. Our admins now manage their category independently without stepping on each other." },
+  { name: "Sunita Arora", role: "Training Lead, NovaTech", stars: 5, quote: "PAL tracking gave us visibility we never had before. We caught at-risk students early and improved completion rates by 22%." },
+  { name: "Vikram Pillai", role: "CTO, EduBridge", stars: 5, quote: "We migrated from bare Moodle in under a week. The enrollment workflows and verification system saved hours of manual admin work." },
+  { name: "Deepa Nair", role: "Academic Dean, MIT Pune", stars: 5, quote: "Finally a platform that understands how colleges actually operate. The multi-category structure maps perfectly to our departments." },
+  { name: "Arjun Mehta", role: "HR Director, FinEdge", stars: 5, quote: "Onboarding compliance training used to take weeks to set up. With Telite, our new cohort was live in a day. Genuinely surprised." },
+  { name: "Priya Shah", role: "VP Learning, Cybertech", stars: 5, quote: "The analytics dashboard alone is worth the upgrade. Seeing PAL scores and quiz trends in real time changed how our managers coach teams." },
+];
+
+const PLANS = [
+  { name: "Starter", price: { monthly: "Free", annual: "Free" }, tag: "For small teams and individual instructors getting started", period: "No credit card required", features: ["Up to 25 learners", "1 learning category", "5 courses", "Basic analytics", "Email support"] },
+  { name: "Pro", price: { monthly: "₹2,499", annual: "₹1,999" }, tag: "For growing organisations with multi-category and advanced analytics", period: "per month, billed monthly", highlight: true, features: ["Up to 500 learners", "5 learning categories", "Unlimited courses", "PAL tracking and reports", "Moodle integration", "Bulk verification tools", "Priority support"] },
+  { name: "Enterprise", price: { monthly: "Custom", annual: "Custom" }, tag: "For colleges and large enterprises with compliance needs", period: "Talk to us", features: ["Unlimited learners", "Unlimited categories", "Custom domain", "SSO and LDAP", "Dedicated account manager", "SLA guarantee"] },
+];
+
+const TRUST_LOGOS = [
+  {
+    name: "IIT Bombay",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="22" fontWeight="800" textAnchor="middle" fontFamily="var(--font-display)">IIT BOMBAY</text>
+        <circle cx="25" cy="30" r="8" stroke="currentColor" strokeWidth="2" fill="none"/>
+        <line x1="25" y1="18" x2="25" y2="42" stroke="currentColor" strokeWidth="2"/>
+        <line x1="13" y1="30" x2="37" y2="30" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    )
+  },
+  {
+    name: "MIT Pune",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="22" fontWeight="800" textAnchor="middle" fontFamily="var(--font-display)">MIT PUNE</text>
+        <path d="M20 20 L28 35 L36 20 M28 35 L28 42" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      </svg>
+    )
+  },
+  {
+    name: "Infosys",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="24" fontWeight="800" textAnchor="middle" fontFamily="var(--font-body)" letterSpacing="0.05em">Infosys</text>
+        <path d="M15 20 H35 V24 H15 V20 Z M15 28 H35 V32 H15 V28 Z M15 36 H30 V40 H15 V36 Z" fill="currentColor"/>
+      </svg>
+    )
+  },
+  {
+    name: "TCS",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="24" fontWeight="800" textAnchor="middle" fontFamily="var(--font-display)" letterSpacing="0.02em">tcs</text>
+        <path d="M15 22 C15 22 23 15 32 25 C32 25 24 35 15 22 Z" fill="currentColor" opacity="0.8"/>
+      </svg>
+    )
+  },
+  {
+    name: "NovaTech",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="20" fontWeight="700" textAnchor="middle" fontFamily="var(--font-body)">NovaTech</text>
+        <polygon points="25,18 35,35 15,35" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+        <circle cx="25" cy="28" r="3" fill="currentColor"/>
+      </svg>
+    )
+  },
+  {
+    name: "EduBridge",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="20" fontWeight="700" textAnchor="middle" fontFamily="var(--font-body)">EduBridge</text>
+        <rect x="15" y="20" width="20" height="20" rx="4" stroke="currentColor" strokeWidth="2" fill="none"/>
+        <line x1="25" y1="20" x2="25" y2="40" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    )
+  },
+  {
+    name: "FinEdge",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="20" fontWeight="700" textAnchor="middle" fontFamily="var(--font-body)">FinEdge</text>
+        <path d="M15 35 L25 20 L35 35 Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+        <line x1="18" y1="30" x2="32" y2="30" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    )
+  },
+  {
+    name: "Cybertech",
+    svg: (
+      <svg className="trust-logo-svg" viewBox="0 0 200 60" fill="currentColor">
+        <text x="50%" y="38" fontSize="20" fontWeight="700" textAnchor="middle" fontFamily="var(--font-body)">Cybertech</text>
+        <rect x="18" y="20" width="16" height="20" rx="3" fill="none" stroke="currentColor" strokeWidth="2"/>
+        <path d="M22 20 V16 C22 14 26 14 26 16 V20" stroke="currentColor" strokeWidth="2" fill="none"/>
+      </svg>
+    )
+  }
+];
+
+const INTEGRATIONS = [
+  {
+    name: "Moodle",
+    category: "LMS",
+    desc: "High-speed bi-directional course category synchronization and user enrollment.",
+    status: "Available",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+        <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
+      </svg>
+    )
+  },
+  {
+    name: "Zoom",
+    category: "Communication",
+    desc: "Auto-provision lecture rooms, generate attendance logs, and embed meetings.",
+    status: "Available",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M23 7l-7 5 7 5V7z" />
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+      </svg>
+    )
+  },
+  {
+    name: "Slack",
+    category: "Communication",
+    desc: "Push event updates, automated reminders, and grade notifications to channels.",
+    status: "Available",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
+      </svg>
+    )
+  },
+  {
+    name: "MS Teams",
+    category: "Communication",
+    desc: "Integrate student groups, sync Microsoft Outlook calendars, and stream lectures.",
+    status: "Available",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 00-3-3.87" />
+        <path d="M16 3.13a4 4 0 010 7.75" />
+      </svg>
+    )
+  },
+  {
+    name: "Razorpay",
+    category: "Payments",
+    desc: "Process course sales, automate student fee payouts, and reconcile invoices.",
+    status: "Available",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+      </svg>
+    )
+  },
+  {
+    name: "Google Workspace",
+    category: "Enterprise",
+    desc: "Single Sign-On (SSO) login flow and direct document attachment via Google Drive.",
+    status: "Available",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+        <path d="M2 12h20" />
+      </svg>
+    )
+  },
+  {
+    name: "Google Classroom",
+    category: "LMS",
+    desc: "Import course curricula, gradebooks, and synchronize active student directories.",
+    status: "Coming Soon",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+      </svg>
+    )
+  },
+  {
+    name: "Stripe",
+    category: "Payments",
+    desc: "Enable international payment gateways, dynamic taxes, and recurring subscriptions.",
+    status: "Coming Soon",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23" />
+        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+      </svg>
+    )
+  },
+  {
+    name: "LDAP / AD SSO",
+    category: "Enterprise",
+    desc: "Secure login synchronization with institutional directories and on-premise servers.",
+    status: "Coming Soon",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0110 0v4" />
+      </svg>
+    )
+  }
+];
+
+const PREVIEW_CHART_DATA = {
+  labels: ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May"],
+  datasets: [
+    {
+      label: "Active Learners",
+      data: [1200, 1850, 2400, 3100, 2900, 3800, 4200, 4800],
+      borderColor: "#6063ee",
+      backgroundColor: "rgba(96, 99, 238, 0.15)",
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: "#fff",
+      pointBorderColor: "#6063ee",
+      pointHoverRadius: 7,
+    },
+    {
+      label: "Course Completions",
+      data: [600, 950, 1200, 1600, 1500, 2200, 2500, 3100],
+      borderColor: "#10b981",
+      backgroundColor: "rgba(16, 185, 129, 0.05)",
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: "#fff",
+      pointBorderColor: "#10b981",
+      pointHoverRadius: 7,
+    }
+  ]
+};
+
+const PREVIEW_CHART_OPTIONS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: "top",
+      labels: {
+        color: "rgba(255, 255, 255, 0.7)",
+        font: { family: "Cabinet Grotesk, sans-serif", size: 12 }
+      }
+    },
+    tooltip: {
+      backgroundColor: "rgba(17, 16, 39, 0.95)",
+      titleColor: "#fff",
+      bodyColor: "rgba(255, 255, 255, 0.8)",
+      borderColor: "rgba(255, 255, 255, 0.1)",
+      borderWidth: 1,
+    }
+  },
+  scales: {
+    x: {
+      grid: { color: "rgba(255, 255, 255, 0.05)" },
+      ticks: { color: "rgba(255, 255, 255, 0.5)", font: { family: "Cabinet Grotesk" } }
+    },
+    y: {
+      grid: { color: "rgba(255, 255, 255, 0.05)" },
+      ticks: { color: "rgba(255, 255, 255, 0.5)", font: { family: "Cabinet Grotesk" } }
+    }
+  }
+};
+
+function CountUp({ target, suffix = "", prefix = "", decimals = 0, useSeparator = true }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && active) {
+        let startTime = null;
+        const duration = 1800; // 1.8 seconds
+
+        const step = (currentTime) => {
+          if (!startTime) startTime = currentTime;
+          const progress = Math.min((currentTime - startTime) / duration, 1);
+          // quadratic ease-out
+          const easeOut = 1 - (1 - progress) * (1 - progress);
+          const value = easeOut * target;
+          
+          setCount(value);
+          if (progress < 1 && active) {
+            requestAnimationFrame(step);
+          } else {
+            setCount(target);
+          }
+        };
+
+        requestAnimationFrame(step);
+        observer.disconnect();
+      }
+    }, { threshold: 0.1 });
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [target]);
+
+  const formattedValue = decimals > 0 
+    ? count.toFixed(decimals) 
+    : Math.floor(count);
+
+  const displayValue = useSeparator && decimals === 0
+    ? Number(formattedValue).toLocaleString()
+    : formattedValue;
+
   return (
-    <div className="text-center mb-14">
-      <p className="text-indigo-600 text-xs font-semibold uppercase tracking-widest mb-3">{eyebrow}</p>
-      <h2 className="text-3xl font-bold text-slate-900 mb-3">{title}</h2>
-      {sub && <p className="text-slate-500 text-base leading-relaxed max-w-xl mx-auto">{sub}</p>}
+    <span ref={ref}>
+      {prefix}
+      {displayValue}
+      {suffix}
+    </span>
+  );
+}
+
+const FAQS = [
+  {
+    q: "What exactly is Telite Systems LMS?",
+    a: "Telite Systems LMS is a modern learning operations orchestrator and analytics layer built to sit alongside your Moodle runtime or run stand-alone. It provides premium role-based administrative consoles, custom organizational boundaries, and advanced AI-driven proactive analytics."
+  },
+  {
+    q: "How does the Moodle integration work?",
+    a: "Telite integrates seamlessly via high-speed Moodle REST Web Services APIs. It manages user accounts, course categories, metadata, and business operations, whilst Moodle reliably serves learning content and SCORM packages. No database customization or plugins are needed."
+  },
+  {
+    q: "Is it compliant with modern security standards?",
+    a: "Yes. We designed Telite with enterprise-grade protection. Data is encrypted at rest (AES-256) and in transit (TLS 1.3), supporting strict role hierarchies, row-level access control, and comprehensive logs tracking admin activities."
+  },
+  {
+    q: "Can we customize branding for our institution?",
+    a: "Absolutely. Our Enterprise tier supports full white-label capabilities: custom subdomains/domains, custom CSS styling/themes, logo sets, and localized email notifications to match your organization’s identity perfectly."
+  },
+  {
+    q: "How long does setting up our workspace take?",
+    a: "Workspaces are provisioned immediately upon sign-up. Setting up organizational categories, bulk importing learners, and synchronizing content via our setup wizards usually takes less than 15 minutes."
+  }
+];
+
+function FAQItem({ item }) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className={`faq-item ${isOpen ? "open" : ""}`}>
+      <button className="faq-trigger" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen}>
+        <span className="faq-question">{item.q}</span>
+        <span className="faq-icon-wrap">
+          <svg className="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      </button>
+      <div className="faq-content-wrap" style={{ maxHeight: isOpen ? "300px" : "0" }}>
+        <div className="faq-content">
+          <p>{item.a}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-function CheckItem({ text, color }) {
+function FeatureCard({ f }) {
   return (
-    <li className="flex items-start gap-3 py-2 text-sm text-slate-600 border-b border-slate-100 last:border-0">
-      <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="2"><path d="M3 8l3 3 7-7"/></svg>
-      {text}
-    </li>
+    <div className="feature-card">
+      <div className="fc-icon">{f.svg}</div>
+      <h3 className="fc-title">{f.title}</h3>
+      <p className="fc-desc">{f.desc}</p>
+    </div>
   );
 }
 
 export default function LandingPage({ session }) {
   const dashboardLink = session?.user ? getDefaultRoute(session.user) : null;
+  const [isAnnual, setIsAnnual] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState("Pro");
+  const [activeTab, setActiveTab] = useState("college");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const vantaHeroRef = useRef(null);
+  const vantaCtaRef = useRef(null);
+  const heroTypedRef = useRef(null);
+  const cursorRef = useRef(null);
+  const cursorDotRef = useRef(null);
+  const priceRefsMap = useRef({});
+
+  // Phase 3 states
+  const [activeIntegrationTab, setActiveIntegrationTab] = useState("All");
+  const [activePreviewTab, setActivePreviewTab] = useState("analytics");
+  const [showStickyCTA, setShowStickyCTA] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [contactForm, setContactForm] = useState({ name: "", email: "", org: "", type: "College / University", msg: "" });
+  const [contactError, setContactError] = useState("");
+  const [contactSuccess, setContactSuccess] = useState(false);
+  const [showSupportWidget, setShowSupportWidget] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterSuccess, setNewsletterSuccess] = useState(false);
+
+  const [approvals, setApprovals] = useState([
+    { id: 1, name: "Varun Mehta", course: "Advanced Machine Learning", org: "IIT Bombay", status: "Pending" },
+    { id: 2, name: "Sneha Nair", course: "React Design Patterns", org: "Infosys", status: "Pending" },
+    { id: 3, name: "Aman Gupta", course: "Cloud Security Architecture", org: "NovaTech", status: "Pending" },
+  ]);
+
+  const [modules, setModules] = useState([
+    { id: 1, title: "Module 1: Introduction & Environment Setup", duration: "2 hrs", active: true },
+    { id: 2, title: "Module 2: Core Fundamentals & Syntax", duration: "4 hrs", active: true },
+    { id: 3, title: "Module 3: Advanced Optimization & Scaling", duration: "5 hrs", active: false },
+    { id: 4, title: "Module 4: Real-world Case Studies & Capstone", duration: "8 hrs", active: false }
+  ]);
+
+  const handleApprove = (id) => {
+    setApprovals(prev => prev.map(app => app.id === id ? { ...app, status: "Approved" } : app));
+  };
+  const handleReject = (id) => {
+    setApprovals(prev => prev.map(app => app.id === id ? { ...app, status: "Rejected" } : app));
+  };
+
+  const toggleModule = (id) => {
+    setModules(prev => prev.map(m => m.id === id ? { ...m, active: !m.active } : m));
+  };
+
+  const handleContactSubmit = (e) => {
+    e.preventDefault();
+    if (!contactForm.name.trim()) {
+      setContactError("Name is required");
+      return;
+    }
+    if (!contactForm.email.includes("@")) {
+      setContactError("Please enter a valid work email");
+      return;
+    }
+    if (!contactForm.org.trim()) {
+      setContactError("Organization name is required");
+      return;
+    }
+    setContactError("");
+    setContactSuccess(true);
+    setTimeout(() => {
+      setShowContactModal(false);
+      setContactSuccess(false);
+      setContactForm({ name: "", email: "", org: "", type: "College / University", msg: "" });
+    }, 2500);
+  };
+
+  const handleNewsletterSubmit = (e) => {
+    e.preventDefault();
+    if (!newsletterEmail.includes("@")) return;
+    setNewsletterSuccess(true);
+    setNewsletterEmail("");
+    setTimeout(() => setNewsletterSuccess(false), 3000);
+  };
+
+  // Toggle handler with price animation
+  const handleToggle = () => {
+    setIsAnnual((prev) => !prev);
+    // Trigger price pop animation
+    Object.values(priceRefsMap.current).forEach((el) => {
+      if (el) {
+        el.classList.remove("price-animate");
+        // Force reflow
+        void el.offsetWidth;
+        el.classList.add("price-animate");
+      }
+    });
+  };
 
   useEffect(() => {
-    const handler = () => {
-      const nav = document.getElementById("lp-nav");
-      if (nav) nav.classList.toggle("lp-nav--scrolled", window.scrollY > 10);
+    const gsap = window.gsap;
+    const ScrollTrigger = window.ScrollTrigger;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const revealPage = () => {
+      document.querySelectorAll(".hero-eyebrow, .hero-headline, .hero-sub, .hero-ctas, .hero-badges, .hero-card-wrap, .feature-card, .step-card, .pricing-card").forEach((el) => {
+        el.style.opacity = "1";
+        el.style.transform = "none";
+      });
     };
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
+    const loaderFallback = window.setTimeout(() => {
+      const loader = document.querySelector(".loader");
+      if (loader) {
+        loader.style.opacity = "0";
+        loader.style.pointerEvents = "none";
+        loader.style.display = "none";
+      }
+      revealPage();
+    }, 2200);
+
+    if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger, window.TextPlugin);
+
+    const handleMouseMove = (e) => {
+      if (cursorRef.current && cursorDotRef.current && gsap) {
+        gsap.to(cursorRef.current, { x: e.clientX, y: e.clientY, duration: 0.6, ease: "power2.out" });
+        gsap.to(cursorDotRef.current, { x: e.clientX, y: e.clientY, duration: 0.1 });
+      }
+      const hero = document.getElementById("hero");
+      if (hero) {
+        const rect = hero.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        hero.style.setProperty("--mouse-x", `${x}px`);
+        hero.style.setProperty("--mouse-y", `${y}px`);
+      }
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+
+    const pulseInterval = setInterval(() => {
+      const metrics = document.querySelectorAll(".hc-metric");
+      const random = metrics[Math.floor(Math.random() * metrics.length)];
+      if (random && gsap) {
+        gsap.fromTo(random, { scale: 1 }, { scale: 1.1, duration: 0.25, yoyo: true, repeat: 1, ease: "power2.inOut" });
+      }
+    }, 4000);
+
+    const nav = document.getElementById("lp-nav");
+    const handleScroll = () => {
+      if (nav) nav.classList.toggle("scrolled", window.scrollY > 10);
+      const hero = document.getElementById("hero");
+      if (hero) {
+        const rect = hero.getBoundingClientRect();
+        setShowStickyCTA(rect.bottom < 0);
+      }
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    let vantaHero = null;
+    if (!reduceMotion && window.VANTA?.NET) {
+      vantaHero = window.VANTA.NET({
+        el: vantaHeroRef.current,
+        mouseControls: true,
+        touchControls: false,
+        gyroControls: false,
+        minHeight: 200,
+        minWidth: 200,
+        scale: 1,
+        scaleMobile: 1,
+        color: 0x4648d4,
+        backgroundColor: 0x00000000,
+        points: 10,
+        maxDistance: 20,
+        spacing: 18,
+      });
+    }
+
+    let vantaCta = null;
+    if (!reduceMotion && window.VANTA?.WAVES) {
+      vantaCta = window.VANTA.WAVES({
+        el: vantaCtaRef.current,
+        mouseControls: true,
+        touchControls: false,
+        color: 0x3835a8,
+        waveHeight: 18,
+        shininess: 40,
+        waveSpeed: 0.8,
+      });
+    }
+
+    let typed = null;
+    if (window.Typed && heroTypedRef.current) {
+      typed = new window.Typed(heroTypedRef.current, {
+        strings: ["learning.", "users.", "analytics.", "content delivery.", "your institution."],
+        typeSpeed: 65,
+        backSpeed: 35,
+        backDelay: 1800,
+        loop: true,
+        cursorChar: "_",
+      });
+    }
+
+    if (!reduceMotion && window.VanillaTilt) {
+      window.VanillaTilt.init(document.querySelectorAll(".feature-card, .pricing-card"), { max: 6, speed: 400, glare: true, "max-glare": 0.10, scale: 1.02 });
+      const heroCard = document.querySelector(".hero-card");
+      if (heroCard) window.VanillaTilt.init(heroCard, { max: 8, glare: true, "max-glare": 0.15 });
+    }
+
+    const magneticBtns = document.querySelectorAll(".magnetic");
+    const handleMagneticMove = function (e) {
+      const rect = this.getBoundingClientRect();
+      const x = (e.clientX - rect.left - rect.width / 2) * 0.25;
+      const y = (e.clientY - rect.top - rect.height / 2) * 0.25;
+      if (gsap) gsap.to(this, { x, y, duration: 0.3, ease: "power2.out" });
+    };
+    const handleMagneticLeave = function () {
+      if (gsap) gsap.to(this, { x: 0, y: 0, duration: 0.5, ease: "elastic.out(1,0.4)" });
+    };
+    magneticBtns.forEach((btn) => {
+      btn.addEventListener("mousemove", handleMagneticMove);
+      btn.addEventListener("mouseleave", handleMagneticLeave);
+    });
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+      anchor.addEventListener("click", function (e) {
+        const target = document.querySelector(this.getAttribute("href"));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    });
+
+    let ctx;
+    if (reduceMotion) {
+      revealPage();
+    } else if (gsap && ScrollTrigger) {
+      ctx = gsap.context(() => {
+        gsap.timeline()
+          .to(".loader-bar", { width: "100%", duration: 1, ease: "power2.inOut" })
+          .to(".loader", { opacity: 0, duration: 0.45, ease: "power2.out" })
+          .set(".loader", { display: "none" })
+          .call(() => window.clearTimeout(loaderFallback));
+
+        ScrollTrigger.create({
+          start: "top top",
+          end: "max",
+          onUpdate: (self) => gsap.to(".progress-bar", { scaleX: self.progress, ease: "none", duration: 0 }),
+        });
+
+        // Hero entrance
+        gsap.timeline({ delay: 1.25 })
+          .from(".hero-eyebrow", { opacity: 0, y: 20, duration: 0.6, ease: "power2.out" })
+          .from(".hero-headline", { opacity: 0, y: 40, duration: 0.8, ease: "power3.out" }, "-=0.3")
+          .from(".hero-sub", { opacity: 0, y: 20, duration: 0.6 }, "-=0.4")
+          .from(".hero-ctas", { opacity: 0, y: 20, duration: 0.5 }, "-=0.3")
+          .from(".hero-badges", { opacity: 0, scale: 0.8, stagger: 0.1, duration: 0.4 }, "-=0.2")
+          .from(".hero-card-wrap", { opacity: 0, x: 60, duration: 1, ease: "power3.out" }, "-=0.7");
+
+        gsap.to(".hero-card-wrap", {
+          y: -80,
+          scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 1.5 },
+        });
+
+        // Parallax on hero orbs
+        gsap.to(".hero-orb--1", { y: -60, scrollTrigger: { trigger: "#hero", scrub: 2 } });
+        gsap.to(".hero-orb--2", { y: -40, scrollTrigger: { trigger: "#hero", scrub: 2.5 } });
+
+        // Feature cards stagger
+        gsap.from(".feature-card", {
+          y: 50, duration: 0.7, stagger: 0.12,
+          ease: "power3.out",
+          scrollTrigger: { trigger: "#features", start: "top 75%" },
+        });
+
+        // Solutions section
+        gsap.from("#solutions .section-eyebrow, #solutions .section-title, #solutions .section-sub", {
+          opacity: 0, y: 30, duration: 0.6, stagger: 0.1,
+          scrollTrigger: { trigger: "#solutions", start: "top 75%" },
+        });
+        gsap.from(".sol-visual", { y: -40, scrollTrigger: { trigger: "#solutions", scrub: 1.2 } });
+
+        // Step cards stagger
+        gsap.from(".step-card", {
+          y: 50, duration: 0.7, stagger: 0.18,
+          ease: "power3.out",
+          scrollTrigger: { trigger: "#howitworks", start: "top 70%" },
+        });
+        // Connector draw-in
+        gsap.from(".step-connector", {
+          scaleX: 0, transformOrigin: "left center", duration: 1.2,
+          ease: "power2.out",
+          scrollTrigger: { trigger: "#howitworks", start: "top 70%" },
+        });
+
+        // Pricing cards - removed opacity 0 to ensure visibility
+        gsap.from(".pricing-card", {
+          y: 40, duration: 0.6, stagger: 0.15,
+          ease: "power3.out",
+          scrollTrigger: { trigger: "#pricing", start: "top 75%" },
+        });
+
+        // CTA section
+        gsap.from(".cta-title, .cta-sub, .cta-btns", {
+          opacity: 0, y: 30, duration: 0.7, stagger: 0.12,
+          ease: "power2.out",
+          scrollTrigger: { trigger: "#cta-section", start: "top 80%" },
+        });
+      });
+    }
+
+    return () => {
+      if (ctx) ctx.revert();
+      clearInterval(pulseInterval);
+      document.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("scroll", handleScroll);
+      window.clearTimeout(loaderFallback);
+      if (vantaHero) vantaHero.destroy();
+      if (vantaCta) vantaCta.destroy();
+      if (typed) typed.destroy();
+      magneticBtns.forEach((btn) => {
+        btn.removeEventListener("mousemove", handleMagneticMove);
+        btn.removeEventListener("mouseleave", handleMagneticLeave);
+      });
+      if (window.ScrollTrigger) window.ScrollTrigger.getAll().forEach((t) => t.kill());
+    };
   }, []);
 
+  useEffect(() => {
+    if (window.gsap) {
+      const target = `.sol-panel-${activeTab}`;
+      if (document.querySelector(target)) {
+        window.gsap.fromTo(target, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.4 });
+      }
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (window.gsap) {
+      window.gsap.fromTo(".integration-card",
+        { opacity: 0, y: 15, scale: 0.95 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.35, stagger: 0.05, ease: "power2.out" }
+      );
+    }
+  }, [activeIntegrationTab]);
+
+  useEffect(() => {
+    if (window.gsap) {
+      window.gsap.fromTo(".preview-window",
+        { opacity: 0, scale: 0.98, y: 10 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "power2.out" }
+      );
+    }
+  }, [activePreviewTab]);
+
+  const filteredIntegrations = activeIntegrationTab === "All"
+    ? INTEGRATIONS
+    : INTEGRATIONS.filter(item => item.category === activeIntegrationTab);
+
   return (
-    <div className="bg-[#FAFAFA] text-[#1A1A2E]" style={{ fontFamily: "Inter, system-ui, sans-serif" }}>
-      {/* ── NAVBAR ── */}
-      <nav id="lp-nav" className="sticky top-0 z-50 border-b border-[#E8E8F0] bg-white/80 backdrop-blur transition-all duration-200">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="text-lg font-semibold text-indigo-600 tracking-tight">Telite LMS</span>
-          <div className="hidden md:flex items-center gap-1">
-            {["Home","Features","Solutions","Pricing","About","Contact"].map(l => (
-              <a key={l} href={l === "Home" ? "#" : `#${l.toLowerCase()}`} className="text-sm text-slate-600 hover:text-indigo-600 px-3 py-2 rounded-md transition-all duration-200">{l}</a>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            {dashboardLink ? (
-              <Link to={dashboardLink} className="text-sm font-medium bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition-all duration-200">Go to Dashboard</Link>
-            ) : (
-              <>
-                <Link to="/login" className="text-sm text-slate-600 hover:text-indigo-700 px-3 py-2 transition-all duration-200">Sign in</Link>
-                <Link to="/signup" className="text-sm font-medium bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition-all duration-200">Sign up free</Link>
-              </>
-            )}
+    <div className="landing-wrapper">
+      {/* ── STICKY CTA BANNER ── */}
+      <div className={`sticky-cta-banner ${showStickyCTA ? "visible" : ""}`}>
+        <div className="sticky-cta-inner">
+          <span className="sticky-cta-text">Transform your learning operations with Telite LMS.</span>
+          <div className="sticky-cta-actions">
+            <button className="btn-sticky-contact magnetic" onClick={() => setShowContactModal(true)}>Book a Demo</button>
+            <Link to="/signup" className="btn-sticky-primary magnetic">Get Started Free</Link>
           </div>
         </div>
+      </div>
+
+      <div className="cursor" ref={cursorRef}></div>
+      <div className="cursor-dot" ref={cursorDotRef}></div>
+      <div className="loader">
+        <div className="loader-logo">Telite <span>LMS</span></div>
+        <div className="loader-bar-wrap"><div className="loader-bar"></div></div>
+        <div className="loader-pct">0%</div>
+      </div>
+      <div className="scroll-progress"><div className="progress-bar"></div></div>
+
+      {/* ── NAVBAR ── */}
+      <nav id="lp-nav">
+        <Link to="/" className="nav-logo">Telite LMS</Link>
+        <ul className="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#solutions">Solutions</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#howitworks">How it works</a></li>
+          <li><a href="#cta-section">Contact</a></li>
+        </ul>
+        <div className="nav-actions">
+          {dashboardLink ? <Link to={dashboardLink} className="btn-primary magnetic">Go to Dashboard</Link> : <>
+            <Link to="/login" className="btn-ghost">Sign in</Link>
+            <Link to="/signup" className="btn-primary magnetic">Get started free</Link>
+          </>}
+        </div>
+
+        {/* Mobile Hamburger Button */}
+        <button 
+          className={`mobile-menu-btn ${isMobileMenuOpen ? "active" : ""}`} 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-label="Toggle Navigation Menu"
+          aria-expanded={isMobileMenuOpen}
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
       </nav>
 
+      {/* Backdrop blurred Drawer navigation */}
+      <div className={`mobile-drawer-overlay ${isMobileMenuOpen ? "active" : ""}`} onClick={() => setIsMobileMenuOpen(false)}></div>
+      <div className={`mobile-drawer ${isMobileMenuOpen ? "active" : ""}`}>
+        <div className="mobile-drawer-header">
+          <Link to="/" className="nav-logo logo-dark" onClick={() => setIsMobileMenuOpen(false)}>Telite LMS</Link>
+        </div>
+        <ul className="mobile-drawer-links">
+          <li><a href="#features" onClick={() => setIsMobileMenuOpen(false)}>Features</a></li>
+          <li><a href="#solutions" onClick={() => setIsMobileMenuOpen(false)}>Solutions</a></li>
+          <li><a href="#pricing" onClick={() => setIsMobileMenuOpen(false)}>Pricing</a></li>
+          <li><a href="#howitworks" onClick={() => setIsMobileMenuOpen(false)}>How it works</a></li>
+          <li><a href="#cta-section" onClick={() => setIsMobileMenuOpen(false)}>Contact</a></li>
+        </ul>
+        <div className="mobile-drawer-actions">
+          {dashboardLink ? <Link to={dashboardLink} className="btn-drawer-primary" onClick={() => setIsMobileMenuOpen(false)}>Go to Dashboard</Link> : <>
+            <Link to="/login" className="btn-drawer-ghost" onClick={() => setIsMobileMenuOpen(false)}>Sign in</Link>
+            <Link to="/signup" className="btn-drawer-primary" onClick={() => setIsMobileMenuOpen(false)}>Get started free</Link>
+          </>}
+        </div>
+      </div>
+
       {/* ── HERO ── */}
-      <section className="min-h-[calc(100vh-56px)] flex items-center">
-        <div className="max-w-7xl mx-auto px-6 py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div>
-            <p className="text-indigo-600 text-xs font-semibold uppercase tracking-widest mb-4">Internal learning platform</p>
-            <h1 className="text-4xl md:text-5xl font-bold leading-tight text-slate-900 max-w-xl">One platform to manage learning, users, analytics, and content delivery.</h1>
-            <p className="text-slate-500 text-lg leading-relaxed mt-4 max-w-lg">Streamline education and training with role-based dashboards, real-time tracking, and seamless LMS integration.</p>
-            <div className="flex flex-wrap gap-3 mt-8">
-              {dashboardLink ? (
-                <Link to={dashboardLink} className="bg-indigo-600 text-white px-7 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-all duration-200 shadow-sm">Go to Dashboard</Link>
-              ) : (
-                <Link to="/signup" className="bg-indigo-600 text-white px-7 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-all duration-200 shadow-sm">Get started free</Link>
-              )}
-              <a href="#features" className="border border-slate-300 text-slate-700 px-7 py-3 rounded-xl hover:border-indigo-400 hover:text-indigo-600 transition-all duration-200">Explore features</a>
+      <section id="hero">
+        <div id="hero-bg" ref={vantaHeroRef}></div>
+        {/* Decorative gradient orbs */}
+        <div className="hero-orb hero-orb--1"></div>
+        <div className="hero-orb hero-orb--2"></div>
+        <div className="hero-orb hero-orb--3"></div>
+        <div className="hero-content">
+          <div className="hc-left">
+            <div className="hero-eyebrow"><span className="hero-eyebrow-dot"></span>Internal Learning Platform</div>
+            <h1 className="hero-headline">
+              One platform to manage<br />
+              <span className="hero-typed-line"><span id="hero-typed" ref={heroTypedRef}></span></span>
+            </h1>
+            <p className="hero-sub">Streamline education and training with role-based dashboards, real-time tracking, and seamless LMS integration.</p>
+            <div className="hero-ctas">
+              <Link to={dashboardLink || "/signup"} className="btn-hero-primary magnetic">{dashboardLink ? "Go to Dashboard" : "Get started free"}</Link>
+              <a href="#features" className="btn-hero-ghost magnetic">Explore features</a>
             </div>
-            <div className="flex items-center gap-3 mt-10">
-              <span className="text-xs text-slate-400">Trusted by</span>
-              {["Colleges","Companies","Training institutes"].map(t => (
-                <span key={t} className="bg-indigo-50 text-indigo-700 text-xs px-3 py-1 rounded-full border border-indigo-200">{t}</span>
-              ))}
+            <div className="hero-badges">
+              <span className="hero-badge">Colleges</span>
+              <span className="hero-badge">Companies</span>
+              <span className="hero-badge">Training Institutes</span>
             </div>
           </div>
-          {/* Dashboard mockup */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
-              <div className="w-3 h-3 rounded-full bg-red-400"/>
-              <div className="w-3 h-3 rounded-full bg-amber-400"/>
-              <div className="w-3 h-3 rounded-full bg-green-400"/>
-              <span className="text-sm font-medium text-slate-700 ml-1">ATS Admin Dashboard</span>
-              <span className="ml-auto bg-indigo-50 text-indigo-600 text-xs px-2 py-0.5 rounded-full">admin panel</span>
-            </div>
-            <div className="grid" style={{ gridTemplateColumns: "100px 1fr" }}>
-              <div className="bg-slate-50 border-r border-slate-100 py-3 px-2">
-                {["Dashboard","Courses","Learners","Enrollment","PAL tracking","Reports"].map((s,i) => (
-                  <div key={s} className={`text-xs px-2 py-1.5 rounded-md mb-0.5 ${i===0 ? "bg-indigo-50 text-indigo-700 font-medium" : "text-slate-500"}`}>{s}</div>
+          <div className="hero-card-wrap">
+            <div className="hero-card">
+              <div className="hc-header"><span className="hc-dot"></span><span className="hc-title">ATS Admin Dashboard</span><span className="hc-badge">Admin Panel</span></div>
+              <div className="hc-metrics">
+                <div className="hc-metric"><span className="num">6</span><small>Orgs</small></div>
+                <div className="hc-metric"><span className="num">17</span><small>Courses</small></div>
+                <div className="hc-metric hl"><span className="num">81%</span><small>Avg Score</small></div>
+              </div>
+              <div className="hc-learners">
+                {[
+                  ["Ratan Singh", "68%", ""],
+                  ["Priya Seth", "82%", ""],
+                  ["Amey Titty", "41%", "warn"],
+                  ["Sara Verma", "75%", ""],
+                ].map(([name, pct, warn]) => (
+                  <div className="lr" key={name}><span className="lr-name">{name}</span><div className="lr-bar-wrap"><div className={`lr-bar ${warn}`} style={{ width: pct }}></div></div><span className="lr-pct">{pct}</span></div>
                 ))}
               </div>
-              <div className="p-4">
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  {[["6","courses","text-indigo-600"],["17","learners","text-slate-800"],["81%","avg PAL","text-emerald-600"]].map(([v,l,c]) => (
-                    <div key={l} className="bg-slate-50 rounded-lg p-2 text-center">
-                      <div className={`text-lg font-semibold ${c}`}>{v}</div>
-                      <div className="text-[10px] text-slate-400">{l}</div>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-400 mb-2">PAL score by student</p>
-                {[["Rahul Singh",94,"bg-indigo-500","text-slate-400"],["Kavya Iyer",90,"bg-indigo-500","text-slate-400"],["Neha Pillai",88,"bg-indigo-400","text-slate-400"],["Dev Verma",54,"bg-red-400","text-red-500"]].map(([n,p,bar,tc]) => (
-                  <div key={n} className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs text-slate-600 w-[72px] truncate">{n}</span>
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${bar}`} style={{ width: `${p}%` }}/></div>
-                    <span className={`text-xs w-7 text-right ${tc}`}>{p}%</span>
-                  </div>
-                ))}
-                <div className="flex gap-1.5 mt-3">
-                  <span className="bg-amber-50 text-amber-700 text-[10px] px-2 py-0.5 rounded">3 pending enrollments</span>
-                  <span className="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded">2 at-risk learners</span>
-                </div>
-              </div>
+              <div className="hc-footer"><span>1 pending enrollment</span><a href="#features">2 at-risk learners →</a></div>
             </div>
+
+            {/* Floating micro-cards */}
+            <div className="hero-float-card hero-float--1">
+              <svg viewBox="0 0 18 18" fill="none" stroke="#10b981" strokeWidth="2" width="18" height="18"><path d="M4 9l3 3 7-7"/></svg>
+              <span>Moodle synced</span>
+            </div>
+            <div className="hero-float-card hero-float--2">
+              <svg viewBox="0 0 18 18" fill="none" stroke="#818cf8" strokeWidth="2" width="18" height="18"><circle cx="9" cy="9" r="7"/><path d="M9 5v4l3 2"/></svg>
+              <span>42 active now</span>
+            </div>
+            <div className="hero-float-card hero-float--3">
+              <svg viewBox="0 0 18 18" fill="none" stroke="#f59e0b" strokeWidth="2" width="18" height="18"><path d="M9 2l2 4 5 1-4 3 1 5-4-2-4 2 1-5-4-3 5-1z"/></svg>
+              <span>AI analyzing</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── TRUST LOGOS ── */}
+      <section className="trust-section">
+        <span className="trust-eyebrow">Trusted by 200+ institutions & enterprises globally</span>
+        <div className="trust-marquee-container">
+          <div className="trust-marquee-track">
+            {[...TRUST_LOGOS, ...TRUST_LOGOS].map((logo, idx) => (
+              <div className="trust-logo-card" key={`${logo.name}-${idx}`}>
+                {logo.svg}
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* ── FEATURES ── */}
-      <section id="features" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <SectionHeader eyebrow="Everything you need" title="Built for modern learning operations" sub="A complete toolkit for admins, instructors, and learners."/>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FEATURES.map(f => (
-              <div key={f.title} className="bg-white border border-slate-100 rounded-2xl p-6 hover:border-indigo-200 hover:shadow-sm transition-all duration-200">
-                <div className={`w-10 h-10 rounded-xl ${f.bg} flex items-center justify-center mb-4`}>
-                  <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke={f.stroke} strokeWidth="1.5">{f.icon}</svg>
+      <section id="features">
+        <div className="inner">
+          <div className="features-header">
+            <span className="section-eyebrow">Everything you need</span>
+            <h2 className="section-title">Built for modern learning<br />operations</h2>
+            <p className="section-sub">A complete toolkit for admins, instructors, and learners.</p>
+          </div>
+          <div className="features-grid">{FEATURES.map((f) => <FeatureCard key={f.id} f={f} />)}</div>
+        </div>
+      </section>
+
+      {/* ── AI SHOWCASE SECTION ── */}
+      <section id="ai-showcase">
+        <div className="inner ai-showcase-layout">
+          <div className="ai-showcase-left">
+            <span className="section-eyebrow ai-glow-text">AI Diagnostics</span>
+            <h2 className="section-title text-light">Predictive learning<br />intelligence</h2>
+            <p className="section-sub text-light-muted">Telite doesn't just record scores; our proactive machine learning layer analyzes cognitive habits, identifies fatigue patterns, and alerts instructors before a learner falls behind.</p>
+            
+            <div className="ai-features-list">
+              <div className="ai-feat-item">
+                <div className="ai-feat-dot"></div>
+                <div>
+                  <h4>Cognitive Fatigue Detection</h4>
+                  <p>Monitors action-delays, navigation pacing, and session intervals to map individual learning curves.</p>
                 </div>
-                <h3 className="text-sm font-semibold text-slate-800 mb-2">{f.title}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
+              </div>
+              <div className="ai-feat-item">
+                <div className="ai-feat-dot"></div>
+                <div>
+                  <h4>Automated Risk Vector Triggers</h4>
+                  <p>Instantly flags at-risk profiles and suggests tailored remedial pathways with zero administrative overhead.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="ai-showcase-right">
+            <div className="ai-interactive-card">
+              <div className="ai-card-header">
+                <span className="ai-status-pulse"></span>
+                <span className="ai-card-title">Cognitive Diagnostic Panel</span>
+                <span className="ai-card-tag">Active Analysis</span>
+              </div>
+              <div className="ai-risk-profile">
+                <div className="ai-profile-main">
+                  <div className="ai-avatar-placeholder">SK</div>
+                  <div>
+                    <div className="ai-profile-name">Shreyas Kulkarni</div>
+                    <div className="ai-profile-meta">Category: Advanced Cryptography</div>
+                  </div>
+                </div>
+                <div className="ai-risk-badge high-risk">High Risk Vector</div>
+              </div>
+              <div className="ai-diagnostics-metrics">
+                <div className="ai-diag-metric">
+                  <span className="ai-diag-lbl">Velocity Profile</span>
+                  <span className="ai-diag-val warning-val">-24% drop-off</span>
+                </div>
+                <div className="ai-diag-metric">
+                  <span className="ai-diag-lbl">Concept Retention</span>
+                  <span className="ai-diag-val">82% accuracy</span>
+                </div>
+                <div className="ai-diag-metric">
+                  <span className="ai-diag-lbl">Cognitive Load</span>
+                  <span className="ai-diag-val danger-val">Fatigue detected</span>
+                </div>
+              </div>
+              <div className="ai-card-remedial">
+                <div className="ai-remedial-title">AI Suggested Remedial Action</div>
+                <p className="ai-remedial-desc">Insert micro-conceptual recap quiz covering "Symmetric Cipher Blocks" and delay Module 4 by 48 hours.</p>
+                <button className="btn-ai-action">Approve Path</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SOLUTIONS ── */}
+      <section id="solutions">
+        <div className="inner">
+          <span className="section-eyebrow">Solutions</span>
+          <h2 className="section-title">Built for your context</h2>
+          <p className="section-sub">Whether managing students across departments or training employees at scale.</p>
+          <div className="solutions-grid">
+            <div className="sol-left">
+              <div className="sol-tabs">
+                <button className={`sol-tab magnetic ${activeTab === "college" ? "active" : ""}`} onClick={() => setActiveTab("college")}>For Colleges</button>
+                <button className={`sol-tab magnetic ${activeTab === "company" ? "active" : ""}`} onClick={() => setActiveTab("company")}>For Companies</button>
+              </div>
+              <div className={`sol-panel ${activeTab === "college" ? "active" : ""}`}>
+                <h3 className="sol-headline">Academic learning management</h3>
+                <ul className="sol-checklist">
+                  {["Manage students, courses, and departments", "Academic analytics and attendance tracking", "Role-based access per faculty and staff", "Bulk enrollment and verification tools", "Moodle integration for existing systems"].map((item) => <li key={item}><span className="check-icon"><svg viewBox="0 0 16 16" fill="none" stroke="#10b981" strokeWidth="2"><path d="M4 8l3 3 5-6"/></svg></span>{item}</li>)}
+                </ul>
+              </div>
+              <div className={`sol-panel ${activeTab === "company" ? "active" : ""}`}>
+                <h3 className="sol-headline">Employee training and upskilling</h3>
+                <ul className="sol-checklist">
+                  {["Onboarding and compliance training paths", "Skill tracking and attendance management", "Team-level performance dashboards", "Domain-restricted signup and access control", "Export reports as CSV or PDF"].map((item) => <li key={item}><span className="check-icon"><svg viewBox="0 0 16 16" fill="none" stroke="#10b981" strokeWidth="2"><path d="M4 8l3 3 5-6"/></svg></span>{item}</li>)}
+                </ul>
+              </div>
+            </div>
+            <div className="sol-visual">
+              <div className="sol-stats">
+                <div className="sol-stat accent"><div className="big"><CountUp target={1284} /></div><div className="lbl">Organizations</div></div>
+                <div className="sol-stat"><div className="big"><CountUp target={2.4} decimals={1} suffix="M" useSeparator={false} /></div><div className="lbl">Learners</div></div>
+                <div className="sol-stat"><div className="big"><CountUp target={98.2} decimals={1} suffix="%" useSeparator={false} /></div><div className="lbl">Sync Rate</div></div>
+                <div className="sol-stat accent"><div className="big"><CountUp target={42} suffix="min" /></div><div className="lbl">Avg Session</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PRODUCT PREVIEW & LIVE ANALYTICS SHOWCASE ── */}
+      <section id="product-preview">
+        <div className="inner">
+          <div className="preview-header">
+            <span className="section-eyebrow">Interactive Sandbox</span>
+            <h2 className="section-title">See Telite LMS in Action</h2>
+            <p className="section-sub">Experience our lightning-fast analytical layers, operational queues, and curriculum building tools.</p>
+          </div>
+
+          <div className="preview-container">
+            <div className="preview-tabs">
+              <button 
+                className={`preview-tab magnetic ${activePreviewTab === "analytics" ? "active" : ""}`}
+                onClick={() => setActivePreviewTab("analytics")}
+              >
+                Workspace Analytics
+              </button>
+              <button 
+                className={`preview-tab magnetic ${activePreviewTab === "operations" ? "active" : ""}`}
+                onClick={() => setActivePreviewTab("operations")}
+              >
+                Admin Operations
+              </button>
+              <button 
+                className={`preview-tab magnetic ${activePreviewTab === "builder" ? "active" : ""}`}
+                onClick={() => setActivePreviewTab("builder")}
+              >
+                Course Builder
+              </button>
+            </div>
+
+            <div className="preview-window">
+              <div className="window-header">
+                <div className="window-dots">
+                  <span className="dot red"></span>
+                  <span className="dot yellow"></span>
+                  <span className="dot green"></span>
+                </div>
+                <div className="window-address">https://app.telite.edu/dashboard/{activePreviewTab}</div>
+              </div>
+              <div className="window-body">
+                {activePreviewTab === "analytics" && (
+                  <div className="preview-pane-analytics">
+                    <div className="pane-sidebar">
+                      <div className="sidebar-metric">
+                        <span className="label">Completion Index</span>
+                        <h4 className="value">84.5%</h4>
+                        <span className="subtext green">+3.2% vs Moodle raw</span>
+                      </div>
+                      <div className="sidebar-metric">
+                        <span className="label">Active Study Pacing</span>
+                        <h4 className="value">4.8 hrs</h4>
+                        <span className="subtext">Daily average session</span>
+                      </div>
+                      <div className="sidebar-metric">
+                        <span className="label">Satisfaction Score</span>
+                        <h4 className="value">4.92/5</h4>
+                        <span className="subtext green">99.8% positive feedback</span>
+                      </div>
+                    </div>
+                    <div className="pane-chart-container">
+                      <div className="pane-chart-header">
+                        <h4>Cohort Progression Trends</h4>
+                        <p>Real-time analytics syncing directly from institutional webhooks.</p>
+                      </div>
+                      <div className="chart-canvas-wrap">
+                        <Line data={PREVIEW_CHART_DATA} options={PREVIEW_CHART_OPTIONS} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activePreviewTab === "operations" && (
+                  <div className="preview-pane-operations">
+                    <div className="pane-header">
+                      <h4>SuperAdmin Enrollment Approvals Queue</h4>
+                      <p>Filter, verify, and approve domain-restricted student enrollments in real time.</p>
+                    </div>
+                    <div className="approvals-list">
+                      {approvals.map((app) => (
+                        <div className={`approval-row ${app.status.toLowerCase()}`} key={app.id}>
+                          <div className="app-info">
+                            <span className="app-name">{app.name}</span>
+                            <span className="app-org">{app.org}</span>
+                            <span className="app-course">{app.course}</span>
+                          </div>
+                          <div className="app-actions">
+                            {app.status === "Pending" ? (
+                              <>
+                                <button className="btn-approve magnetic" onClick={() => handleApprove(app.id)}>Approve</button>
+                                <button className="btn-reject magnetic" onClick={() => handleReject(app.id)}>Reject</button>
+                              </>
+                            ) : (
+                              <span className={`status-pill ${app.status.toLowerCase()}`}>{app.status}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pane-footer-text">
+                      <span>{approvals.filter(a => a.status === "Pending").length} pending verification checkouts in current queue</span>
+                    </div>
+                  </div>
+                )}
+
+                {activePreviewTab === "builder" && (
+                  <div className="preview-pane-builder">
+                    <div className="pane-header">
+                      <h4>Course Curriculum Composer</h4>
+                      <p>Toggle modular course chunks to dynamically adjust syllabus weight and pacing paths.</p>
+                    </div>
+                    <div className="modules-list">
+                      {modules.map((m) => (
+                        <div className={`module-row ${m.active ? "active" : ""}`} key={m.id}>
+                          <div className="module-info">
+                            <span className="module-title">{m.title}</span>
+                            <span className="module-duration">{m.duration}</span>
+                          </div>
+                          <div className="module-action">
+                            <button className={`toggle-btn-switch ${m.active ? "on" : "off"}`} onClick={() => toggleModule(m.id)}>
+                              <span className="switch-dot"></span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="builder-summary">
+                      <div className="summary-item">
+                        <span className="label">Active Modules</span>
+                        <span className="val">{modules.filter(m => m.active).length} / {modules.length}</span>
+                      </div>
+                      <div className="summary-item">
+                        <span className="label">Total Syllabus Duration</span>
+                        <span className="val">{modules.filter(m => m.active).reduce((sum, m) => sum + parseInt(m.duration), 0)} Hours</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECURITY SECTION ── */}
+      <section id="security-trust">
+        <div className="inner">
+          <div className="security-header">
+            <span className="section-eyebrow">Enterprise Security</span>
+            <h2 className="section-title">Guardians of your learning data</h2>
+            <p className="section-sub">Telite is engineered with state-of-the-art security compliance to protect institutional privacy and intellectual assets.</p>
+          </div>
+          <div className="security-grid">
+            <div className="security-card">
+              <div className="sec-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <h3 className="sec-title">Military-Grade Encryption</h3>
+              <p className="sec-desc">End-to-end cryptographic shielding utilizing AES-256 for data-at-rest and TLS 1.3 for active operations in-transit.</p>
+            </div>
+            <div className="security-card">
+              <div className="sec-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+              </div>
+              <h3 className="sec-title">Row-Level Tenancy Security</h3>
+              <p className="sec-desc">Strict, cryptographically isolated boundary policies running on the database-level to guarantee absolute data privacy.</p>
+            </div>
+            <div className="security-card">
+              <div className="sec-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              </div>
+              <h3 className="sec-title">Continuous Audit Logs</h3>
+              <p className="sec-desc">Immutable audit trails recording credential configurations, role promotions, access vectors, and administrative workflows.</p>
+            </div>
+            <div className="security-card">
+              <div className="sec-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+              </div>
+              <h3 className="sec-title">GDPR & ISO Readiness</h3>
+              <p className="sec-desc">Direct compliance frameworks engineered aligned with SOC 2 Type II, ISO 27001, and global GDPR residency mandates.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── INTEGRATION ECOSYSTEM Grid ── */}
+      <section id="integrations">
+        <div className="inner">
+          <div className="integrations-header">
+            <span className="section-eyebrow">Ecosystem</span>
+            <h2 className="section-title">Seamless Integrations</h2>
+            <p className="section-sub">Connect your existing workflows, LMS platforms, and identity providers with one click.</p>
+          </div>
+          <div className="integrations-tabs-wrapper">
+            <div className="integrations-tabs">
+              {["All", "LMS", "Communication", "Payments", "Enterprise"].map((cat) => (
+                <button
+                  key={cat}
+                  className={`integration-tab magnetic ${activeIntegrationTab === cat ? "active" : ""}`}
+                  onClick={() => setActiveIntegrationTab(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="integrations-grid">
+            {filteredIntegrations.map((item) => (
+              <div className="integration-card" key={item.name}>
+                <div className="int-card-header">
+                  <div className="int-logo-wrapper">
+                    {item.svg}
+                  </div>
+                  <span className={`status-badge ${item.status.toLowerCase().replace(" ", "-")}`}>
+                    {item.status}
+                  </span>
+                </div>
+                <h3 className="int-name">{item.name}</h3>
+                <span className="int-category">{item.category}</span>
+                <p className="int-desc">{item.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── SOLUTIONS ── */}
-      <section id="solutions" className="py-24 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <SectionHeader eyebrow="Solutions" title="Built for your context" sub="Whether managing students across departments or training employees at scale."/>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
-            <div className="bg-white border border-slate-200 rounded-2xl p-8">
-              <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full mb-4">For colleges</span>
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Academic learning management</h3>
-              <ul className="space-y-0">{COLLEGES.map(c => <CheckItem key={c} text={c} color="#4f46e5"/>)}</ul>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-8">
-              <span className="inline-block bg-teal-100 text-teal-700 text-xs font-medium px-3 py-1 rounded-full mb-4">For companies</span>
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Employee training and upskilling</h3>
-              <ul className="space-y-0">{COMPANIES.map(c => <CheckItem key={c} text={c} color="#0d9488"/>)}</ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ── HOW IT WORKS ── */}
-      <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <SectionHeader eyebrow="How it works" title="Up and running in three steps" sub="No complex setup. Your team can be learning within hours."/>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative max-w-4xl mx-auto">
-            <div className="hidden md:block absolute top-6 left-[16.66%] right-[16.66%] h-px bg-slate-200 z-0" style={{ marginLeft: 24, marginRight: 24 }}/>
-            {STEPS.map(s => (
-              <div key={s.n} className="text-center relative z-10">
-                <div className="w-12 h-12 rounded-full bg-indigo-50 border-2 border-indigo-200 flex items-center justify-center mx-auto mb-4 text-indigo-700 font-semibold text-lg">{s.n}</div>
-                <h3 className="font-semibold text-slate-800 mb-2">{s.title}</h3>
-                <p className="text-slate-500 text-sm leading-relaxed max-w-[220px] mx-auto">{s.desc}</p>
+      <section id="howitworks">
+        <div className="inner">
+          <div className="steps-header">
+            <span className="section-eyebrow">How it works</span>
+            <h2 className="section-title">Up and running in three steps</h2>
+            <p className="section-sub">No complex setup. Your team can be learning within hours.</p>
+          </div>
+          <div className="steps-row">
+            <div className="step-connector"></div>
+            {[
+              ["1", "Create your workspace", "Set up your organisation, configure allowed domains, and invite your first admins. Under five minutes."],
+              ["2", "Add users and courses", "Bulk import learners, create learning categories, publish courses with modules, and assign tasks."],
+              ["3", "Track and optimise", "Monitor real-time progress, PAL scores, and completion rates. Export reports and act on at-risk alerts."],
+            ].map(([num, title, desc]) => (
+              <div className="step-card" key={num}>
+                <div className="step-num">{num}</div>
+                <div className="step-card-body">
+                  <h3 className="step-title">{title}</h3>
+                  <p className="step-desc">{desc}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -203,104 +1289,338 @@ export default function LandingPage({ session }) {
       </section>
 
       {/* ── TESTIMONIALS ── */}
-      <section className="py-24 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <SectionHeader eyebrow="Testimonials" title="Trusted by learning teams"/>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {TESTIMONIALS.map(t => (
-              <div key={t.name} className="bg-white border border-slate-100 rounded-2xl p-6">
-                <div className="flex gap-1 mb-4">{[...Array(5)].map((_,i) => <div key={i} className="w-3 h-3 bg-amber-400 rounded-sm"/>)}</div>
-                <p className="text-slate-600 text-sm leading-relaxed mb-4">"{t.q}"</p>
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full ${t.bg} ${t.fg} flex items-center justify-center text-xs font-medium`}>{t.initials}</div>
-                  <div><div className="text-sm font-semibold">{t.name}</div><div className="text-xs text-slate-400">{t.role}</div></div>
+      <section id="testimonials">
+        <div className="header-wrap"><span className="section-eyebrow">Testimonials</span><h2 className="section-title">Trusted by learning teams</h2></div>
+        <div className="marquee-outer"><div className="marquee-track">{[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => <div className="testi-card" key={`${t.name}-${idx}`}><div className="stars">{Array.from({ length: t.stars }).map((_, i) => <span key={i} className="star">★</span>)}</div><p className="testi-quote">"{t.quote}"</p><div className="testi-author"><div className="testi-avatar">{t.name.split(" ").map((n) => n[0]).join("")}</div><div><div className="testi-name">{t.name}</div><div className="testi-role">{t.role}</div></div></div></div>)}</div></div>
+      </section>
+
+      {/* ── PRICING ── */}
+      <section id="pricing">
+        <div className="inner">
+          <div className="pricing-header">
+            <span className="section-eyebrow">Pricing</span>
+            <h2 className="section-title">Simple, transparent pricing</h2>
+            <p className="section-sub">Start free. Scale as you grow. No hidden fees.</p>
+          </div>
+          <div className="pricing-toggle">
+            <span className={`toggle-label ${!isAnnual ? "active" : ""}`} onClick={() => handleToggle()}>Monthly</span>
+            <div className={`toggle-switch ${isAnnual ? "annual" : ""}`} onClick={handleToggle} role="switch" aria-checked={isAnnual} aria-label="Toggle annual pricing"></div>
+            <span className={`toggle-label ${isAnnual ? "active" : ""}`} onClick={() => handleToggle()}>Annually</span>
+            <span className="toggle-badge">Save 20%</span>
+          </div>
+          <div className="pricing-grid">
+            {PLANS.map((p) => (
+              <div
+                key={p.name}
+                className={`pricing-card ${p.highlight ? "pro" : ""} ${selectedPlan === p.name ? "selected" : ""}`}
+                onClick={() => setSelectedPlan(p.name)}
+                role="button"
+                tabIndex={0}
+                aria-label={`Select ${p.name} plan`}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedPlan(p.name); }}
+              >
+                {p.highlight && <span className="pro-badge">Most popular</span>}
+                <div className="plan-name">{p.name}</div>
+                <div className="plan-tag">{p.tag}</div>
+                <div
+                  className="plan-price price-number"
+                  ref={(el) => { priceRefsMap.current[p.name] = el; }}
+                >
+                  {isAnnual ? p.price.annual : p.price.monthly}
                 </div>
+                <div className="plan-period">{isAnnual && p.name === "Pro" ? "per month, billed annually" : p.period}</div>
+                <ul className="plan-features">
+                  {p.features.map((feature) => (
+                    <li key={feature}>
+                      <span className="pf-check"><svg viewBox="0 0 16 16" fill="none" stroke="#10b981" strokeWidth="2"><path d="M4 8l3 3 5-6"/></svg></span>{feature}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to={dashboardLink || (p.price.monthly === "Custom" ? "#" : "/signup")}
+                  className={`btn-plan magnetic ${p.highlight ? "btn-plan-white" : p.price.monthly === "Custom" ? "btn-plan-ghost" : "btn-plan-outline"}`}
+                  onClick={(e) => {
+                    if (p.price.monthly === "Custom") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowContactModal(true);
+                    } else {
+                      e.stopPropagation();
+                    }
+                  }}
+                >
+                  {dashboardLink ? "Go to Dashboard" : p.price.monthly === "Custom" ? "Contact Sales" : "Get started"}
+                </Link>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── PRICING ── */}
-      <section id="pricing" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <SectionHeader eyebrow="Pricing" title="Simple, transparent pricing" sub="Start free. Scale as you grow. No hidden fees."/>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {PLANS.map(p => (
-              <div key={p.name} className={`bg-white rounded-2xl p-8 relative ${p.featured ? "border-2 border-indigo-600" : "border border-slate-200"}`}>
-                {p.featured && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs px-4 py-1 rounded-full whitespace-nowrap">Most popular</span>}
-                <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${p.featured ? "text-indigo-600" : "text-slate-500"}`}>{p.name}</p>
-                <div className="text-3xl font-bold text-slate-900">{p.price}</div>
-                <p className="text-xs text-slate-400 mb-4">{p.period}</p>
-                <p className="text-sm text-slate-500 mb-5 leading-relaxed">{p.desc}</p>
-                <hr className="border-slate-100 mb-4"/>
-                <ul className="space-y-2 mb-6">{p.features.map(f => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-slate-600"><span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0"/>{f}</li>
-                ))}</ul>
-                {p.link ? (
-                  <Link to={dashboardLink || p.link} className={`block w-full text-center py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${p.featured ? "bg-indigo-600 text-white hover:bg-indigo-700" : "border border-slate-300 text-slate-700 hover:border-indigo-400 hover:text-indigo-600"}`}>
-                    {dashboardLink ? "Go to Dashboard" : p.cta}
-                  </Link>
-                ) : (
-                  <button className="w-full py-2.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:border-indigo-400 hover:text-indigo-600 transition-all duration-200">{p.cta}</button>
-                )}
-              </div>
+      {/* ── FAQ SECTION ── */}
+      <section id="faq">
+        <div className="inner">
+          <div className="faq-header">
+            <span className="section-eyebrow">FAQ</span>
+            <h2 className="section-title">Frequently asked questions</h2>
+            <p className="section-sub">Have questions about Telite LMS? Find quick answers right here.</p>
+          </div>
+          <div className="faq-list">
+            {FAQS.map((faq, index) => (
+              <FAQItem key={index} item={faq} />
             ))}
           </div>
         </div>
       </section>
 
       {/* ── CTA BANNER ── */}
-      <section className="py-20 bg-indigo-600">
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <h2 className="text-3xl font-bold text-white">Ready to modernise your learning operations?</h2>
-          <p className="text-indigo-200 mt-3 mb-8">Join hundreds of colleges and companies already using Telite LMS.</p>
-          <div className="flex justify-center gap-4 flex-wrap">
-            {dashboardLink ? (
-              <Link to={dashboardLink} className="bg-white text-indigo-700 font-semibold px-8 py-3 rounded-xl hover:bg-indigo-50 transition-all duration-200">Go to Dashboard</Link>
-            ) : (
-              <Link to="/signup" className="bg-white text-indigo-700 font-semibold px-8 py-3 rounded-xl hover:bg-indigo-50 transition-all duration-200">Get started free</Link>
-            )}
-            <button className="border border-indigo-400 text-white px-8 py-3 rounded-xl hover:bg-indigo-700 transition-all duration-200">Book a demo</button>
+      <section id="cta-section">
+        <div id="cta-vanta" ref={vantaCtaRef}></div>
+        <div className="cta-content">
+          <h2 className="cta-title">Ready to modernise your<br />learning operations?</h2>
+          <p className="cta-sub">Join thousands of colleges and companies already using Telite LMS.</p>
+          <div className="cta-btns">
+            <Link to={dashboardLink || "/signup"} className="btn-cta-white magnetic">{dashboardLink ? "Go to Dashboard" : "Get started free"}</Link>
+            <a href="#features" className="btn-cta-outline magnetic">Explore features</a>
           </div>
         </div>
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="bg-slate-900 py-14">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
-            <div>
-              <h4 className="text-white font-semibold text-lg">Telite LMS</h4>
-              <p className="text-slate-400 text-sm mt-2 leading-relaxed">Role-aware learning operations for colleges, companies, and training institutes.</p>
+      <footer>
+        <div className="footer-grid">
+          <div>
+            <span className="footer-brand-name">Telite LMS</span>
+            <p className="footer-brand-desc">Role-driven learning operations for colleges, companies, and training institutes.</p>
+            <div className="footer-social">
+              <a href="#" aria-label="Twitter / X">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l11.733 16h4.267l-11.733-16zM4 20l6.768-6.768M20 4l-6.768 6.768"/></svg>
+              </a>
+              <a href="#" aria-label="LinkedIn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+              </a>
+              <a href="#" aria-label="GitHub">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+              </a>
+              <a href="mailto:support@telitesystems.com" aria-label="Email">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
+              </a>
             </div>
-            {[
-              { title: "Product", items: ["Features","Pricing","Changelog","Roadmap","API docs"] },
-              { title: "Company", items: ["About","Blog","Careers","Press kit"] },
-              { title: "Support", items: ["Help centre","Contact us","Privacy policy","Terms of service"] },
-            ].map(col => (
-              <div key={col.title}>
-                <h5 className="text-slate-300 text-sm font-semibold mb-3">{col.title}</h5>
-                <ul className="space-y-2">{col.items.map(i => <li key={i}><a className="text-slate-400 text-sm hover:text-white transition-all duration-200 cursor-pointer">{i}</a></li>)}</ul>
-              </div>
-            ))}
+            <div className="footer-newsletter">
+              <h5 className="newsletter-title">Subscribe to updates</h5>
+              {newsletterSuccess ? (
+                <div className="newsletter-success-msg">Thanks! You are subscribed.</div>
+              ) : (
+                <form onSubmit={handleNewsletterSubmit} className="newsletter-form">
+                  <input
+                    type="email"
+                    placeholder="Enter your email"
+                    required
+                    value={newsletterEmail}
+                    onChange={(e) => setNewsletterEmail(e.target.value)}
+                    aria-label="Email Address for newsletter"
+                  />
+                  <button type="submit" className="btn-newsletter-submit" aria-label="Subscribe">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col md:flex-row justify-between items-center border-t border-slate-800 mt-10 pt-6 gap-4">
-            <p className="text-slate-500 text-sm">© 2026 Telite Systems. All rights reserved.</p>
-            <div className="flex gap-2">
-              {[
-                <><path d="M9 2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/><path d="M7 7l7-7M10 1h4v4"/></>,
-                <><path d="M4 1h2a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z"/><path d="M10 1h2v4l-2 2-2-2V1z"/></>,
-                <><rect x="1" y="3" width="12" height="10" rx="1"/><path d="M1 3l6 5 6-5"/></>,
-              ].map((svg, i) => (
-                <div key={i} className="w-8 h-8 rounded-lg border border-slate-700 flex items-center justify-center hover:border-slate-500 hover:bg-slate-800 transition-all duration-200 cursor-pointer">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 14 14" fill="none" stroke="#94a3b8" strokeWidth="1.5">{svg}</svg>
-                </div>
-              ))}
-            </div>
+          <div>
+            <h5 className="footer-col-title">Product</h5>
+            <ul className="footer-links">
+              <li><a href="#features">Features</a></li>
+              <li><a href="#pricing">Pricing</a></li>
+              <li><a href="#">Integrations</a></li>
+              <li><a href="#">Changelog</a></li>
+              <li><a href="#">Roadmap</a></li>
+            </ul>
+          </div>
+          <div>
+            <h5 className="footer-col-title">Company</h5>
+            <ul className="footer-links">
+              <li><a href="#">About us</a></li>
+              <li><a href="#">Blog</a></li>
+              <li><a href="#">Careers</a></li>
+              <li><a href="#">Press</a></li>
+              <li><a href="#">Security</a></li>
+            </ul>
+          </div>
+          <div>
+            <h5 className="footer-col-title">Support</h5>
+            <ul className="footer-links">
+              <li><a href="#">Documentation</a></li>
+              <li><a href="#">API Docs</a></li>
+              <li><a href="#">Help center</a></li>
+              <li><a href="#">Status</a></li>
+              <li><a href="mailto:support@telitesystems.com">Contact</a></li>
+            </ul>
+          </div>
+          <div>
+            <h5 className="footer-col-title">Legal</h5>
+            <ul className="footer-links">
+              <li><a href="#">Privacy Policy</a></li>
+              <li><a href="#">Terms of Service</a></li>
+              <li><a href="#">Cookie Policy</a></li>
+              <li><a href="#">GDPR Compliance</a></li>
+            </ul>
           </div>
         </div>
+        <div className="footer-bottom">
+          <span>© 2026 Telite Systems. All rights reserved.</span>
+        </div>
       </footer>
+
+      {/* ── CONTACT/DEMO MODAL ── */}
+      {showContactModal && (
+        <div className="modal-overlay" onClick={() => setShowContactModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowContactModal(false)} aria-label="Close modal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            {contactSuccess ? (
+              <div className="modal-success-state">
+                <div className="success-checkmark-wrapper">
+                  <svg className="success-checkmark" viewBox="0 0 52 52">
+                    <circle className="success-checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                    <path className="success-checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                  </svg>
+                </div>
+                <h3>Request Submitted!</h3>
+                <p>Our learning operations specialists will reach out to you within 24 hours to schedule a custom walkthrough.</p>
+              </div>
+            ) : (
+              <>
+                <h3>Book a Live Demo</h3>
+                <p className="modal-subtitle">Experience how Telite LMS orchestrates complex learning ecosystems.</p>
+                <form onSubmit={handleContactSubmit}>
+                  {contactError && <div className="form-error-banner">{contactError}</div>}
+                  <div className="form-group">
+                    <label htmlFor="modal-name">Full Name</label>
+                    <input
+                      id="modal-name"
+                      type="text"
+                      placeholder="E.g., Vikram Pillai"
+                      required
+                      value={contactForm.name}
+                      onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="modal-email">Work Email</label>
+                    <input
+                      id="modal-email"
+                      type="email"
+                      placeholder="E.g., vikram@edubridge.in"
+                      required
+                      value={contactForm.email}
+                      onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="modal-org">Organization</label>
+                    <input
+                      id="modal-org"
+                      type="text"
+                      placeholder="E.g., EduBridge Learning"
+                      required
+                      value={contactForm.org}
+                      onChange={(e) => setContactForm({ ...contactForm, org: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="modal-type">Organization Type</label>
+                    <select
+                      id="modal-type"
+                      value={contactForm.type}
+                      onChange={(e) => setContactForm({ ...contactForm, type: e.target.value })}
+                    >
+                      <option>College / University</option>
+                      <option>Corporate Training</option>
+                      <option>Individual Instructor</option>
+                      <option>Government Body</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="modal-msg">How can we help?</label>
+                    <textarea
+                      id="modal-msg"
+                      placeholder="Syllabus sync needs, learner limits, etc."
+                      value={contactForm.msg}
+                      onChange={(e) => setContactForm({ ...contactForm, msg: e.target.value })}
+                    />
+                  </div>
+                  <button type="submit" className="btn-modal-submit magnetic">Schedule My Demo</button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── SUPPORT WIDGET ── */}
+      <div className="support-widget-container">
+        <button 
+          className={`support-widget-badge magnetic ${showSupportWidget ? "active" : ""}`}
+          onClick={() => setShowSupportWidget(!showSupportWidget)}
+          aria-label="Toggle Support Options"
+          aria-expanded={showSupportWidget}
+        >
+          {showSupportWidget ? (
+            <svg className="widget-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          ) : (
+            <svg className="widget-chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          )}
+        </button>
+        
+        {showSupportWidget && (
+          <div className="support-widget-panel">
+            <div className="widget-panel-header">
+              <h4>Telite Support Hub</h4>
+              <p>How can we assist you today?</p>
+            </div>
+            <div className="widget-panel-body">
+              <a href="#faq" className="widget-link-item" onClick={() => setShowSupportWidget(false)}>
+                <div className="widget-item-icon">❓</div>
+                <div className="widget-item-content">
+                  <h5>Read FAQs</h5>
+                  <p>Quick answers to common queries</p>
+                </div>
+              </a>
+              <a href="mailto:support@telitesystems.com" className="widget-link-item">
+                <div className="widget-item-icon">📧</div>
+                <div className="widget-item-content">
+                  <h5>Email Support</h5>
+                  <p>Get a response in under 2 hours</p>
+                </div>
+              </a>
+              <a href="#" className="widget-link-item" onClick={(e) => { e.preventDefault(); setShowContactModal(true); setShowSupportWidget(false); }}>
+                <div className="widget-item-icon">📅</div>
+                <div className="widget-item-content">
+                  <h5>Request Call</h5>
+                  <p>Schedule a quick phone walkthrough</p>
+                </div>
+              </a>
+            </div>
+            <div className="widget-panel-footer">
+              <span className="status-indicator online"></span>
+              <span className="footer-status-text">Operations team online</span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

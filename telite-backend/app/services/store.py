@@ -543,7 +543,7 @@ def _ensure_global_admin_seed(conn: sqlite3.Connection) -> None:
         """
         UPDATE users
         SET role = 'super_admin', is_platform_admin = 1, organization_id = COALESCE(organization_id, 1),
-            org_id = COALESCE(org_id, organization_id, 1), status = COALESCE(status, 'active')
+            org_id = COALESCE(org_id, organization_id, 1), is_active = 1, status = 'active'
         WHERE lower(username) = lower('globaladmin')
         """
     )
