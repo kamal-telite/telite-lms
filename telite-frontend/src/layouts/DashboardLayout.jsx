@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Badge, Avatar, Button } from "../components/common/ui";
+import { Badge } from "../components/common/ui";
 import { Icon } from "../components/common/icons";
 
 export function DashboardShell({
@@ -25,15 +25,26 @@ export function DashboardShell({
     <div className={`dashboard-shell ${collapsed ? 'is-collapsed' : ''}`} data-theme={theme}>
       <aside className={`dashboard-sidebar ${collapsed ? 'dashboard-sidebar--collapsed' : ''}`}>
         <div className="sidebar-brand">
-          <div className="sidebar-brand__mark" style={{ background: brandMark.background }}>
-            {brandMark.label}
-          </div>
-          {!collapsed && (
-            <div>
-              <div className="sidebar-brand__title">{brandTitle}</div>
-              <div className="sidebar-brand__subtitle">{brandSubtitle}</div>
+          <div className="sidebar-brand__identity">
+            <div className="sidebar-brand__mark" style={{ background: brandMark.background }}>
+              {brandMark.label}
             </div>
-          )}
+            {!collapsed && (
+              <div>
+                <div className="sidebar-brand__title">{brandTitle}</div>
+                <div className="sidebar-brand__subtitle">{brandSubtitle}</div>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={16} />
+          </button>
         </div>
 
         <div className="sidebar-nav">
@@ -61,26 +72,6 @@ export function DashboardShell({
           ))}
         </div>
 
-        <div className="sidebar-bottom">
-          <div className="sidebar-profile" style={{ justifyContent: collapsed ? 'center' : 'flex-start' }}>
-            <Avatar initials={profile.initials} gradient={profile.gradient} size={30} />
-            {!collapsed && (
-              <div>
-                <div className="sidebar-profile__name">{profile.name}</div>
-                <div className="sidebar-profile__role">{profile.roleLabel}</div>
-              </div>
-            )}
-          </div>
-          <button 
-            type="button" 
-            className="sidebar-collapse-btn"
-            onClick={() => setCollapsed(!collapsed)}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={16} />
-            {!collapsed && <span>Collapse</span>}
-          </button>
-        </div>
       </aside>
 
       <div className="dashboard-main">

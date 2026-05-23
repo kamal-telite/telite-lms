@@ -163,6 +163,24 @@ Last updated: 2026-05-23
   - Leaderboard and course filters now render useful empty states.
   - Backend task submission now checks that a learner can access the task before marking it submitted.
   - Build result: passes. Backend syntax check `python -m py_compile telite-backend/app/services/store.py` passes. Full backend pytest could not run because pytest is not installed in this Python environment.
+- 2026-05-23: Completed shared sidebar, learner label, and admin learner-delete permission batch.
+  - Shared dashboard sidebars now use an icon-only collapse control in the top-right of the sidebar header.
+  - Removed the duplicate profile block from the sidebar because profile access already exists in the top navigation.
+  - Renamed the learner "Moodle link" navigation label to "Course Link".
+  - Admin-level deletion now uses the admin dependency instead of super-admin-only access.
+  - Category admins can delete learners only inside their own category scope; broader user deletion remains blocked for category admins.
+  - Build result: `npm.cmd run build` passes after running outside the sandbox because Vite config loading hit a sandbox read restriction. The existing large JS chunk warning remains.
+  - Backend syntax check passes using bundled Python: `python.exe -c py_compile ... management.py`.
+- 2026-05-23: Completed admin learner-info layout and small button-label continuity batch.
+  - Category Admin learner management now uses responsive learner cards instead of the cramped multi-column table.
+  - Learner rows now group identity, course progress, PAL score, enrollment type, status, and actions consistently with shared dashboard UI primitives.
+  - Learner filters/actions use a scoped toolbar and the shared plus-icon primary button style.
+  - Admin export menu labels were cleaned from corrupted emoji text to plain "Download CSV" and "Download PDF".
+  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
+- 2026-05-23: Completed SuperAdmin dead-action cleanup.
+  - Removed a non-functional "View all" action from the enrollment audit panel.
+  - Updated the PAL "Full report" action to route to the first available category report instead of hardcoding the ATS category; it now shows a warning toast if no category exists.
+  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
 
 ## Next Planned Fix Order
 

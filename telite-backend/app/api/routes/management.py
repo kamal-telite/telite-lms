@@ -510,7 +510,7 @@ def patch_user_active(
 @management_router.delete("/users/{user_id}")
 def delete_user(
     user_id: str,
-    current_user: TokenData = Depends(require_super_admin),
+    current_user: TokenData = Depends(require_admin),
 ):
     actor = fetch_user_by_id(current_user.id)
     if not actor:
@@ -519,6 +519,11 @@ def delete_user(
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     ensure_org_access(current_user, _org_id(target))
+    if is_category_admin_role(current_user.role):
+        if not is_learner_role(target.get("role", "")):
+            raise HTTPException(status_code=403, detail="Category admins can delete only learners")
+        if target.get("category_scope") != current_user.category_scope:
+            raise HTTPException(status_code=403, detail="Learner is outside your category scope")
     try:
         user = soft_delete_user(user_id, actor)
         if user.get("moodle_user_id"):

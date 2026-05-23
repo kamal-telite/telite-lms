@@ -767,7 +767,18 @@ export default function SuperAdminPage({ session, onLogout }) {
                 ) : (
                   <>
                     <Badge tone="neutral">all-time</Badge>
-                    <button className="panel-link" type="button" onClick={() => navigate("/categories/ats/stats")}>
+                    <button
+                      className="panel-link"
+                      type="button"
+                      onClick={() => {
+                        const firstCategory = dashboard.categories?.[0];
+                        if (firstCategory?.slug) {
+                          navigate(`/categories/${firstCategory.slug}/stats`);
+                        } else {
+                          showToast("No category report is available yet.", "warning");
+                        }
+                      }}
+                    >
                       Full report
                     </button>
                   </>
@@ -923,7 +934,7 @@ export default function SuperAdminPage({ session, onLogout }) {
             <Panel
               title="Enrollment audit log"
               subtitle={isMoodleSource ? "Read-only" : "manual & self-enrol"}
-              action={!isMoodleSource ? <button className="panel-link" type="button">View all</button> : null}
+              action={null}
             >
               {isMoodleSource ? (
                 <EmptyState

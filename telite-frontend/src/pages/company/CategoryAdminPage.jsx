@@ -492,7 +492,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       showToast("Export failed: " + err.message, "error");
                     }
                   }}>
-                    📥 Export as CSV
+                    Download CSV
                   </button>
                   <button type="button" onClick={() => {
                     setExportOpen(false);
@@ -544,7 +544,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       showToast("PDF export failed: " + err.message, "error");
                     }
                   }}>
-                    📄 Export as PDF
+                    Download PDF
                   </button>
                 </div>
               ) : null}
@@ -841,7 +841,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                 title={`Manage ${labels.users}`}
                 subtitle={`Overview of ${labels.users.toLowerCase()} enrolled in ${dashboard.category?.name}`}
                 action={
-                  <div className="toolbar">
+                  <div className="toolbar learner-toolbar">
                     <input
                       className="field__input"
                       placeholder={`Search by name or email...`}
@@ -853,59 +853,57 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       <option value="manual">Manual</option>
                       <option value="self">Self-enrolled</option>
                     </select>
-                    <Button tone="primary" onClick={() => setLearnerModal({ open: true, seed: null })}>+ Add {labels.user}</Button>
+                    <Button tone="primary" icon="plus" onClick={() => setLearnerModal({ open: true, seed: null })}>Add {labels.user}</Button>
                   </div>
                 }
               >
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{labels.user}</th>
-                      <th>Enrolled date</th>
-                      <th>Courses</th>
-                      <th>PAL Score</th>
-                      <th>Enrollment type</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedLearners.map((learner) => (
-                      <tr key={learner.id}>
-                        <td>
-                          <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
-                            <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={26} />
-                            <div>
-                              <div className="row-title">{learner.full_name}</div>
-                              <div className="row-subtitle">{learner.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="mono">{formatShortDate(learner.created_at)}</td>
-                        <td className="mono">{learner.courses_completed}/{learner.total_courses}</td>
-                        <td className="mono" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</td>
-                        <td><Badge tone={learner.enrollment_type === "self" ? "accent" : "brand"}>{learner.enrollment_type}</Badge></td>
-                        <td><Badge tone={learner.is_active ? "success" : "neutral"}>{learner.is_active ? "Active" : "Inactive"}</Badge></td>
-                        <td>
+              <div className="learner-list">
+                {paginatedLearners.length ? (
+                  paginatedLearners.map((learner) => (
+                    <article className="learner-card" key={learner.id}>
+                      <div className="learner-card__identity">
+                        <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={34} />
+                        <div>
+                          <div className="row-title">{learner.full_name}</div>
+                          <div className="row-subtitle">{learner.email}</div>
+                        </div>
+                      </div>
+                      <div className="learner-card__stats">
+                        <div>
+                          <span>Enrolled</span>
+                          <strong className="mono">{formatShortDate(learner.created_at)}</strong>
+                        </div>
+                        <div>
+                          <span>Courses</span>
+                          <strong className="mono">{learner.courses_completed}/{learner.total_courses}</strong>
+                        </div>
+                        <div>
+                          <span>PAL Score</span>
+                          <strong className="mono" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</strong>
+                        </div>
+                      </div>
+                      <div className="learner-card__badges">
+                        <Badge tone={learner.enrollment_type === "self" ? "accent" : "brand"}>{learner.enrollment_type}</Badge>
+                        <Badge tone={learner.is_active ? "success" : "neutral"}>{learner.is_active ? "Active" : "Inactive"}</Badge>
+                      </div>
+                      <div className="learner-card__actions">
+                        <IconButton label="View learner" icon="eye" onClick={() => setDetailLearner(learner)} />
+                        <IconButton label="Delete learner" icon="trash" onClick={() => setDeleteLearnerId((value) => (value === learner.id ? null : learner.id))} />
+                      </div>
+                      {deleteLearnerId === learner.id ? (
+                        <div className="inline-confirm learner-card__confirm">
+                          <span>Remove this {labels.user.toLowerCase()}?</span>
                           <div className="split-actions">
-                            <IconButton label="View learner" icon="eye" onClick={() => setDetailLearner(learner)} />
-                            <IconButton label="Delete learner" icon="trash" onClick={() => setDeleteLearnerId((value) => (value === learner.id ? null : learner.id))} />
+                            <Button tone="danger" size="small" onClick={() => handleDeleteLearner(learner.id)}>Confirm delete</Button>
+                            <Button tone="ghost" size="small" onClick={() => setDeleteLearnerId(null)}>Cancel</Button>
                           </div>
-                          {deleteLearnerId === learner.id ? (
-                            <div className="inline-confirm">
-                              <span>Remove this {labels.user.toLowerCase()}?</span>
-                              <div className="split-actions">
-                                <Button tone="danger" onClick={() => handleDeleteLearner(learner.id)}>Confirm delete</Button>
-                                <Button tone="ghost" onClick={() => setDeleteLearnerId(null)}>Cancel</Button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      ) : null}
+                    </article>
+                  ))
+                ) : (
+                  <EmptyState title={`No ${labels.users.toLowerCase()} found`} body="Try changing the search or enrollment filter." />
+                )}
               </div>
               <div className="pagination" style={{ marginTop: 16 }}>
                 <Button tone="ghost" disabled={learnerPage === 1} onClick={() => setLearnerPage(1)}>Page 1</Button>
