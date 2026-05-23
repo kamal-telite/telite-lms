@@ -3,10 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { launchCourse, submitTask } from "../../services/client";
 import { DashboardShell, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { Avatar, Badge, Button, ErrorState, LoadingState, Panel, StatCard, useToast, EmptyState, IconButton } from "../../components/common/ui";
-import { ChartCanvas } from "../../components/common/charts";
 import {
   formatDateTime,
-  formatMonthDate,
   formatPercent,
   getCompletionColor,
   getInitials,
@@ -70,22 +68,54 @@ function NotificationDrawer({ open, onClose, notifications }) {
     <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 320, background: "var(--surface)", borderLeft: "1px solid var(--border)", zIndex: 100, boxShadow: "-4px 0 15px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: 16, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h3 style={{ margin: 0, fontSize: "16px" }}>Notifications</h3>
-        <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: "18px", cursor: "pointer", color: "var(--text-muted)" }}>×</button>
+        <IconButton label="Close notifications" icon="x" onClick={onClose} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-        {notifications?.length === 0 ? (
-           <EmptyState title="You're all caught up! 🎉" body="No new notifications." />
+        {!notifications?.length ? (
+           <EmptyState title="You're all caught up" body="No new notifications." />
         ) : (
            notifications?.map(n => (
              <div key={n.id} style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
                 <div style={{ fontSize: "13px", fontWeight: "bold" }}>{n.title}</div>
-                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: 4 }}>{n.message}</div>
+                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: 4 }}>{n.message ?? n.body ?? ""}</div>
              </div>
            ))
         )}
       </div>
     </div>
   );
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Number(value) || 0));
+}
+
+function getCourseProgress(course) {
+  return clampPercent(course.completion_pct ?? course.progress ?? 0);
+}
+
+function getCourseStatus(course) {
+  return course.progress_status ?? course.completion_status ?? course.status ?? "not_started";
+}
+
+function getCourseBadgeTone(status) {
+  return status === "completed" ? "success" : status === "in_progress" ? "warn" : "neutral";
+}
+
+function getCourseActionLabel(status) {
+  return status === "completed" ? "Review" : status === "not_started" ? "Start" : "Resume";
+}
+
+function buildPalDimensions(breakdown = {}) {
+  const timePct = breakdown.time_on_task_pct ?? Math.min(((Number(breakdown.time_on_task) || 0) / 50) * 100, 100);
+  const streakPct = breakdown.streak_pct ?? Math.min(((Number(breakdown.streak_days) || 0) / 30) * 100, 100);
+  return [
+    { label: "Course Completion", value: breakdown.completion, weight: 0.35 },
+    { label: "Quiz Average", value: breakdown.quiz_avg, weight: 0.3 },
+    { label: "Task Completion", value: breakdown.task_completion, weight: 0.2 },
+    { label: "Time on Task", value: timePct, weight: 0.1 },
+    { label: "Learning Streak", value: streakPct, weight: 0.05 },
+  ];
 }
 
 export default function LearnerPage({ session, onLogout }) {
@@ -178,6 +208,17 @@ export default function LearnerPage({ session, onLogout }) {
     return <ErrorState body={error || "Your learner dashboard did not return any data."} action={<Button tone="primary" onClick={load}>Retry</Button>} />;
   }
 
+  const courses = Array.isArray(data.courses) ? data.courses : [];
+  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const leaderboard = Array.isArray(data.recommendation?.leaderboard) ? data.recommendation.leaderboard : [];
+  const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+  const currentCourseId = data.hero.current_course?.id;
+  const currentCourseLaunching = currentCourseId && launchingId === currentCourseId;
+  const visibleCourses = courses.filter((course) => courseFilter === "all" ? true : getCourseStatus(course) === courseFilter);
+  const visibleTasks = tasks.filter((task) => taskFilter === "all" ? true : task.status === taskFilter);
+  const pendingTaskCount = tasks.filter((task) => task.status === "pending" || task.status === "overdue").length;
+  const palDimensions = buildPalDimensions(data.pal_breakdown);
+
   const navGroups = [
     {
       label: "Learning",
@@ -185,7 +226,7 @@ export default function LearnerPage({ session, onLogout }) {
         { id: "section-dashboard", label: "Dashboard", icon: "dashboard" },
         { id: "section-courses", label: "My Courses", icon: "course" },
         { id: "section-pal", label: "PAL Progress", icon: "leaderboard" },
-        { id: "section-tasks", label: "Tasks", icon: "task", badge: String(data.tasks?.filter(t => t.status === "pending" || t.status === "overdue").length || 0), badgeTone: "warn" },
+        { id: "section-tasks", label: "Tasks", icon: "task", badge: String(pendingTaskCount), badgeTone: "warn" },
       ],
     },
     {
@@ -221,21 +262,19 @@ export default function LearnerPage({ session, onLogout }) {
         roleLabel: "learner",
       }}
       title={titleize(currentTab === "learner" ? "Dashboard" : currentTab)}
-      subtitle={`${data.profile.category_scope?.toUpperCase()} category · Telite Systems`}
+      subtitle={`${data.profile.category_scope?.toUpperCase()} category - Telite Systems`}
       topbarActions={
         <>
           <Badge tone="accent">PAL {formatPercent(data.hero.pal_score)}</Badge>
           <Button
             tone="primary"
             icon="external"
-            onClick={() => handleLaunch(data.hero.current_course?.id)}
-            disabled={launchingId === data.hero.current_course?.id}
+            onClick={() => handleLaunch(currentCourseId)}
+            disabled={!currentCourseId || currentCourseLaunching}
           >
-            {launchingId === data.hero.current_course?.id ? "Launching..." : "Resume Course"}
+            {currentCourseLaunching ? "Launching..." : currentCourseId ? "Resume Course" : "No active course"}
           </Button>
-          <button className="icon-btn" title="Notifications" onClick={() => setShowNotifications(true)}>
-            <span role="img" aria-label="bell">🔔</span>
-          </button>
+          <IconButton label="Notifications" icon="bell" onClick={() => setShowNotifications(true)} />
           <ProfileDropdown profile={{
             initials: getInitials(session?.user?.name || "Learner"),
             gradient: ["#0ea5e9", "#6366f1"],
@@ -246,7 +285,7 @@ export default function LearnerPage({ session, onLogout }) {
       }
       scrollRef={scrollRef}
     >
-      <NotificationDrawer open={showNotifications} onClose={() => setShowNotifications(false)} notifications={data.notifications} />
+      <NotificationDrawer open={showNotifications} onClose={() => setShowNotifications(false)} notifications={notifications} />
       <div className="dashboard-stack">
         
         {/* DASHBOARD PAGE */}
@@ -279,8 +318,8 @@ export default function LearnerPage({ session, onLogout }) {
                 </div>
               </div>
               <div className="hero-actions" style={{ marginTop: 18 }}>
-                <Button tone="primary" icon="external" onClick={() => handleLaunch(data.hero.current_course?.id)}>
-                  Resume Course
+                <Button tone="primary" icon="external" onClick={() => handleLaunch(currentCourseId)} disabled={!currentCourseId || currentCourseLaunching}>
+                  {currentCourseLaunching ? "Launching..." : currentCourseId ? "Resume Course" : "No active course"}
                 </Button>
                 <Button tone="ghost" onClick={() => changeSection({ id: "section-pal" })}>
                   View PAL Report
@@ -295,14 +334,17 @@ export default function LearnerPage({ session, onLogout }) {
               <StatCard accent="#7C3AED" label="Cohort Rank" value={`#${data.stats.cohort_rank}`} meta="You lead the cohort" />
             </div>
 
-            <Panel title="Recent Courses" subtitle="Resume where you left off" action={<button className="panel-link" onClick={() => changeSection({ id: 'section-courses' })}>View all →</button>}>
+            <Panel title="Recent Courses" subtitle="Resume where you left off" action={<button className="panel-link" onClick={() => changeSection({ id: 'section-courses' })}>View all -&gt;</button>}>
               <div className="grid-3">
-                {data.courses.slice(0,3).map((course) => (
-                  <article className={`course-card ${data.hero.current_course?.id === course.id ? "is-active" : ""}`} key={course.id}>
+                {courses.slice(0,3).map((course) => {
+                  const progress = getCourseProgress(course);
+                  const status = getCourseStatus(course);
+                  return (
+                  <article className={`course-card ${currentCourseId === course.id ? "is-active" : ""}`} key={course.id}>
                     <div className="course-card__header">
                       <div className="course-card__title">{course.name}</div>
-                      <Badge tone={course.status === "completed" ? "success" : "neutral"}>
-                        {titleize(course.status)}
+                      <Badge tone={getCourseBadgeTone(status)}>
+                        {titleize(status)}
                       </Badge>
                     </div>
                     <div className="bar-score" style={{ marginTop: 12 }}>
@@ -310,22 +352,23 @@ export default function LearnerPage({ session, onLogout }) {
                         <div
                           className="progress-fill"
                           style={{
-                            width: animateProgress ? `${course.completion_pct}%` : "0%",
-                            background: getCompletionColor(course.completion_pct),
+                            width: animateProgress ? `${progress}%` : "0%",
+                            background: getCompletionColor(progress),
                           }}
                         />
                       </div>
                     </div>
                     <div className="course-card__footer">
                       <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                        {formatPercent(course.completion_pct)} done
+                        {formatPercent(progress)} done
                       </div>
-                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
-                        {launchingId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                      <Button tone={status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
+                        {launchingId === course.id ? "..." : getCourseActionLabel(status)}
                       </Button>
                     </div>
                   </article>
-                ))}
+                )})}
+                {!courses.length && <EmptyState title="No courses yet" body="Your assigned courses will appear here when they are available." />}
               </div>
             </Panel>
           </section>
@@ -343,12 +386,15 @@ export default function LearnerPage({ session, onLogout }) {
                 ))}
               </div>
               <div className="grid-3">
-                {data.courses.filter(c => courseFilter === "all" ? true : c.status === courseFilter).map((course) => (
+                {visibleCourses.map((course) => {
+                  const progress = getCourseProgress(course);
+                  const status = getCourseStatus(course);
+                  return (
                   <article className="course-card" key={course.id}>
                     <div className="course-card__header">
                       <div className="course-card__title">{course.name}</div>
-                      <Badge tone={course.status === "completed" ? "success" : "neutral"}>
-                        {titleize(course.status)}
+                      <Badge tone={getCourseBadgeTone(status)}>
+                        {titleize(status)}
                       </Badge>
                     </div>
                     <div className="bar-score" style={{ marginTop: 12 }}>
@@ -356,22 +402,23 @@ export default function LearnerPage({ session, onLogout }) {
                         <div
                           className="progress-fill"
                           style={{
-                            width: animateProgress ? `${course.completion_pct}%` : "0%",
-                            background: getCompletionColor(course.completion_pct),
+                            width: animateProgress ? `${progress}%` : "0%",
+                            background: getCompletionColor(progress),
                           }}
                         />
                       </div>
                     </div>
                     <div className="course-card__footer">
                       <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                        {formatPercent(course.completion_pct)} done
+                        {formatPercent(progress)} done
                       </div>
-                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
-                        {launchingId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                      <Button tone={status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
+                        {launchingId === course.id ? "..." : getCourseActionLabel(status)}
                       </Button>
                     </div>
                   </article>
-                ))}
+                )})}
+                {!visibleCourses.length && <EmptyState title="No courses" body="You have no courses matching this filter." />}
               </div>
             </Panel>
           </section>
@@ -391,18 +438,14 @@ export default function LearnerPage({ session, onLogout }) {
             </div>
             <Panel title="PAL Dimensions" subtitle="How your score is calculated">
                <div className="pal-list">
-                 {[
-                   { label: "Course Completion", value: data.pal_breakdown.completion, weight: 0.3 },
-                   { label: "Quiz Average", value: data.pal_breakdown.quiz_avg, weight: 0.3 },
-                   { label: "Task Completion", value: data.pal_breakdown.task_completion, weight: 0.2 },
-                 ].map((dim) => (
+                 {palDimensions.map((dim) => (
                    <div className="pal-item" key={dim.label}>
                      <div className="pal-item__info">
                        <span className="pal-item__label">{dim.label}</span>
                        <span className="pal-item__weight">Weight: {dim.weight * 100}%</span>
                      </div>
                      <div className="pal-item__track">
-                       <div className="pal-item__fill" style={{ width: `${dim.value}%`, background: getScoreColor(dim.value) }} />
+                       <div className="pal-item__fill" style={{ width: `${clampPercent(dim.value)}%`, background: getScoreColor(dim.value) }} />
                      </div>
                      <div className="pal-item__value mono" style={{ color: getScoreColor(dim.value) }}>
                        {formatPercent(dim.value)}
@@ -436,7 +479,7 @@ export default function LearnerPage({ session, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).map((task) => (
+                    {visibleTasks.map((task) => (
                       <tr key={task.id}>
                         <td>
                           <div className="row-title">{task.title}</div>
@@ -462,7 +505,7 @@ export default function LearnerPage({ session, onLogout }) {
                         </td>
                       </tr>
                     ))}
-                    {data.tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).length === 0 && (
+                    {visibleTasks.length === 0 && (
                       <tr>
                         <td colSpan="4"><EmptyState title="No tasks" body="You have no tasks matching this filter." /></td>
                       </tr>
@@ -489,7 +532,7 @@ export default function LearnerPage({ session, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.recommendation?.leaderboard?.map((row, idx) => (
+                    {leaderboard.map((row, idx) => (
                       <tr key={row.id || idx} className={row.id === data.profile.id ? "is-highlighted" : ""}>
                         <td style={{ textAlign: "center", fontWeight: 700, color: getRankColor(row.rank) }}>
                           #{row.rank}
@@ -508,6 +551,11 @@ export default function LearnerPage({ session, onLogout }) {
                         </td>
                       </tr>
                     ))}
+                    {!leaderboard.length && (
+                      <tr>
+                        <td colSpan="4"><EmptyState title="No leaderboard data" body="Cohort rankings will appear once PAL data is available." /></td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

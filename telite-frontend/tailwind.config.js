@@ -1,8 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    "./src/pages/LandingPage.jsx",
-    "./src/pages/PlatformAdminPage.jsx",
+    "./src/pages/**/*.{js,jsx,ts,tsx}",
     "./src/components/**/*.jsx"
   ],
   corePlugins: {

@@ -60,13 +60,13 @@
   --spacing-md: 24px;
   --spacing-grid-gutter: 24px;
 
-  --font-h1: "Inter", sans-serif;
-  --font-data-mono: "Space Grotesk", monospace;
-  --font-label-caps: "Space Grotesk", sans-serif;
-  --font-h3: "Inter", sans-serif;
-  --font-h2: "Inter", sans-serif;
-  --font-body-md: "Inter", sans-serif;
-  --font-body-lg: "Inter", sans-serif;
+  --font-h1: "Geist", sans-serif;
+  --font-data-mono: "Geist Mono", monospace;
+  --font-label-caps: "Geist Mono", monospace;
+  --font-h3: "Geist", sans-serif;
+  --font-h2: "Geist", sans-serif;
+  --font-body-md: "Geist", sans-serif;
+  --font-body-lg: "Geist", sans-serif;
 
   --text-label-caps: 12px;
   --text-label-caps--line-height: 1.0;
@@ -85,17 +85,17 @@
 
   --text-data-mono: 14px;
   --text-data-mono--line-height: 1.4;
-  --text-data-mono--letter-spacing: -0.01em;
+  --text-data-mono--letter-spacing: 0em;
   --text-data-mono--font-weight: 500;
 
   --text-h2: 32px;
   --text-h2--line-height: 1.3;
-  --text-h2--letter-spacing: -0.01em;
+  --text-h2--letter-spacing: 0em;
   --text-h2--font-weight: 600;
 
   --text-h1: 48px;
   --text-h1--line-height: 1.2;
-  --text-h1--letter-spacing: -0.02em;
+  --text-h1--letter-spacing: 0em;
   --text-h1--font-weight: 700;
 
   --text-body-md: 16px;
@@ -108,10 +108,10 @@
 .platform-admin-root {
   background-color: var(--color-surface);
   color: var(--color-on-surface);
-  font-family: "Inter", sans-serif;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
+  font-family: "Geist", sans-serif;
+  min-height: 100vh;
+  width: 100%;
+  overflow: visible;
 }
 
 .platform-admin-root *,
@@ -127,28 +127,36 @@
 
 /* ─── GLASS / NEU / PANEL EFFECTS ─── */
 .platform-admin-root .glass-panel {
-  backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: none;
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
 }
 
 .platform-admin-root .glass {
-  backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: none;
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
 }
 
 .platform-admin-root .neu {
-  box-shadow: -4px -4px 10px rgba(255, 255, 255, 0.8), 4px 4px 10px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(11, 28, 48, 0.06);
 }
 
 .platform-admin-root .neumorphic-card,
 .platform-admin-root .neumorphic-button {
-  box-shadow: -4px -4px 10px rgba(255, 255, 255, 0.8), 4px 4px 10px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(11, 28, 48, 0.06);
 }
 
 .platform-admin-root .neumorphic-button:active {
-  box-shadow: inset -2px -2px 5px rgba(255, 255, 255, 0.8), inset 2px 2px 5px rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 1px 2px rgba(11, 28, 48, 0.08);
+}
+
+.platform-admin-root .rounded-xl,
+.platform-admin-root .rounded-2xl,
+.platform-admin-root .rounded-\[1\.5rem\],
+.platform-admin-root .rounded-\[2rem\],
+.platform-admin-root .rounded-\[32px\] {
+  border-radius: 8px !important;
 }
 
 /* ─── TOGGLE SWITCH ─── */
@@ -186,22 +194,23 @@
 
 /* ─── MOTION / ANIMATION ─── */
 .platform-admin-root .hover-lift {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .platform-admin-root .hover-lift:hover {
-  transform: translateY(-4px) translateZ(10px) rotateX(1deg);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(11, 28, 48, 0.08);
 }
 
 .platform-admin-root .tilt-card:hover {
-  transform: perspective(1000px) rotateX(2deg) rotateY(1deg) translateZ(10px);
-  transition: transform 0.3s ease-out;
+  transform: translateY(-1px);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 6px 14px rgba(11, 28, 48, 0.08);
 }
 
 .platform-admin-root .recessed-input,
 .platform-admin-root .inset-input {
-  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.05), inset -2px -2px 5px rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 1px 2px rgba(11, 28, 48, 0.05);
 }
 
 /* ─── ANIMATE-IN UTILITIES ─── */
@@ -229,4 +238,22 @@
 
 .platform-admin-root .duration-300 {
   animation-duration: 300ms;
+}
+
+@media (max-width: 900px) {
+  .platform-admin-root {
+    display: block;
+  }
+
+  .platform-admin-root .platform-admin-sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    max-height: none;
+  }
+
+  .platform-admin-root .platform-admin-main {
+    margin-left: 0;
+    min-height: auto;
+  }
 }

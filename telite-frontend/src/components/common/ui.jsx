@@ -42,13 +42,15 @@ export function Button({
   children,
   tone = "ghost",
   icon,
+  size,
   className = "",
   type = "button",
   ...props
 }) {
+  const sizeClass = size ? `btn--${size}` : "";
   return (
-    <button className={`btn btn--${tone} ${className}`.trim()} type={type} {...props}>
-      {icon ? <Icon name={icon} size={15} /> : null}
+    <button className={`btn btn--${tone} ${sizeClass} ${className}`.trim()} type={type} {...props}>
+      {icon ? <Icon name={icon} size={size === "small" || size === "sm" ? 13 : 15} /> : null}
       <span>{children}</span>
     </button>
   );

@@ -2375,6 +2375,22 @@ def list_tasks(
         return [dict(row) for row in rows]
 
 
+def can_learner_access_task(task: dict[str, Any], actor: dict[str, Any]) -> bool:
+    if not is_learner_role(actor["role"]):
+        return False
+    if task.get("assigned_to_user_id") == actor["id"]:
+        return True
+
+    task_category = task.get("category_slug")
+    actor_category = actor.get("category_scope")
+    category_matches = task_category in {actor_category, "all"}
+    if task.get("assignment_scope") == "all_learners" and category_matches:
+        return True
+    if task.get("assignment_scope") == "all_categories":
+        return True
+    return False
+
+
 def count_pending_approvals(org_id: int | None = None) -> int:
     with get_conn() as conn:
         clauses = ["status IN ('pending', 'flagged')"]
@@ -3497,6 +3513,8 @@ def submit_task(task_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         actor_org_id = _extract_org_id(actor)
         if not actor.get("is_platform_admin") and actor_org_id is not None and task.get("org_id") != actor_org_id:
             raise ValueError("You do not have access to this organization.")
+        if is_learner_role(actor["role"]) and not can_learner_access_task(task, actor):
+            raise ValueError("You do not have access to this task.")
         conn.execute(
             "UPDATE tasks SET status = 'submitted' WHERE id = ?",
             (task_id,),
