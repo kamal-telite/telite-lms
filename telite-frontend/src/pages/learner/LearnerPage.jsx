@@ -133,6 +133,13 @@ export default function LearnerPage({ session, onLogout }) {
   const [taskFilter, setTaskFilter] = useState("all");
   const [showNotifications, setShowNotifications] = useState(false);
   const [animateProgress, setAnimateProgress] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [learnerProfileForm, setLearnerProfileForm] = useState({
+    full_name: "",
+    email: "",
+    category_scope: "",
+    enrollment_type: "",
+  });
 
   useEffect(() => {
     load();
@@ -146,6 +153,17 @@ export default function LearnerPage({ session, onLogout }) {
     }
     return undefined;
   }, [loading, data]);
+
+  useEffect(() => {
+    if (data?.profile) {
+      setLearnerProfileForm({
+        full_name: data.profile.full_name || "",
+        email: data.profile.email || "",
+        category_scope: data.profile.category_scope || "",
+        enrollment_type: data.profile.enrollment_type || "",
+      });
+    }
+  }, [data?.profile]);
 
   const currentPath = location.pathname.replace(/\/$/, "");
   const pathParts = currentPath.split("/");
@@ -206,6 +224,12 @@ export default function LearnerPage({ session, onLogout }) {
 
   if (error || !data) {
     return <ErrorState body={error || "Your learner dashboard did not return any data."} action={<Button tone="primary" onClick={load}>Retry</Button>} />;
+  }
+
+  function handleSaveLearnerProfile(event) {
+    event.preventDefault();
+    setEditingProfile(false);
+    showToast("Profile details saved locally.", "success");
   }
 
   const courses = Array.isArray(data.courses) ? data.courses : [];
@@ -575,25 +599,75 @@ export default function LearnerPage({ session, onLogout }) {
         {/* PROFILE PAGE */}
         {activeNav === "section-profile" && (
           <section id="section-profile">
-            <Panel title="Profile Information" subtitle="Your learner details">
-              <div className="grid-2">
-                <div className="soft-card">
-                  <div className="row-subtitle">Full Name</div>
-                  <div className="row-title">{data.profile.full_name}</div>
+            <Panel
+              title="Profile Information"
+              subtitle="Manage the details shown in your learner workspace"
+              action={
+                !editingProfile ? (
+                  <Button tone="ghost" icon="pencil" onClick={() => setEditingProfile(true)}>Edit profile</Button>
+                ) : null
+              }
+            >
+              <form className="profile-form" onSubmit={handleSaveLearnerProfile}>
+                <div className="profile-settings__hero">
+                  <Avatar initials={data.profile.avatar_initials || getInitials(learnerProfileForm.full_name)} gradient={data.profile.avatar_gradient || ["#0ea5e9", "#6366f1"]} size={64} />
+                  <div>
+                    <div className="row-title">{learnerProfileForm.full_name || data.profile.full_name}</div>
+                    <div className="row-subtitle">{learnerProfileForm.email || data.profile.email}</div>
+                    {editingProfile ? (
+                      <div className="profile-settings__actions">
+                        <Button tone="ghost" icon="pencil" size="small" onClick={() => showToast("Photo upload is not connected yet.", "info")}>Change photo</Button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="soft-card">
-                  <div className="row-subtitle">Email Address</div>
-                  <div className="row-title">{data.profile.email}</div>
+
+                <div className="grid-2">
+                  <label className="field">
+                    <span className="field__label">Full Name</span>
+                    <input
+                      className="field__input"
+                      value={learnerProfileForm.full_name}
+                      disabled={!editingProfile}
+                      onChange={(event) => setLearnerProfileForm((current) => ({ ...current, full_name: event.target.value }))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Email Address</span>
+                    <input
+                      className="field__input"
+                      value={learnerProfileForm.email}
+                      disabled={!editingProfile}
+                      onChange={(event) => setLearnerProfileForm((current) => ({ ...current, email: event.target.value }))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Cohort Category</span>
+                    <input className="field__input" value={learnerProfileForm.category_scope} disabled />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Enrollment Type</span>
+                    <input className="field__input" value={learnerProfileForm.enrollment_type} disabled />
+                  </label>
                 </div>
-                <div className="soft-card">
-                  <div className="row-subtitle">Cohort Category</div>
-                  <div className="row-title">{data.profile.category_scope}</div>
-                </div>
-                <div className="soft-card">
-                  <div className="row-subtitle">Enrollment Type</div>
-                  <div className="row-title">{data.profile.enrollment_type}</div>
-                </div>
-              </div>
+
+                {editingProfile ? (
+                  <div className="profile-settings__footer">
+                    <Button tone="ghost" onClick={() => {
+                      setLearnerProfileForm({
+                        full_name: data.profile.full_name || "",
+                        email: data.profile.email || "",
+                        category_scope: data.profile.category_scope || "",
+                        enrollment_type: data.profile.enrollment_type || "",
+                      });
+                      setEditingProfile(false);
+                    }}>
+                      Cancel
+                    </Button>
+                    <Button tone="primary" type="submit">Save changes</Button>
+                  </div>
+                ) : null}
+              </form>
             </Panel>
           </section>
         )}

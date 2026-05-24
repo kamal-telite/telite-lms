@@ -123,70 +123,50 @@ export function SectionTitle({ label, actions }) {
 export function ProfileDropdown({ profile, onLogout, onNavigate }) {
   const [open, setOpen] = useState(false);
 
-  // Added a small inline click-away listener logic or simple toggle
   return (
-    <div className="profile-dropdown-wrapper" style={{ position: "relative" }}>
+    <div className="profile-dropdown-wrapper">
       <button 
         type="button"
         className="profile-btn" 
         onClick={() => setOpen(!open)}
-        style={{
-          background: "transparent",
-          border: "1px solid var(--border)",
-          borderRadius: "99px",
-          padding: "2px",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center"
-        }}
+        aria-label="Open profile menu"
       >
-        <div 
-          style={{
-            width: 32, 
-            height: 32, 
-            borderRadius: "50%", 
-            background: profile?.gradient ? `linear-gradient(135deg, ${profile.gradient.join(", ")})` : "var(--border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            fontWeight: 600,
-            fontSize: "12px"
-          }}
+        <div
+          className="profile-btn__avatar"
+          style={{ background: profile?.gradient ? `linear-gradient(135deg, ${profile.gradient.join(", ")})` : "var(--border)" }}
         >
           {profile?.initials || "U"}
         </div>
       </button>
       {open ? (
-        <div 
-          className="menu-popover" 
-          style={{ 
-            position: "absolute", 
-            top: "44px", 
-            right: "0", 
-            minWidth: "220px", 
-            background: "var(--surface)", 
-            border: "1px solid var(--border)", 
-            borderRadius: "12px", 
-            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
-            zIndex: 50,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden"
-          }}
-        >
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-            <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>{profile?.name || "Admin User"}</div>
-            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{profile?.roleLabel || "System Admin"}</div>
+        <div className="profile-menu">
+          <div className="profile-menu__header">
+            <div className="row-title">{profile?.name || "Admin User"}</div>
+            <div className="row-subtitle">{profile?.roleLabel || "System Admin"}</div>
           </div>
-          <div style={{ padding: "8px" }}>
-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('profile'); }}>👤 Profile</button>
-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('settings'); }}>⚙️ Settings</button>
-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('notifications'); }}>🔔 Notifications</button>
-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('help'); }}>❓ Help & Support</button>
+          <div className="profile-menu__items">
+            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('profile'); }}>
+              <Icon name="profile" size={15} />
+              <span>Profile</span>
+            </button>
+            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('settings'); }}>
+              <Icon name="settings" size={15} />
+              <span>Settings</span>
+            </button>
+            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('notifications'); }}>
+              <Icon name="bell" size={15} />
+              <span>Notifications</span>
+            </button>
+            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('help'); }}>
+              <Icon name="circle" size={15} />
+              <span>Help & Support</span>
+            </button>
           </div>
-          <div style={{ padding: "8px", borderTop: "1px solid var(--border)" }}>
-            <button type="button" className="dropdown-item" style={{ color: "var(--danger)" }} onClick={onLogout}>🚪 Log out</button>
+          <div className="profile-menu__items profile-menu__items--footer">
+            <button type="button" className="dropdown-item dropdown-item--danger" onClick={onLogout}>
+              <Icon name="logout" size={15} />
+              <span>Log out</span>
+            </button>
           </div>
         </div>
       ) : null}

@@ -181,6 +181,20 @@ Last updated: 2026-05-23
   - Removed a non-functional "View all" action from the enrollment audit panel.
   - Updated the PAL "Full report" action to route to the first available category report instead of hardcoding the ATS category; it now shows a warning toast if no category exists.
   - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
+- 2026-05-23: Completed Admin/SuperAdmin/Learner profile UI continuity batch.
+  - Reworked the shared Admin/SuperAdmin profile settings route into a two-column profile layout with consistent panel padding, dashboard fonts, shared icons, and tokenized button styling.
+  - Normalized profile route tabs so `tab=profile` and other unknown profile tab values open the General profile panel instead of rendering an empty Settings shell.
+  - Replaced broken emoji text in the profile dropdown with shared SVG icons and consistent menu button dimensions.
+  - Added learner profile edit mode with editable full name/email fields, read-only category/enrollment fields, and matching Save/Cancel/Edit button styles.
+  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
+  - Browser visual attach could not complete in this environment because the browser runtime hit a local `AppData` permission error; use the local dev server for final visual QA.
+- 2026-05-23: Completed padding-only continuity cleanup across dashboard panels, tables, forms, and modals.
+  - Added shared padding compatibility for older `panel-header`, `panel-body`, `panel-footer`, `panel-title`, and `panel-subtitle` classes so older tabs match the newer `Panel` component spacing.
+  - Standardized table cell horizontal padding and minimum table width to stop text/progress values from touching or spilling past holder borders.
+  - Standardized form grid gaps and minimum widths so inputs/selects/radio chips stay inside their containers.
+  - Adjusted modal header/content/footer padding and scrolling so modal footer buttons no longer overlap form fields or detail cards.
+  - No feature behavior was changed.
+  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
 
 ## Next Planned Fix Order
 

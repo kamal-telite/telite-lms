@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Avatar, Badge, Button, EmptyState, StatCard, Panel, useToast } from "../common/ui";
+import { Icon } from "../common/icons";
 import { TaskBoardKanban } from "./TaskBoard";
 import { ChartCanvas } from "../common/charts";
 import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent } from "../../utils/formatters";
@@ -608,142 +609,151 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
 }
 
 export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
+  const { showToast } = useToast();
   const tabs = [
-    { id: "general", label: "General", icon: "👤" },
-    { id: "notifications", label: "Notifications", icon: "🔔" },
-    { id: "personalization", label: "Personalization", icon: "🎨" },
-    { id: "security", label: "Security", icon: "🔒" },
-    { id: "account", label: "Account", icon: "⚙️" },
+    { id: "general", label: "General", icon: "profile" },
+    { id: "notifications", label: "Notifications", icon: "bell" },
+    { id: "personalization", label: "Personalization", icon: "settings" },
+    { id: "security", label: "Security", icon: "shield" },
+    { id: "account", label: "Account", icon: "settings" },
   ];
+  const selectedTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : "general";
+  const userName = session?.user?.name || "Admin User";
+  const userEmail = session?.user?.email || "admin@telite.io";
+  const roleLabel = session?.user?.role === "super_admin" ? "Super Admin" : "Category Admin";
 
   return (
-    <div className="grid-3" style={{ gridTemplateColumns: "240px 1fr" }}>
-      <div className="panel">
-        <div className="panel-body" style={{ padding: "16px 8px" }}>
-          <div className="sidebar-nav__items">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`nav-item ${activeTab === tab.id ? "is-active" : ""}`}
-                onClick={() => setActiveTab(tab.id)}
-                style={{ padding: "10px 16px", borderRadius: 8, textAlign: "left" }}
-              >
-                <span className="nav-item__left">
-                  <span>{tab.icon}</span>
-                  <span style={{ marginLeft: 8 }}>{tab.label}</span>
-                </span>
-              </button>
-            ))}
+    <div className="profile-settings">
+      <aside className="profile-settings__nav panel">
+        <div className="profile-settings__summary">
+          <Avatar initials={getInitials(userName)} gradient={["#2563EB", "#7C3AED"]} size={42} />
+          <div>
+            <div className="row-title">{userName}</div>
+            <div className="row-subtitle">{roleLabel}</div>
           </div>
         </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">{tabs.find(t => t.id === activeTab)?.label || "Settings"}</h2>
-          <p className="panel-subtitle">Manage your profile preferences and account settings.</p>
+        <div className="profile-settings__tabs">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`profile-settings__tab ${selectedTab === tab.id ? "is-active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <Icon name={tab.icon} size={15} />
+              <span>{tab.label}</span>
+            </button>
+          ))}
         </div>
-        
-        <div className="panel-body">
-          {activeTab === "general" && (
-            <div className="dashboard-stack">
-              <div style={{ display: "flex", gap: 24, alignItems: "center", marginBottom: 24 }}>
-                <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "#059669"]} size={80} />
+      </aside>
+
+      <Panel
+        className="profile-settings__panel"
+        title={tabs.find((tab) => tab.id === selectedTab)?.label || "Profile"}
+        subtitle="Manage your profile preferences and account settings."
+      >
+        {selectedTab === "general" && (
+          <div className="dashboard-stack">
+            <div className="profile-settings__hero">
+              <Avatar initials={getInitials(userName)} gradient={["#2563EB", "#059669"]} size={64} />
+              <div>
+                <div className="row-title">{userName}</div>
+                <div className="row-subtitle">{userEmail}</div>
+                <div className="profile-settings__actions">
+                  <Button tone="ghost" icon="pencil" size="small" onClick={() => showToast("Photo upload is not connected yet.", "info")}>Change photo</Button>
+                </div>
+              </div>
+            </div>
+            <div className="grid-2">
+              <label className="field">
+                <span className="field__label">Full Name</span>
+                <input className="field__input" defaultValue={userName} />
+              </label>
+              <label className="field">
+                <span className="field__label">Email Address</span>
+                <input className="field__input" defaultValue={userEmail} disabled />
+              </label>
+            </div>
+            <label className="field">
+              <span className="field__label">Role</span>
+              <input className="field__input" defaultValue={roleLabel} disabled />
+            </label>
+            <div className="profile-settings__footer">
+              <Button tone="primary" onClick={() => showToast("Profile preferences saved locally.", "success")}>Save changes</Button>
+            </div>
+          </div>
+        )}
+
+        {selectedTab === "notifications" && (
+          <div className="dashboard-stack">
+            {[
+              { title: "Enrollment Requests", desc: "Get notified when a user requests enrollment to a course." },
+              { title: "Verification Alerts", desc: "Get notified about new account verification requests." },
+              { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
+              { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." },
+            ].map((item) => (
+              <div className="profile-settings__option" key={item.title}>
                 <div>
-                  <Button tone="ghost" style={{ marginBottom: 8 }}>Upload new photo</Button>
-                  <div className="muted" style={{ fontSize: 12 }}>JPG, GIF or PNG. Max size of 800K</div>
+                  <div className="row-title">{item.title}</div>
+                  <div className="row-subtitle">{item.desc}</div>
                 </div>
+                <label className="chip"><input type="checkbox" defaultChecked /> Enabled</label>
               </div>
-              <div className="grid-2">
-                <label className="field">
-                  <span className="field__label">Full Name</span>
-                  <input className="field__input" defaultValue={session?.user?.name || "Category Admin"} />
-                </label>
-                <label className="field">
-                  <span className="field__label">Email Address</span>
-                  <input className="field__input" defaultValue={session?.user?.email || "admin@telite.io"} disabled />
-                </label>
-              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedTab === "personalization" && (
+          <div className="dashboard-stack">
+            <div className="row-title">Default Tab on Login</div>
+            <div className="toolbar">
+              <label className="chip"><input type="radio" name="default_tab" defaultChecked /> Overview</label>
+              <label className="chip"><input type="radio" name="default_tab" /> Tasks</label>
+              <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
+            </div>
+
+            <div className="row-title">Dashboard Density</div>
+            <div className="toolbar">
+              <label className="chip"><input type="radio" name="density" /> Compact</label>
+              <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
+            </div>
+          </div>
+        )}
+
+        {selectedTab === "security" && (
+          <div className="dashboard-stack">
+            <label className="field">
+              <span className="field__label">Current Password</span>
+              <input type="password" className="field__input" placeholder="Current password" />
+            </label>
+            <div className="grid-2">
               <label className="field">
-                <span className="field__label">Role</span>
-                <input className="field__input" defaultValue="Category Admin" disabled />
+                <span className="field__label">New Password</span>
+                <input type="password" className="field__input" />
               </label>
-              <div className="panel-footer" style={{ marginTop: 24, padding: "16px 0 0", borderTop: "1px solid var(--border)", textAlign: "right" }}>
-                <Button tone="primary">Save Changes</Button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "notifications" && (
-            <div className="dashboard-stack">
-              {[
-                { title: "Enrollment Requests", desc: "Get notified when a user requests enrollment to a course." },
-                { title: "Verification Alerts", desc: "Get notified about new account verification requests." },
-                { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
-                { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." }
-              ].map((item, idx) => (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--border)" }}>
-                  <div>
-                    <div className="row-title">{item.title}</div>
-                    <div className="row-subtitle">{item.desc}</div>
-                  </div>
-                  <label className="chip"><input type="checkbox" defaultChecked /> Enabled</label>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "personalization" && (
-            <div className="dashboard-stack">
-              <div className="row-title">Default Tab on Login</div>
-              <div className="toolbar">
-                <label className="chip"><input type="radio" name="default_tab" defaultChecked /> Overview</label>
-                <label className="chip"><input type="radio" name="default_tab" /> Tasks</label>
-                <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
-              </div>
-
-              <div className="row-title" style={{ marginTop: 24 }}>Dashboard Density</div>
-              <div className="toolbar">
-                <label className="chip"><input type="radio" name="density" /> Compact</label>
-                <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "security" && (
-            <div className="dashboard-stack">
               <label className="field">
-                <span className="field__label">Current Password</span>
-                <input type="password" className="field__input" placeholder="••••••••" />
+                <span className="field__label">Confirm New Password</span>
+                <input type="password" className="field__input" />
               </label>
-              <div className="grid-2">
-                <label className="field">
-                  <span className="field__label">New Password</span>
-                  <input type="password" className="field__input" />
-                </label>
-                <label className="field">
-                  <span className="field__label">Confirm New Password</span>
-                  <input type="password" className="field__input" />
-                </label>
-              </div>
-              <div style={{ marginTop: 16 }}>
-                <Button tone="primary">Update Password</Button>
-              </div>
             </div>
-          )}
+            <div className="profile-settings__footer">
+              <Button tone="primary" onClick={() => showToast("Password update is not connected yet.", "info")}>Update password</Button>
+            </div>
+          </div>
+        )}
 
-          {activeTab === "account" && (
-            <div className="dashboard-stack">
-              <div className="soft-card" style={{ background: "var(--red-light)", border: "1px solid var(--red-mid)" }}>
-                <div className="row-title" style={{ color: "var(--red)" }}>Danger Zone</div>
-                <div className="row-subtitle" style={{ marginBottom: 16 }}>Permanently delete your account and all associated data.</div>
-                <Button tone="danger">Delete Account</Button>
+        {selectedTab === "account" && (
+          <div className="dashboard-stack">
+            <div className="profile-settings__danger">
+              <div>
+                <div className="row-title">Danger Zone</div>
+                <div className="row-subtitle">Account deletion requires platform approval.</div>
               </div>
+              <Button tone="danger" onClick={() => showToast("Account deletion requires approval before it can be enabled.", "warning")}>Request deletion</Button>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }
