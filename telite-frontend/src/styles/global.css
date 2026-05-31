@@ -567,14 +567,14 @@ a {
 }
 
 .btn--primary {
-  border-color: var(--theme-accent);
-  background: var(--theme-accent);
+  border-color: var(--theme-accent, var(--brand));
+  background: var(--theme-accent, var(--brand));
   color: #fff;
 }
 
 .btn--primary:hover {
-  background: var(--theme-accent-dark);
-  border-color: var(--theme-accent-dark);
+  background: var(--theme-accent-dark, var(--brand-dark));
+  border-color: var(--theme-accent-dark, var(--brand-dark));
 }
 
 .btn--success {
@@ -995,6 +995,15 @@ code {
   font-size: 10.5px;
 }
 
+.rank-cell {
+  display: inline-flex;
+  width: 28px;
+  justify-content: center;
+  font-family: "Geist Mono", monospace;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
 .learner-toolbar {
   justify-content: flex-end;
 }
@@ -1209,6 +1218,10 @@ code {
   position: fixed;
   inset: 0;
   z-index: 50;
+  --theme-accent: var(--brand);
+  --theme-accent-light: var(--brand-light);
+  --theme-accent-mid: var(--brand-mid);
+  --theme-accent-dark: var(--brand-dark);
   background: rgba(15, 23, 42, 0.45);
   display: grid;
   place-items: center;
@@ -1248,7 +1261,7 @@ code {
 
 .modal-card__content {
   margin-top: 0;
-  padding: 18px 24px 0;
+  padding: 18px 24px 18px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -1256,7 +1269,7 @@ code {
 
 .modal-card__footer {
   margin-top: 0;
-  padding: 16px 24px 24px;
+  padding: 14px 24px 18px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -1264,6 +1277,11 @@ code {
   z-index: 10;
   background: var(--surface);
   border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 16px rgba(15, 23, 42, 0.04);
+}
+
+.modal-card__footer .btn {
+  min-width: 112px;
 }
 
 .modal-card .form-stack {

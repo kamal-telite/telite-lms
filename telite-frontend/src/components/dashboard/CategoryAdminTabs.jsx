@@ -402,7 +402,7 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
                 {topPerformers.map((learner, idx) => (
                   <tr key={learner.id}>
                     <td>
-                      {idx === 0 ? "🥇 1" : idx === 1 ? "🥈 2" : idx === 2 ? "🥉 3" : `${idx + 1}`}
+                      <span className="rank-cell">{idx + 1}</span>
                     </td>
                     <td>
                       <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>

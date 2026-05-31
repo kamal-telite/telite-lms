@@ -386,6 +386,29 @@ def get_table_columns(conn: Any, table: str) -> list[str]:
     return [row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
 
 
+def _unique_text_value(conn: Any, table: str, column: str, base: str, *, prefix: str = "") -> str:
+    table_name = _safe_identifier(table)
+    column_name = _safe_identifier(column)
+    base_slug = slugify(base) or "user"
+    root = f"{prefix}{base_slug}"
+    candidate = root
+    suffix = 2
+    while conn.execute(f"SELECT 1 FROM {table_name} WHERE {column_name} = ?", (candidate,)).fetchone():
+        candidate = f"{root}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def _unique_username(conn: Any, full_name: str) -> str:
+    root = (slugify(full_name) or "user").replace("-", ".")
+    candidate = root
+    suffix = 2
+    while conn.execute("SELECT 1 FROM users WHERE username = ?", (candidate,)).fetchone():
+        candidate = f"{root}.{suffix}"
+        suffix += 1
+    return candidate
+
+
 def _row_to_dict(record: Any) -> dict[str, Any]:
     if isinstance(record, dict):
         return record
@@ -2566,7 +2589,7 @@ def create_category(payload: dict[str, Any], actor: dict[str, Any]) -> dict[str,
                 id, name, slug, description, status, accent_color, admin_user_id,
                 planned_courses, avg_pal_target, moodle_category_id, org_type,
                 organization_id, org_id, created_at, archived_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 category_id,
@@ -3007,7 +3030,6 @@ def create_manual_enrollment(payload: dict[str, Any], actor: dict[str, Any]) -> 
         if not selected_courses:
             raise ValueError("Select at least one course.")
 
-        user_id = f"user-{slugify(payload['full_name'])}"
         existing = conn.execute(
             "SELECT id FROM users WHERE lower(email) = lower(?)",
             (payload["email"],),
@@ -3045,7 +3067,8 @@ def create_manual_enrollment(payload: dict[str, Any], actor: dict[str, Any]) -> 
                 ),
             )
         else:
-            username = slugify(payload["full_name"]).replace("-", ".")
+            user_id = _unique_text_value(conn, "users", "id", payload["full_name"], prefix="user-")
+            username = _unique_username(conn, payload["full_name"])
             conn.execute(
                 """
             INSERT INTO users (
@@ -3201,7 +3224,6 @@ def approve_enrollment_request(request_id: str, actor: dict[str, Any]) -> dict[s
                 (request["category_slug"], request_org_id),
             ).fetchall()
         ]
-        user_id = f"user-{slugify(request['full_name'])}"
         existing = conn.execute("SELECT id FROM users WHERE lower(email) = lower(?)", (request["email"],)).fetchone()
         if existing:
             user_id = existing["id"]
@@ -3232,7 +3254,8 @@ def approve_enrollment_request(request_id: str, actor: dict[str, Any]) -> dict[s
                 ),
             )
         else:
-            username = slugify(request["full_name"]).replace("-", ".")
+            user_id = _unique_text_value(conn, "users", "id", request["full_name"], prefix="user-")
+            username = _unique_username(conn, request["full_name"])
             conn.execute(
                 """
             INSERT INTO users (

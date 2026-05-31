@@ -195,6 +195,25 @@ Last updated: 2026-05-23
   - Adjusted modal header/content/footer padding and scrolling so modal footer buttons no longer overlap form fields or detail cards.
   - No feature behavior was changed.
   - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
+- 2026-05-24: Completed targeted modal footer visibility and leaderboard rank alignment fixes.
+  - Modal content now reserves bottom space and the shared modal footer has a subtle top shadow plus consistent button minimum width, making Add Learner and Add Category submit buttons visible while preserving project styling.
+  - Admin PAL leaderboard rank numbers now use a fixed-width centered numeric cell, so ranks align consistently.
+  - No feature behavior was changed.
+  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
+- 2026-05-24: Completed modal portal primary-button visibility fix.
+  - Add Learner and Add Category modal primary buttons were present but invisible because modal portals render outside the dashboard `data-theme`, leaving `--theme-accent` undefined.
+  - Added brand-token fallbacks for primary buttons and scoped modal portal theme tokens so submit buttons render visibly while keeping the existing style.
+  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
+- 2026-05-24: Fixed Add Learner 500 error caused by duplicate name-derived learner IDs.
+  - Manual learner creation no longer uses only `user-{slugified full name}` for new learner IDs when the email is new.
+  - New learner IDs and usernames are now generated with collision-safe suffixes, while existing learners are still matched and updated by email.
+  - Applied the same collision-safe generation to self-enrollment approval because it creates learner users through the same name-derived pattern.
+  - Backend syntax check passes for `telite-backend/app/services/store.py` using bundled Python.
+- 2026-05-24: Fixed Add Category 500 error in SuperAdmin portal.
+  - Category creation SQL listed 15 columns but only 14 placeholders, causing `sqlite3.OperationalError` and a 500 on submit.
+  - Corrected the insert placeholder count in `create_category`.
+  - Direct backend reproduction against a temporary SQLite DB now succeeds for Add Learner, same-name learner collision, and Add Category.
+  - Backend syntax check passes for `telite-backend/app/services/store.py` using bundled Python.
 
 ## Next Planned Fix Order
 
