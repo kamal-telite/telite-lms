@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getDefaultRoute } from "../../context/session";
+import CommandPalette from "./components/CommandPalette";
 import "../../styles/landing.css";
 import { Line } from "react-chartjs-2";
 import {
@@ -246,29 +247,31 @@ const INTEGRATIONS = [
 ];
 
 const PREVIEW_CHART_DATA = {
-  labels: ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May"],
+  labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   datasets: [
     {
-      label: "Active Learners",
-      data: [1200, 1850, 2400, 3100, 2900, 3800, 4200, 4800],
-      borderColor: "#6063ee",
-      backgroundColor: "rgba(96, 99, 238, 0.15)",
+      label: "Live Engagement",
+      data: [65, 78, 90, 85, 95, 110, 105],
+      borderColor: "#6366f1", // primary
+      backgroundColor: "rgba(99, 102, 241, 0.1)",
+      borderWidth: 3,
       fill: true,
       tension: 0.4,
-      pointBackgroundColor: "#fff",
-      pointBorderColor: "#6063ee",
-      pointHoverRadius: 7,
+      pointRadius: 4,
+      pointBackgroundColor: "#05050a",
+      pointBorderColor: "#6366f1",
+      pointBorderWidth: 2,
     },
     {
-      label: "Course Completions",
-      data: [600, 950, 1200, 1600, 1500, 2200, 2500, 3100],
-      borderColor: "#10b981",
-      backgroundColor: "rgba(16, 185, 129, 0.05)",
-      fill: true,
+      label: "Cognitive Fatigue Risk",
+      data: [20, 15, 30, 25, 10, 5, 8],
+      borderColor: "#f59e0b", // amber
+      backgroundColor: "rgba(245, 158, 11, 0.1)",
+      borderWidth: 2,
+      borderDash: [5, 5],
+      fill: false,
       tension: 0.4,
-      pointBackgroundColor: "#fff",
-      pointBorderColor: "#10b981",
-      pointHoverRadius: 7,
+      pointRadius: 0,
     }
   ]
 };
@@ -422,6 +425,8 @@ export default function LandingPage({ session }) {
   const [selectedPlan, setSelectedPlan] = useState("Pro");
   const [activeTab, setActiveTab] = useState("college");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const vantaHeroRef = useRef(null);
   const vantaCtaRef = useRef(null);
   const heroTypedRef = useRef(null);
@@ -440,6 +445,28 @@ export default function LandingPage({ session }) {
   const [showSupportWidget, setShowSupportWidget] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSuccess, setNewsletterSuccess] = useState(false);
+
+  // Theme toggle
+  const toggleTheme = useCallback(() => {
+    setIsDark(prev => {
+      const next = !prev;
+      document.documentElement.dataset.theme = next ? '' : 'light';
+      document.body.style.background = next ? '#07006c' : '#f8f9ff';
+      return next;
+    });
+  }, []);
+
+  // Cmd+K keyboard shortcut for command palette
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const [approvals, setApprovals] = useState([
     { id: 1, name: "Varun Mehta", course: "Advanced Machine Learning", org: "IIT Bombay", status: "Pending" },
@@ -514,6 +541,10 @@ export default function LandingPage({ session }) {
     const gsap = window.gsap;
     const ScrollTrigger = window.ScrollTrigger;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const finePointer = window.matchMedia("(pointer: fine)").matches;
+    const isDesktop = window.innerWidth >= 1100;
+    const enablePointerEffects = !reduceMotion && finePointer && isDesktop;
+    const enableDecorativeEngines = !reduceMotion && isDesktop && ((navigator.hardwareConcurrency || 4) >= 8);
     const revealPage = () => {
       document.querySelectorAll(".hero-eyebrow, .hero-headline, .hero-sub, .hero-ctas, .hero-badges, .hero-card-wrap, .feature-card, .step-card, .pricing-card").forEach((el) => {
         el.style.opacity = "1";
@@ -532,21 +563,39 @@ export default function LandingPage({ session }) {
 
     if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger, window.TextPlugin);
 
+    let mouseRaf = 0;
+    let mousePoint = null;
     const handleMouseMove = (e) => {
-      if (cursorRef.current && cursorDotRef.current && gsap) {
-        gsap.to(cursorRef.current, { x: e.clientX, y: e.clientY, duration: 0.6, ease: "power2.out" });
-        gsap.to(cursorDotRef.current, { x: e.clientX, y: e.clientY, duration: 0.1 });
-      }
-      const hero = document.getElementById("hero");
-      if (hero) {
-        const rect = hero.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        hero.style.setProperty("--mouse-x", `${x}px`);
-        hero.style.setProperty("--mouse-y", `${y}px`);
-      }
+      mousePoint = { x: e.clientX, y: e.clientY };
+      if (mouseRaf) return;
+
+      mouseRaf = window.requestAnimationFrame(() => {
+        mouseRaf = 0;
+        if (!mousePoint) return;
+
+        if (cursorRef.current) {
+          cursorRef.current.style.left = mousePoint.x + "px";
+          cursorRef.current.style.top = mousePoint.y + "px";
+        }
+        if (cursorDotRef.current) {
+          cursorDotRef.current.style.left = mousePoint.x + "px";
+          cursorDotRef.current.style.top = mousePoint.y + "px";
+        }
+
+        const hero = document.getElementById("hero");
+        if (hero) {
+          const rect = hero.getBoundingClientRect();
+          hero.style.setProperty("--mouse-x", `${mousePoint.x - rect.left}px`);
+          hero.style.setProperty("--mouse-y", `${mousePoint.y - rect.top}px`);
+        }
+      });
     };
-    document.addEventListener("mousemove", handleMouseMove);
+    if (enablePointerEffects) {
+      document.addEventListener("mousemove", handleMouseMove, { passive: true });
+    } else {
+      if (cursorRef.current) cursorRef.current.style.display = "none";
+      if (cursorDotRef.current) cursorDotRef.current.style.display = "none";
+    }
 
     const pulseInterval = setInterval(() => {
       const metrics = document.querySelectorAll(".hc-metric");
@@ -569,10 +618,10 @@ export default function LandingPage({ session }) {
     window.addEventListener("scroll", handleScroll, { passive: true });
 
     let vantaHero = null;
-    if (!reduceMotion && window.VANTA?.NET) {
+    if (enableDecorativeEngines && window.VANTA?.NET) {
       vantaHero = window.VANTA.NET({
         el: vantaHeroRef.current,
-        mouseControls: true,
+        mouseControls: false,
         touchControls: false,
         gyroControls: false,
         minHeight: 200,
@@ -581,41 +630,46 @@ export default function LandingPage({ session }) {
         scaleMobile: 1,
         color: 0x4648d4,
         backgroundColor: 0x00000000,
-        points: 10,
-        maxDistance: 20,
-        spacing: 18,
+        points: 6,
+        maxDistance: 14,
+        spacing: 22,
       });
     }
 
     let vantaCta = null;
-    if (!reduceMotion && window.VANTA?.WAVES) {
+    if (enableDecorativeEngines && window.VANTA?.WAVES) {
       vantaCta = window.VANTA.WAVES({
         el: vantaCtaRef.current,
-        mouseControls: true,
+        mouseControls: false,
         touchControls: false,
         color: 0x3835a8,
-        waveHeight: 18,
-        shininess: 40,
-        waveSpeed: 0.8,
+        waveHeight: 12,
+        shininess: 26,
+        waveSpeed: 0.55,
       });
     }
 
     let typed = null;
-    if (window.Typed && heroTypedRef.current) {
+    if (enableDecorativeEngines && window.Typed && heroTypedRef.current) {
       typed = new window.Typed(heroTypedRef.current, {
         strings: ["learning.", "users.", "analytics.", "content delivery.", "your institution."],
-        typeSpeed: 65,
-        backSpeed: 35,
+        typeSpeed: 55,
+        backSpeed: 30,
         backDelay: 1800,
         loop: true,
         cursorChar: "_",
       });
     }
 
-    if (!reduceMotion && window.VanillaTilt) {
-      window.VanillaTilt.init(document.querySelectorAll(".feature-card, .pricing-card"), { max: 6, speed: 400, glare: true, "max-glare": 0.10, scale: 1.02 });
+    if (enableDecorativeEngines && window.VanillaTilt) {
+      window.VanillaTilt.init(document.querySelectorAll(".feature-card, .pricing-card"), {
+        max: 4,
+        speed: 300,
+        glare: false,
+        scale: 1.01
+      });
       const heroCard = document.querySelector(".hero-card");
-      if (heroCard) window.VanillaTilt.init(heroCard, { max: 8, glare: true, "max-glare": 0.15 });
+      if (heroCard) window.VanillaTilt.init(heroCard, { max: 5, glare: false, scale: 1.01 });
     }
 
     const magneticBtns = document.querySelectorAll(".magnetic");
@@ -628,21 +682,12 @@ export default function LandingPage({ session }) {
     const handleMagneticLeave = function () {
       if (gsap) gsap.to(this, { x: 0, y: 0, duration: 0.5, ease: "elastic.out(1,0.4)" });
     };
-    magneticBtns.forEach((btn) => {
-      btn.addEventListener("mousemove", handleMagneticMove);
-      btn.addEventListener("mouseleave", handleMagneticLeave);
-    });
-
-    // Smooth scroll for anchor links
-    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
-      anchor.addEventListener("click", function (e) {
-        const target = document.querySelector(this.getAttribute("href"));
-        if (target) {
-          e.preventDefault();
-          target.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+    if (enablePointerEffects) {
+      magneticBtns.forEach((btn) => {
+        btn.addEventListener("mousemove", handleMagneticMove);
+        btn.addEventListener("mouseleave", handleMagneticLeave);
       });
-    });
+    }
 
     let ctx;
     if (reduceMotion) {
@@ -662,63 +707,65 @@ export default function LandingPage({ session }) {
         });
 
         // Hero entrance
-        gsap.timeline({ delay: 1.25 })
+        gsap.timeline({ delay: 0.2 })
           .from(".hero-eyebrow", { opacity: 0, y: 20, duration: 0.6, ease: "power2.out" })
-          .from(".hero-headline", { opacity: 0, y: 40, duration: 0.8, ease: "power3.out" }, "-=0.3")
-          .from(".hero-sub", { opacity: 0, y: 20, duration: 0.6 }, "-=0.4")
-          .from(".hero-ctas", { opacity: 0, y: 20, duration: 0.5 }, "-=0.3")
-          .from(".hero-badges", { opacity: 0, scale: 0.8, stagger: 0.1, duration: 0.4 }, "-=0.2")
+          .from(".hero-headline", { opacity: 0, y: 40, duration: 0.8, ease: "power3.out" }, "-=0.4")
+          .from(".hero-sub", { opacity: 0, y: 30, duration: 0.7, ease: "power3.out" }, "-=0.6")
+          .from(".hero-ctas", { opacity: 0, y: 20, duration: 0.6, ease: "power2.out" }, "-=0.5")
           .from(".hero-card-wrap", { opacity: 0, x: 60, duration: 1, ease: "power3.out" }, "-=0.7");
 
+        // Progress bar widths
+        document.querySelectorAll('.lr-bar').forEach(bar => {
+          gsap.to(bar, { width: bar.style.width || "50%", duration: 1.2, ease: "power2.out", delay: 0.8 });
+        });
+
         gsap.to(".hero-card-wrap", {
-          y: -80,
+          y: -100,
           scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 1.5 },
         });
 
-        // Parallax on hero orbs
-        gsap.to(".hero-orb--1", { y: -60, scrollTrigger: { trigger: "#hero", scrub: 2 } });
-        gsap.to(".hero-orb--2", { y: -40, scrollTrigger: { trigger: "#hero", scrub: 2.5 } });
-
         // Feature cards stagger
         gsap.from(".feature-card", {
-          y: 50, duration: 0.7, stagger: 0.12,
+          opacity: 0, y: 60, duration: 0.8, stagger: 0.1,
           ease: "power3.out",
-          scrollTrigger: { trigger: "#features", start: "top 75%" },
+          scrollTrigger: { trigger: ".features-grid", start: "top 80%" },
         });
-
-        // Solutions section
-        gsap.from("#solutions .section-eyebrow, #solutions .section-title, #solutions .section-sub", {
-          opacity: 0, y: 30, duration: 0.6, stagger: 0.1,
-          scrollTrigger: { trigger: "#solutions", start: "top 75%" },
-        });
-        gsap.from(".sol-visual", { y: -40, scrollTrigger: { trigger: "#solutions", scrub: 1.2 } });
 
         // Step cards stagger
         gsap.from(".step-card", {
-          y: 50, duration: 0.7, stagger: 0.18,
-          ease: "power3.out",
-          scrollTrigger: { trigger: "#howitworks", start: "top 70%" },
+          opacity: 0, scale: 0.85, y: 30, duration: 0.7, stagger: 0.2,
+          ease: "back.out(1.3)",
+          scrollTrigger: { trigger: ".steps-row", start: "top 75%" },
         });
+
         // Connector draw-in
         gsap.from(".step-connector", {
           scaleX: 0, transformOrigin: "left center", duration: 1.2,
-          ease: "power2.out",
-          scrollTrigger: { trigger: "#howitworks", start: "top 70%" },
+          ease: "power2.inOut",
+          scrollTrigger: { trigger: ".steps-row", start: "top 75%" },
         });
 
-        // Pricing cards - removed opacity 0 to ensure visibility
         gsap.from(".pricing-card", {
-          y: 40, duration: 0.6, stagger: 0.15,
-          ease: "power3.out",
-          scrollTrigger: { trigger: "#pricing", start: "top 75%" },
+          opacity: 0, y: 80, scale: 0.9, stagger: 0.15, duration: 0.8, ease: "back.out(1.2)",
+          scrollTrigger: { trigger: ".pricing-grid", start: "top 80%" },
+        });
+
+        gsap.from(".security-card", {
+          opacity: 0, y: 40, stagger: 0.1, duration: 0.7, ease: "power3.out",
+          scrollTrigger: { trigger: ".security-grid", start: "top 80%" },
+        });
+
+        gsap.from(".integration-card", {
+          opacity: 0, y: 30, stagger: 0.08, duration: 0.6, ease: "power3.out",
+          scrollTrigger: { trigger: ".integrations-grid", start: "top 80%" },
         });
 
         // CTA section
-        gsap.from(".cta-title, .cta-sub, .cta-btns", {
-          opacity: 0, y: 30, duration: 0.7, stagger: 0.12,
-          ease: "power2.out",
+        gsap.from(".cta-title, .cta-sub", {
+          opacity: 0, y: 40, stagger: 0.15, duration: 0.8, ease: "power3.out",
           scrollTrigger: { trigger: "#cta-section", start: "top 80%" },
         });
+
       });
     }
 
@@ -728,6 +775,7 @@ export default function LandingPage({ session }) {
       document.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("scroll", handleScroll);
       window.clearTimeout(loaderFallback);
+      if (mouseRaf) window.cancelAnimationFrame(mouseRaf);
       if (vantaHero) vantaHero.destroy();
       if (vantaCta) vantaCta.destroy();
       if (typed) typed.destroy();
@@ -741,8 +789,8 @@ export default function LandingPage({ session }) {
 
   useEffect(() => {
     if (window.gsap) {
-      const target = `.sol-panel-${activeTab}`;
-      if (document.querySelector(target)) {
+      const target = document.querySelector(".sol-panel.active");
+      if (target) {
         window.gsap.fromTo(target, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.4 });
       }
     }
@@ -803,6 +851,12 @@ export default function LandingPage({ session }) {
           <li><a href="#cta-section">Contact</a></li>
         </ul>
         <div className="nav-actions">
+          <button className="cmd-btn magnetic" onClick={() => setShowCommandPalette(true)} aria-label="Open Command Palette">
+            <span>Commands</span><kbd>⌘K</kbd>
+          </button>
+          <button className="theme-btn magnetic" onClick={toggleTheme} aria-label="Toggle Theme">
+            {isDark ? '☀️' : '🌙'}
+          </button>
           {dashboardLink ? <Link to={dashboardLink} className="btn-primary magnetic">Go to Dashboard</Link> : <>
             <Link to="/login" className="btn-ghost">Sign in</Link>
             <Link to="/signup" className="btn-primary magnetic">Get started free</Link>
@@ -862,10 +916,11 @@ export default function LandingPage({ session }) {
               <Link to={dashboardLink || "/signup"} className="btn-hero-primary magnetic">{dashboardLink ? "Go to Dashboard" : "Get started free"}</Link>
               <a href="#features" className="btn-hero-ghost magnetic">Explore features</a>
             </div>
-            <div className="hero-badges">
-              <span className="hero-badge">Colleges</span>
-              <span className="hero-badge">Companies</span>
-              <span className="hero-badge">Training Institutes</span>
+            <div className="hero-ticker">
+              <span className="ticker-label">AI Insights Live</span>
+              <div className="ticker-feed">
+                <span>Predictive learning models active...</span>
+              </div>
             </div>
           </div>
           <div className="hero-card-wrap">
@@ -1300,6 +1355,7 @@ export default function LandingPage({ session }) {
           <div className="pricing-header">
             <span className="section-eyebrow">Pricing</span>
             <h2 className="section-title">Simple, transparent pricing</h2>
+            <div className="pricing-trust-line">Trusted by 120+ institutions globally</div>
             <p className="section-sub">Start free. Scale as you grow. No hidden fees.</p>
           </div>
           <div className="pricing-toggle">
@@ -1621,6 +1677,13 @@ export default function LandingPage({ session }) {
           </div>
         )}
       </div>
+
+      {/* ── COMMAND PALETTE ── */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        context={{ setShowContactModal, toggleTheme }}
+      />
     </div>
   );
 }

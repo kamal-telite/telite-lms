@@ -1,0 +1,272 @@
+.dashboard-preview {
+    width: 100%;
+    color: white;
+}
+
+.admin-status-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: rgba(255, 255, 255, 0.4);
+    flex-wrap: wrap;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.dot.healthy { background: var(--status-success); }
+.dot.warning { background: var(--status-warning); }
+
+.admin-id {
+    margin-left: auto;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 220px;
+    grid-template-rows: auto auto;
+    gap: 12px;
+}
+
+.dash-card {
+    background: var(--glass-bg-primary);
+    border: 1px solid var(--glass-border-primary);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.dash-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.tenant-health {
+    grid-row: span 2;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.total-count {
+    font-size: 10px;
+    color: var(--primary);
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+.tenant-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tenant-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: var(--glass-bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--glass-bg-primary);
+}
+
+.tenant-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tenant-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tenant-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.health-mini-bar {
+    width: 40px;
+    height: 3px;
+    background: var(--glass-bg-strong);
+    border-radius: 2px;
+}
+
+.health-mini-bar > div { height: 100%; border-radius: 2px; }
+.health-mini-bar > div.tone-success { background: var(--status-success); }
+.health-mini-bar > div.tone-warning { background: var(--status-warning); }
+
+.tenant-status {
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.tenant-status.tone-success { color: var(--status-success); }
+.tenant-status.tone-warning { color: var(--status-warning); }
+
+.tenant-metrics {
+    display: flex;
+    gap: 16px;
+}
+
+.metric-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.metric-group small {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+.metric-group span {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.sync-pill {
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.sync-pill.tone-success {
+    background: color-mix(in srgb, var(--status-success) 16%, transparent);
+    color: var(--status-success);
+}
+
+.sync-pill.tone-warning {
+    background: color-mix(in srgb, var(--status-warning) 16%, transparent);
+    color: var(--status-warning);
+}
+
+.uptime-widget .uptime-value {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-family: var(--font-heading);
+}
+
+.uptime-graph {
+    height: 30px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.uptime-bar {
+    flex: 1;
+    background: var(--status-success);
+    opacity: 0.6;
+    border-radius: 1px;
+}
+
+.session-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    gap: 12px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat .val {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: var(--font-heading);
+}
+
+.stat small {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.4);
+    font-family: var(--font-mono);
+}
+
+.sys-health {
+    grid-column: span 2;
+}
+
+.event-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.alert-item {
+    padding: 8px 12px;
+    background: var(--glass-bg-secondary);
+    border-radius: 6px;
+    border-left: 2px solid transparent;
+}
+
+.alert-item.high { border-left-color: var(--status-danger); }
+.alert-item.med { border-left-color: var(--status-info); }
+.alert-item.low { border-left-color: var(--status-success); }
+
+.alert-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.alert-time { font-size: 9px; color: rgba(255, 255, 255, 0.3); }
+.severity { font-size: 8px; font-weight: 800; }
+
+.alert-txt {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+    }
+
+    .tenant-health,
+    .sys-health {
+        grid-row: auto;
+        grid-column: auto;
+    }
+
+    .tenant-row,
+    .tenant-main,
+    .session-stats {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .tenant-metrics {
+        width: 100%;
+        justify-content: space-between;
+    }
+}

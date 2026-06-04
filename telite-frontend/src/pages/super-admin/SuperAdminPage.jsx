@@ -28,6 +28,7 @@ import {
 import { ChartCanvas } from "../../components/common/charts";
 import { DashboardShell, SectionTitle, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
+import { BrandingSettingsTab } from "../../components/dashboard/BrandingSettingsTab";
 import { TaskBoardKanban } from "../../components/dashboard/TaskBoard";
 import { useSuperAdminStore } from "../../store/dashboardStore";
 import {
@@ -194,7 +195,10 @@ export default function SuperAdminPage({ session, onLogout }) {
     },
     {
       label: "System",
-      items: [{ id: "section-settings", label: "Settings", icon: "settings" }],
+      items: [
+        { id: "section-settings", label: "Settings", icon: "settings" },
+        { id: "section-branding", label: "Branding", icon: "brush" }
+      ],
     },
   ];
 
@@ -456,7 +460,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                     type="button"
                     onClick={exportCSV}
                   >
-                    Export as CSV
+                    📥 All Reports (CSV)
                   </button>
                   <button
                     type="button"
@@ -529,7 +533,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                       }
                     }}
                   >
-                    Export as PDF
+                    📄 All Reports (PDF)
                   </button>
                 </div>
               ) : null}
@@ -1547,6 +1551,12 @@ export default function SuperAdminPage({ session, onLogout }) {
               ) : null}
             </Panel>
           </section>
+          )}
+
+          {activeNav === "section-branding" && (
+            <section id="section-branding">
+              <BrandingSettingsTab dashboard={dashboard} organizations={organizations} session={session} />
+            </section>
           )}
           {activeNav === "section-profile" && (
             <section id="section-profile">

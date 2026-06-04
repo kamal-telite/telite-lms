@@ -1,0 +1,284 @@
+﻿commit 7a99b74e194de1f8cbf52bf0c39c0a6a13e48336
+Author: fireside4137 <swapnilupadhyay4137@gmail.com>
+Date:   Sun May 31 15:50:03 2026 +0530
+
+    Fix enrollment flows and modal visibility
+
+diff --git a/context.md b/context.md
+index 8ac72ba..f3fbd65 100644
+--- a/context.md
++++ b/context.md
+@@ -195,6 +195,25 @@ Last updated: 2026-05-23
+   - Adjusted modal header/content/footer padding and scrolling so modal footer buttons no longer overlap form fields or detail cards.
+   - No feature behavior was changed.
+   - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
++- 2026-05-24: Completed targeted modal footer visibility and leaderboard rank alignment fixes.
++  - Modal content now reserves bottom space and the shared modal footer has a subtle top shadow plus consistent button minimum width, making Add Learner and Add Category submit buttons visible while preserving project styling.
++  - Admin PAL leaderboard rank numbers now use a fixed-width centered numeric cell, so ranks align consistently.
++  - No feature behavior was changed.
++  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
++- 2026-05-24: Completed modal portal primary-button visibility fix.
++  - Add Learner and Add Category modal primary buttons were present but invisible because modal portals render outside the dashboard `data-theme`, leaving `--theme-accent` undefined.
++  - Added brand-token fallbacks for primary buttons and scoped modal portal theme tokens so submit buttons render visibly while keeping the existing style.
++  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
++- 2026-05-24: Fixed Add Learner 500 error caused by duplicate name-derived learner IDs.
++  - Manual learner creation no longer uses only `user-{slugified full name}` for new learner IDs when the email is new.
++  - New learner IDs and usernames are now generated with collision-safe suffixes, while existing learners are still matched and updated by email.
++  - Applied the same collision-safe generation to self-enrollment approval because it creates learner users through the same name-derived pattern.
++  - Backend syntax check passes for `telite-backend/app/services/store.py` using bundled Python.
++- 2026-05-24: Fixed Add Category 500 error in SuperAdmin portal.
++  - Category creation SQL listed 15 columns but only 14 placeholders, causing `sqlite3.OperationalError` and a 500 on submit.
++  - Corrected the insert placeholder count in `create_category`.
++  - Direct backend reproduction against a temporary SQLite DB now succeeds for Add Learner, same-name learner collision, and Add Category.
++  - Backend syntax check passes for `telite-backend/app/services/store.py` using bundled Python.
+ 
+ ## Next Planned Fix Order
+ 
+diff --git a/telite-backend/app/services/store.py b/telite-backend/app/services/store.py
+index 3d748d3..02a2918 100644
+--- a/telite-backend/app/services/store.py
++++ b/telite-backend/app/services/store.py
+@@ -386,6 +386,29 @@ def get_table_columns(conn: Any, table: str) -> list[str]:
+     return [row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
+ 
+ 
++def _unique_text_value(conn: Any, table: str, column: str, base: str, *, prefix: str = "") -> str:
++    table_name = _safe_identifier(table)
++    column_name = _safe_identifier(column)
++    base_slug = slugify(base) or "user"
++    root = f"{prefix}{base_slug}"
++    candidate = root
++    suffix = 2
++    while conn.execute(f"SELECT 1 FROM {table_name} WHERE {column_name} = ?", (candidate,)).fetchone():
++        candidate = f"{root}-{suffix}"
++        suffix += 1
++    return candidate
++
++
++def _unique_username(conn: Any, full_name: str) -> str:
++    root = (slugify(full_name) or "user").replace("-", ".")
++    candidate = root
++    suffix = 2
++    while conn.execute("SELECT 1 FROM users WHERE username = ?", (candidate,)).fetchone():
++        candidate = f"{root}.{suffix}"
++        suffix += 1
++    return candidate
++
++
+ def _row_to_dict(record: Any) -> dict[str, Any]:
+     if isinstance(record, dict):
+         return record
+@@ -2566,7 +2589,7 @@ def create_category(payload: dict[str, Any], actor: dict[str, Any]) -> dict[str,
+                 id, name, slug, description, status, accent_color, admin_user_id,
+                 planned_courses, avg_pal_target, moodle_category_id, org_type,
+                 organization_id, org_id, created_at, archived_at
+-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
++            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             """,
+             (
+                 category_id,
+@@ -3007,7 +3030,6 @@ def create_manual_enrollment(payload: dict[str, Any], actor: dict[str, Any]) ->
+         if not selected_courses:
+             raise ValueError("Select at least one course.")
+ 
+-        user_id = f"user-{slugify(payload['full_name'])}"
+         existing = conn.execute(
+             "SELECT id FROM users WHERE lower(email) = lower(?)",
+             (payload["email"],),
+@@ -3045,7 +3067,8 @@ def create_manual_enrollment(payload: dict[str, Any], actor: dict[str, Any]) ->
+                 ),
+             )
+         else:
+-            username = slugify(payload["full_name"]).replace("-", ".")
++            user_id = _unique_text_value(conn, "users", "id", payload["full_name"], prefix="user-")
++            username = _unique_username(conn, payload["full_name"])
+             conn.execute(
+                 """
+             INSERT INTO users (
+@@ -3201,7 +3224,6 @@ def approve_enrollment_request(request_id: str, actor: dict[str, Any]) -> dict[s
+                 (request["category_slug"], request_org_id),
+             ).fetchall()
+         ]
+-        user_id = f"user-{slugify(request['full_name'])}"
+         existing = conn.execute("SELECT id FROM users WHERE lower(email) = lower(?)", (request["email"],)).fetchone()
+         if existing:
+             user_id = existing["id"]
+@@ -3232,7 +3254,8 @@ def approve_enrollment_request(request_id: str, actor: dict[str, Any]) -> dict[s
+                 ),
+             )
+         else:
+-            username = slugify(request["full_name"]).replace("-", ".")
++            user_id = _unique_text_value(conn, "users", "id", request["full_name"], prefix="user-")
++            username = _unique_username(conn, request["full_name"])
+             conn.execute(
+                 """
+             INSERT INTO users (
+diff --git a/telite-frontend/package-lock.json b/telite-frontend/package-lock.json
+index 8fe4b45..50f8b88 100644
+--- a/telite-frontend/package-lock.json
++++ b/telite-frontend/package-lock.json
+@@ -74,7 +74,6 @@
+       "integrity": "sha512-CGOfOJqWjg2qW/Mb6zNsDm+u5vFQ8DxXfbM09z69p5Z6+mE1ikP2jUXw+j42Pf1XTYED2Rni5f95npYeuwMDQA==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@babel/code-frame": "^7.29.0",
+         "@babel/generator": "^7.29.0",
+@@ -352,7 +351,6 @@
+       "resolved": "https://registry.npmjs.org/@dnd-kit/core/-/core-6.3.1.tgz",
+       "integrity": "sha512-xkGBRQQab4RLwgXxoqETICr6S5JlogafbhNsidmrkVv2YRs5MLwpjoF2qpiGjQt8S9AoxtIV603s0GIUpY5eYQ==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@dnd-kit/accessibility": "^3.1.1",
+         "@dnd-kit/utilities": "^3.2.2",
+@@ -1663,7 +1661,6 @@
+         }
+       ],
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "baseline-browser-mapping": "^2.10.12",
+         "caniuse-lite": "^1.0.30001782",
+@@ -1737,7 +1734,6 @@
+       "resolved": "https://registry.npmjs.org/chart.js/-/chart.js-4.5.1.tgz",
+       "integrity": "sha512-GIjfiT9dbmHRiYi6Nl2yFCq7kkwdkp1W/lp2J99rX0yo9tgJGn3lKQATztIjb5tVtevcBtIdICNWqlq5+E8/Pw==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@kurkle/color": "^0.3.0"
+       },
+@@ -2225,7 +2221,6 @@
+       "resolved": "https://registry.npmjs.org/jspdf/-/jspdf-4.2.1.tgz",
+       "integrity": "sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@babel/runtime": "^7.28.6",
+         "fast-png": "^6.2.0",
+@@ -2643,7 +2638,6 @@
+         }
+       ],
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "nanoid": "^3.3.11",
+         "picocolors": "^1.1.1",
+@@ -2684,7 +2678,6 @@
+       "resolved": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+       "integrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "loose-envify": "^1.1.0"
+       },
+@@ -2707,7 +2700,6 @@
+       "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+       "integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "loose-envify": "^1.1.0",
+         "scheduler": "^0.23.2"
+@@ -2953,7 +2945,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx b/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx
+index 8b681b7..f9b50b1 100644
+--- a/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx
++++ b/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx
+@@ -402,7 +402,7 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
+                 {topPerformers.map((learner, idx) => (
+                   <tr key={learner.id}>
+                     <td>
+-                      {idx === 0 ? "≡ƒÑç 1" : idx === 1 ? "≡ƒÑê 2" : idx === 2 ? "≡ƒÑë 3" : `${idx + 1}`}
++                      <span className="rank-cell">{idx + 1}</span>
+                     </td>
+                     <td>
+                       <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+diff --git a/telite-frontend/src/styles/global.css b/telite-frontend/src/styles/global.css
+index 6d83f7f..9548807 100644
+--- a/telite-frontend/src/styles/global.css
++++ b/telite-frontend/src/styles/global.css
+@@ -567,14 +567,14 @@ a {
+ }
+ 
+ .btn--primary {
+-  border-color: var(--theme-accent);
+-  background: var(--theme-accent);
++  border-color: var(--theme-accent, var(--brand));
++  background: var(--theme-accent, var(--brand));
+   color: #fff;
+ }
+ 
+ .btn--primary:hover {
+-  background: var(--theme-accent-dark);
+-  border-color: var(--theme-accent-dark);
++  background: var(--theme-accent-dark, var(--brand-dark));
++  border-color: var(--theme-accent-dark, var(--brand-dark));
+ }
+ 
+ .btn--success {
+@@ -995,6 +995,15 @@ code {
+   font-size: 10.5px;
+ }
+ 
++.rank-cell {
++  display: inline-flex;
++  width: 28px;
++  justify-content: center;
++  font-family: "Geist Mono", monospace;
++  font-weight: 700;
++  color: var(--text-secondary);
++}
++
+ .learner-toolbar {
+   justify-content: flex-end;
+ }
+@@ -1209,6 +1218,10 @@ code {
+   position: fixed;
+   inset: 0;
+   z-index: 50;
++  --theme-accent: var(--brand);
++  --theme-accent-light: var(--brand-light);
++  --theme-accent-mid: var(--brand-mid);
++  --theme-accent-dark: var(--brand-dark);
+   background: rgba(15, 23, 42, 0.45);
+   display: grid;
+   place-items: center;
+@@ -1248,7 +1261,7 @@ code {
+ 
+ .modal-card__content {
+   margin-top: 0;
+-  padding: 18px 24px 0;
++  padding: 18px 24px 18px;
+   overflow-y: auto;
+   flex: 1;
+   min-height: 0;
+@@ -1256,7 +1269,7 @@ code {
+ 
+ .modal-card__footer {
+   margin-top: 0;
+-  padding: 16px 24px 24px;
++  padding: 14px 24px 18px;
+   display: flex;
+   justify-content: flex-end;
+   gap: 10px;
+@@ -1264,6 +1277,11 @@ code {
+   z-index: 10;
+   background: var(--surface);
+   border-top: 1px solid var(--border);
++  box-shadow: 0 -8px 16px rgba(15, 23, 42, 0.04);
++}
++
++.modal-card__footer .btn {
++  min-width: 112px;
+ }
+ 
+ .modal-card .form-stack {

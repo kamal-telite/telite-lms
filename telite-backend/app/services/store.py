@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
 import re
 import sqlite3
+import time
 import uuid
+import csv
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,6 +18,7 @@ from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from app.data.seed_data import ATS_STATS_CONFIG, build_seed_payload
+from app.core.password_utils import get_admin_password, get_default_learner_password
 
 try:
     import psycopg
@@ -22,6 +26,11 @@ try:
 except ImportError:  # pragma: no cover - exercised only when psycopg is unavailable.
     psycopg = None
     dict_row = None
+
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:  # pragma: no cover - exercised only when psycopg_pool is unavailable.
+    ConnectionPool = None
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -39,17 +48,21 @@ POSTGRES_SEQUENCE_TABLES = (
     "admin_actions",
     "allowed_domains",
     "audit_log",
+    "moodle_sync_logs",
     "moodle_tenants",
     "notifications",
     "org_feature_flags",
     "org_invitations",
     "organizations",
     "password_reset_tokens",
+    "platform_settings",
 )
 SQLITE_TO_POSTGRES_TABLE_ORDER = (
+    "platform_settings",
     "organizations",
     "org_feature_flags",
     "moodle_tenants",
+    "moodle_sync_logs",
     "users",
     "categories",
     "courses",
@@ -65,6 +78,16 @@ SQLITE_TO_POSTGRES_TABLE_ORDER = (
     "admin_actions",
     "org_invitations",
 )
+POSTGRES_POOL_MIN_SIZE = int(os.getenv("TELITE_POSTGRES_POOL_MIN_SIZE", "2"))
+POSTGRES_POOL_MAX_SIZE = int(os.getenv("TELITE_POSTGRES_POOL_MAX_SIZE", "20"))
+POSTGRES_POOL_TIMEOUT_SECONDS = int(os.getenv("TELITE_POSTGRES_POOL_TIMEOUT_SECONDS", "30"))
+POSTGRES_CONNECT_TIMEOUT_SECONDS = int(os.getenv("TELITE_POSTGRES_CONNECT_TIMEOUT_SECONDS", "10"))
+
+_postgres_pool: ConnectionPool | None = None
+
+
+def generate_job_id(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
 class CompatCursor:
@@ -137,6 +160,8 @@ ROLE_NORMALIZATION_ALIASES = {
     "company_super_admin": "super_admin",
     "college_admin": "super_admin",
     "company_admin": "super_admin",
+    "org_admin": "super_admin",
+    "organization_admin": "super_admin",
     "teacher": "category_admin",
     "project_admin": "category_admin",
     "admin": "category_admin",
@@ -154,6 +179,23 @@ SQL_TENANT_SUPER_ADMIN_ROLES = ", ".join(f"'{role}'" for role in sorted(TENANT_S
 SQL_CATEGORY_ADMIN_ROLES = ", ".join(f"'{role}'" for role in sorted(CATEGORY_ADMIN_ROLES))
 SQL_LEARNER_ROLES = ", ".join(f"'{role}'" for role in sorted(LEARNER_ROLES))
 SQL_ADMIN_ROLES = ", ".join(f"'{role}'" for role in sorted(ADMIN_ROLES))
+DEFAULT_PLATFORM_SETTINGS = {
+    "platform_name": "Telite LMS",
+    "support_email": "support@telite.io",
+    "timezone": "Asia/Kolkata",
+    "language": "en",
+    "security": {
+        "two_factor": True,
+        "session_timeout": True,
+        "login_lockout": True,
+    },
+    "notifications": {
+        "email_alerts": True,
+        "security_alerts": True,
+        "sync_reports": False,
+    },
+}
+INVITATION_RESEND_COOLDOWN_MINUTES = 5
 
 
 def now_local() -> str:
@@ -162,6 +204,15 @@ def now_local() -> str:
 
 def now_date() -> str:
     return datetime.now().strftime("%Y-%m-%d")
+
+
+def _parse_local_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None
 
 
 def _prepare_query(query: str, backend: str) -> str:
@@ -183,7 +234,6 @@ def _postgres_configured() -> bool:
         os.getenv("TELITE_POSTGRES_DB")
         or os.getenv("TELITE_POSTGRES_HOST")
         or os.getenv("TELITE_DATABASE_URL")
-        or os.getenv("MOODLE_DB_NAME")
         or os.getenv("POSTGRES_DB")
     )
 
@@ -218,25 +268,22 @@ def get_db_path() -> str:
 def get_postgres_dsn() -> str:
     env_url = os.getenv("TELITE_DATABASE_URL", "").strip()
     if env_url:
-        return env_url
+        return env_url.replace("postgresql+psycopg://", "postgresql://")
 
     host = (
         os.getenv("TELITE_POSTGRES_HOST")
-        or os.getenv("MOODLE_DB_HOST")
         or os.getenv("POSTGRES_HOST")
         or "localhost"
     )
     port = (
         os.getenv("TELITE_POSTGRES_PORT")
-        or os.getenv("MOODLE_DB_PORT")
         or os.getenv("POSTGRES_PORT")
         or "5432"
     )
-    database = os.getenv("TELITE_POSTGRES_DB") or os.getenv("MOODLE_DB_NAME") or os.getenv("POSTGRES_DB")
-    user = os.getenv("TELITE_POSTGRES_USER") or os.getenv("MOODLE_DB_USER") or os.getenv("POSTGRES_USER")
+    database = os.getenv("TELITE_POSTGRES_DB") or os.getenv("POSTGRES_DB")
+    user = os.getenv("TELITE_POSTGRES_USER") or os.getenv("POSTGRES_USER")
     password = (
         os.getenv("TELITE_POSTGRES_PASSWORD")
-        or os.getenv("MOODLE_DB_PASSWORD")
         or os.getenv("POSTGRES_PASSWORD")
     )
 
@@ -249,6 +296,29 @@ def get_postgres_dsn() -> str:
     return f"postgresql://{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{database}"
 
 
+def _get_postgres_pool() -> ConnectionPool:
+    global _postgres_pool
+    if ConnectionPool is None:
+        raise RuntimeError(
+            "PostgreSQL backend selected but psycopg_pool is not installed. "
+            "Install dependencies from telite-backend/requirements.txt."
+        )
+    if _postgres_pool is None:
+        _postgres_pool = ConnectionPool(
+            conninfo=get_postgres_dsn(),
+            min_size=POSTGRES_POOL_MIN_SIZE,
+            max_size=POSTGRES_POOL_MAX_SIZE,
+            timeout=POSTGRES_POOL_TIMEOUT_SECONDS,
+            kwargs={
+                "row_factory": dict_row,
+                "autocommit": False,
+                "connect_timeout": POSTGRES_CONNECT_TIMEOUT_SECONDS,
+            },
+            open=True,
+        )
+    return _postgres_pool
+
+
 def _connect() -> CompatConnection:
     backend = get_db_backend()
     if backend == DB_BACKEND_POSTGRES:
@@ -257,7 +327,7 @@ def _connect() -> CompatConnection:
                 "PostgreSQL backend selected but psycopg is not installed. "
                 "Add 'psycopg[binary]' to the environment."
             )
-        raw_connection = psycopg.connect(get_postgres_dsn(), row_factory=dict_row, autocommit=False)
+        raw_connection = _get_postgres_pool().getconn()
         return CompatConnection(raw_connection, DB_BACKEND_POSTGRES)
 
     raw_connection = sqlite3.connect(get_db_path())
@@ -271,7 +341,22 @@ def get_conn():
     try:
         yield conn
     finally:
-        conn.close()
+        if conn.backend == DB_BACKEND_POSTGRES and _postgres_pool is not None:
+            _postgres_pool.putconn(conn._raw_connection)
+        else:
+            conn.close()
+
+
+def verify_database_connection() -> None:
+    with get_conn() as conn:
+        conn.execute("SELECT 1")
+
+
+def close_postgres_pool() -> None:
+    global _postgres_pool
+    if _postgres_pool is not None:
+        _postgres_pool.close()
+        _postgres_pool = None
 
 
 def _json_load(value: str | None, default: Any) -> Any:
@@ -496,6 +581,8 @@ def _ensure_global_admin_seed(conn: sqlite3.Connection) -> None:
         "SELECT id FROM users WHERE lower(username) = lower('globaladmin') LIMIT 1"
     ).fetchone()
     if not existing:
+        # Get secure admin password from environment or generate one
+        admin_password = get_admin_password()
         conn.execute(
             """
             INSERT INTO users (
@@ -514,7 +601,7 @@ def _ensure_global_admin_seed(conn: sqlite3.Connection) -> None:
                 "Global Admin",
                 "super_admin",
                 None,
-                hash_password("Global@1234"),
+                hash_password(admin_password),
                 "GA",
                 "#7C3AED",
                 "#2563EB",
@@ -691,7 +778,9 @@ def init_db() -> None:
                 user_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 body TEXT NOT NULL,
+                type TEXT DEFAULT 'info',
                 is_read INTEGER NOT NULL DEFAULT 0,
+                metadata_json TEXT,
                 created_at TEXT NOT NULL
             );
 
@@ -709,7 +798,10 @@ def init_db() -> None:
                 refresh_token TEXT UNIQUE NOT NULL,
                 expires_at TEXT NOT NULL,
                 revoked_at TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                org_id INTEGER,
+                user_agent TEXT,
+                ip_address TEXT
             );
 
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -718,6 +810,10 @@ def init_db() -> None:
                 token TEXT NOT NULL UNIQUE,
                 expires_at TEXT NOT NULL,
                 used_at TEXT,
+                delivery_status TEXT NOT NULL DEFAULT 'pending',
+                delivery_error TEXT,
+                delivery_attempted_at TEXT,
+                delivered_at TEXT,
                 created_at TEXT NOT NULL
             );
 
@@ -752,6 +848,26 @@ def init_db() -> None:
                 reason TEXT,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS platform_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT NOT NULL UNIQUE,
+                setting_value_json TEXT NOT NULL,
+                updated_by TEXT,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS alert_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
+                metric TEXT NOT NULL,
+                threshold REAL NOT NULL,
+                channel TEXT NOT NULL,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                created_by TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             
             CREATE TABLE IF NOT EXISTS organizations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -759,14 +875,35 @@ def init_db() -> None:
                 type TEXT NOT NULL,
                 domain TEXT NOT NULL UNIQUE,
                 slug TEXT UNIQUE,
-                logo_url TEXT,
                 status TEXT NOT NULL DEFAULT 'active',
+                plan TEXT DEFAULT 'free',
                 moodle_category_id INTEGER,
                 moodle_tenant_key TEXT,
                 admin_user_id TEXT,
                 created_by TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS organization_branding (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL UNIQUE,
+                logo_url TEXT,
+                favicon_url TEXT,
+                login_banner_url TEXT,
+                primary_color TEXT,
+                secondary_color TEXT,
+                font_family TEXT,
+                theme_mode TEXT NOT NULL DEFAULT 'light',
+                certificate_template_url TEXT,
+                email_template_id TEXT,
+                landing_page_config TEXT,
+                seo_title TEXT,
+                seo_description TEXT,
+                custom_domain TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS org_feature_flags (
@@ -793,6 +930,19 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS moodle_sync_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
+                moodle_tenant_id INTEGER,
+                category_identifier TEXT,
+                event_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                message TEXT NOT NULL,
+                duration_ms INTEGER,
+                metadata_json TEXT,
+                created_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS org_invitations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 org_id INTEGER NOT NULL,
@@ -802,6 +952,16 @@ def init_db() -> None:
                 invited_by TEXT,
                 expires_at TEXT NOT NULL,
                 accepted_at TEXT,
+                revoked_at TEXT,
+                revoked_by TEXT,
+                revoke_reason TEXT,
+                resend_count INTEGER NOT NULL DEFAULT 0,
+                last_sent_at TEXT,
+                last_resent_at TEXT,
+                delivery_status TEXT NOT NULL DEFAULT 'pending',
+                delivery_error TEXT,
+                delivery_attempted_at TEXT,
+                delivered_at TEXT,
                 created_at TEXT NOT NULL
             );
             """
@@ -823,6 +983,10 @@ def init_db() -> None:
         _migrate_add_column(conn, "users", "status", "TEXT DEFAULT 'active'")
         _migrate_add_column(conn, "users", "invited_via", "INTEGER")
         _migrate_add_column(conn, "users", "last_login_at", "TEXT")
+        _migrate_add_column(conn, "password_reset_tokens", "delivery_status", "TEXT NOT NULL DEFAULT 'pending'")
+        _migrate_add_column(conn, "password_reset_tokens", "delivery_error", "TEXT")
+        _migrate_add_column(conn, "password_reset_tokens", "delivery_attempted_at", "TEXT")
+        _migrate_add_column(conn, "password_reset_tokens", "delivered_at", "TEXT")
         # Pending verifications
         _migrate_add_column(conn, "pending_verifications", "organization_id", "INTEGER NOT NULL DEFAULT 1")
         _migrate_add_column(conn, "pending_verifications", "organization_name", "TEXT NOT NULL DEFAULT 'Unknown'")
@@ -840,14 +1004,31 @@ def init_db() -> None:
         _migrate_add_column(conn, "audit_log", "severity", "TEXT DEFAULT 'INFO'")
         _migrate_add_column(conn, "audit_log", "ip_address", "TEXT")
         _migrate_add_column(conn, "audit_log", "metadata_json", "TEXT")
+        _migrate_add_column(conn, "notifications", "type", "TEXT DEFAULT 'info'")
+        _migrate_add_column(conn, "notifications", "metadata_json", "TEXT")
+        _migrate_add_column(conn, "auth_sessions", "org_id", "INTEGER")
+        _migrate_add_column(conn, "auth_sessions", "user_agent", "TEXT")
+        _migrate_add_column(conn, "auth_sessions", "ip_address", "TEXT")
         # Organizations — enhance existing table
         _migrate_add_column(conn, "organizations", "slug", "TEXT")
         _migrate_add_column(conn, "organizations", "status", "TEXT DEFAULT 'active'")
         _migrate_add_column(conn, "organizations", "logo_url", "TEXT")
+        _migrate_add_column(conn, "organizations", "plan", "TEXT DEFAULT 'free'")
         _migrate_add_column(conn, "organizations", "moodle_category_id", "INTEGER")
         _migrate_add_column(conn, "organizations", "moodle_tenant_key", "TEXT")
         _migrate_add_column(conn, "organizations", "created_by", "TEXT")
         _migrate_add_column(conn, "organizations", "updated_at", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "revoked_at", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "revoked_by", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "revoke_reason", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "resend_count", "INTEGER NOT NULL DEFAULT 0")
+        _migrate_add_column(conn, "org_invitations", "last_sent_at", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "last_resent_at", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "delivery_status", "TEXT NOT NULL DEFAULT 'pending'")
+        _migrate_add_column(conn, "org_invitations", "delivery_error", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "delivery_attempted_at", "TEXT")
+        _migrate_add_column(conn, "org_invitations", "delivered_at", "TEXT")
+        _seed_platform_settings(conn)
 
         # ── Keep tenant identifiers aligned across legacy/new columns ────────
         _sync_org_context(conn)
@@ -863,8 +1044,18 @@ def init_db() -> None:
                 (now, now),
             )
             conn.execute(
+                "INSERT INTO organization_branding (organization_id, primary_color, secondary_color, font_family, theme_mode, created_at, updated_at) "
+                "VALUES (1, '#2563EB', '#111827', 'Inter', 'light', ?, ?)",
+                (now, now),
+            )
+            conn.execute(
                 "INSERT INTO organizations (id, name, type, domain, slug, status, created_at, updated_at) "
                 "VALUES (2, 'Telite Systems', 'company', 'telite.io', 'telite-systems', 'active', ?, ?)",
+                (now, now),
+            )
+            conn.execute(
+                "INSERT INTO organization_branding (organization_id, primary_color, secondary_color, font_family, theme_mode, created_at, updated_at) "
+                "VALUES (2, '#2563EB', '#111827', 'Inter', 'light', ?, ?)",
                 (now, now),
             )
             conn.commit()
@@ -931,6 +1122,26 @@ def _migrate_add_column(conn: Any, table: str, column: str, col_type: str) -> No
             logger.info("Migrated: added %s.%s (%s)", table, column, col_type)
     except Exception as exc:
         logger.warning("Migration skipped for %s.%s: %s", table, column, exc)
+
+
+def _seed_platform_settings(conn: Any) -> None:
+    """Seed default platform setting groups into the key/value settings table."""
+    timestamp = now_local()
+    for key, value in DEFAULT_PLATFORM_SETTINGS.items():
+        existing = conn.execute(
+            "SELECT id FROM platform_settings WHERE setting_key = ? LIMIT 1",
+            (key,),
+        ).fetchone()
+        if existing:
+            continue
+        conn.execute(
+            """
+            INSERT INTO platform_settings (setting_key, setting_value_json, updated_by, updated_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (key, json.dumps(value), None, timestamp),
+        )
+    conn.commit()
 
 
 # ── Feature Flags ────────────────────────────────────────────────────────────
@@ -1101,24 +1312,33 @@ def list_organizations(
 
 
 def get_organization(org_id: int) -> dict[str, Any] | None:
-    """Get a single organization with full stats."""
+    """Get a single organization with refresh-friendly detail sections."""
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM organizations WHERE id = ?", (org_id,)).fetchone()
         if not row:
             return None
         org = dict(row)
-        org["user_count"] = conn.execute(
+        user_count = conn.execute(
             "SELECT COUNT(*) AS count FROM users WHERE org_id = ? AND COALESCE(is_platform_admin, 0) = 0",
             (org_id,),
         ).fetchone()["count"]
-        org["users_by_role"] = [
+        org["user_count"] = user_count
+        users_by_role = [
             dict(r) for r in conn.execute(
                 "SELECT role, COUNT(*) AS count FROM users WHERE org_id = ? AND COALESCE(is_platform_admin, 0) = 0 GROUP BY role",
                 (org_id,),
             ).fetchall()
         ]
-        org["course_count"] = conn.execute(
+        org["users_by_role"] = users_by_role
+        course_count = conn.execute(
             "SELECT COUNT(*) AS count FROM courses WHERE org_id = ?", (org_id,)
+        ).fetchone()["count"]
+        org["course_count"] = course_count
+        admin_count = sum(item["count"] for item in users_by_role if item["role"] in ADMIN_ROLES)
+        learner_count = sum(item["count"] for item in users_by_role if item["role"] in LEARNER_ROLES)
+        active_user_count = conn.execute(
+            "SELECT COUNT(*) AS count FROM users WHERE org_id = ? AND COALESCE(is_platform_admin, 0) = 0 AND is_active = 1",
+            (org_id,),
         ).fetchone()["count"]
         # Feature flags
         flags_rows = conn.execute(
@@ -1134,12 +1354,45 @@ def get_organization(org_id: int) -> dict[str, Any] | None:
                 "SELECT * FROM audit_log WHERE org_id = ? ORDER BY created_at DESC LIMIT 5", (org_id,)
             ).fetchall()
         ]
+        org["recent_sync_logs"] = [
+            dict(r) for r in conn.execute(
+                "SELECT * FROM moodle_sync_logs WHERE org_id = ? ORDER BY created_at DESC, id DESC LIMIT 5", (org_id,)
+            ).fetchall()
+        ]
+        pending_invites = [
+            dict(r) for r in conn.execute(
+                """
+                SELECT id, email, role, token, expires_at, invited_by, resend_count, last_sent_at, last_resent_at, created_at
+                FROM org_invitations
+                WHERE org_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 10
+                """,
+                (org_id, now_local()),
+            ).fetchall()
+        ]
+        org["pending_invitations"] = pending_invites
         # Super admin
         admin = conn.execute(
             f"SELECT id, full_name, email FROM users WHERE org_id = ? AND role IN ({SQL_TENANT_SUPER_ADMIN_ROLES}) AND COALESCE(is_platform_admin, 0) = 0 LIMIT 1",
             (org_id,),
         ).fetchone()
         org["super_admin"] = dict(admin) if admin else None
+        org["stats"] = {
+            "total_users": user_count,
+            "active_users": active_user_count,
+            "admin_users": admin_count,
+            "learner_users": learner_count,
+            "courses": course_count,
+            "pending_invitations": len(pending_invites),
+        }
+        org["sync_summary"] = {
+            "tenant_connected": bool(mt),
+            "sync_status": mt["sync_status"] if mt else None,
+            "last_sync_at": mt["last_sync_at"] if mt else None,
+            "recent_events": len(org["recent_sync_logs"]),
+        }
+        org["refreshed_at"] = now_local()
         return org
 
 
@@ -1164,6 +1417,15 @@ def create_organization(payload: dict[str, Any], actor_id: str | None = None) ->
             (payload["name"], payload["type"], payload["domain"], slug, actor_id, now, now),
         )
         conn.commit()
+        org_id_new = conn.execute("SELECT id FROM organizations WHERE slug = ?", (slug,)).fetchone()["id"]
+        conn.execute(
+            """
+            INSERT INTO organization_branding (organization_id, primary_color, secondary_color, font_family, theme_mode, created_at, updated_at)
+            VALUES (?, '#2563EB', '#111827', 'Inter', 'light', ?, ?)
+            """,
+            (org_id_new, now, now),
+        )
+        conn.commit()
         org_id = conn.execute("SELECT id FROM organizations WHERE slug = ?", (slug,)).fetchone()["id"]
         # Seed feature flags for new org
         for key in DEFAULT_FEATURE_KEYS:
@@ -1175,16 +1437,205 @@ def create_organization(payload: dict[str, Any], actor_id: str | None = None) ->
         return get_organization(org_id) or {}
 
 
+def _insert_org_invitation(
+    conn: Any,
+    *,
+    org_id: int,
+    email: str,
+    role: str,
+    invited_by: str | None = None,
+) -> dict[str, Any]:
+    now = now_local()
+    token = str(uuid.uuid4())
+    normalized_email = str(email).strip().lower()
+    normalized_role = normalize_role(role)
+    if not normalized_email:
+        raise ValueError("Invitation email is required.")
+    if not is_admin_role(normalized_role):
+        raise ValueError("Invitations currently support admin roles only.")
+    from datetime import timedelta
+    expires_at = (datetime.now() + timedelta(hours=72)).strftime("%Y-%m-%d %H:%M")
+    existing = conn.execute(
+        """
+        SELECT id
+        FROM org_invitations
+        WHERE lower(email) = lower(?) AND org_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+        """,
+        (normalized_email, org_id, now),
+    ).fetchone()
+    if existing:
+        raise ValueError(f"An active invitation for {normalized_email} already exists for this organization.")
+    conn.execute(
+        """
+        INSERT INTO org_invitations (
+            org_id, email, role, token, invited_by, expires_at,
+            resend_count, last_sent_at, delivery_status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (org_id, normalized_email, normalized_role, token, invited_by, expires_at, 0, now, "pending", now),
+    )
+    # Commit first so the SELECT can see the inserted row (required for PostgreSQL)
+    conn.commit()
+    row = conn.execute("SELECT * FROM org_invitations WHERE token = ?", (token,)).fetchone()
+    if not row:
+        # Fallback: return the data we already know
+        return {
+            "id": None,
+            "org_id": org_id,
+            "email": normalized_email,
+            "role": normalized_role,
+            "token": token,
+            "invited_by": invited_by,
+            "expires_at": expires_at,
+            "resend_count": 0,
+            "last_sent_at": now,
+            "delivery_status": "pending",
+            "created_at": now,
+        }
+    return dict(row)
+
+
+def create_platform_organization(
+    *,
+    name: str,
+    org_type: str,
+    domain: str,
+    slug: str | None = None,
+    actor_id: str | None = None,
+    super_admin_email: str | None = None,
+    moodle_setup: str = "manual",
+) -> dict[str, Any]:
+    """Create org + local onboarding records atomically before external sync."""
+    now = now_local()
+    normalized_name = str(name).strip()
+    normalized_domain = str(domain).strip().lower()
+    normalized_slug = slugify(str(slug).strip().lower()) if slug else slugify(normalized_name)
+    normalized_type = str(org_type).strip().lower()
+    if not normalized_name:
+        raise ValueError("Organization name is required.")
+    if not normalized_domain:
+        raise ValueError("Organization domain is required.")
+    if normalized_type not in {"college", "company"}:
+        raise ValueError("Organization type must be college or company.")
+    if not normalized_slug:
+        raise ValueError("Organization slug is invalid.")
+
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM organizations WHERE lower(domain) = lower(?) LIMIT 1",
+            (normalized_domain,),
+        ).fetchone()
+        if existing:
+            raise ValueError(f"Domain '{normalized_domain}' is already in use.")
+        existing_slug = conn.execute(
+            "SELECT 1 FROM organizations WHERE lower(slug) = lower(?) LIMIT 1",
+            (normalized_slug,),
+        ).fetchone()
+        if existing_slug:
+            raise ValueError(f"Slug '{normalized_slug}' is already in use.")
+
+        conn.execute(
+            """
+            INSERT INTO organizations (name, type, domain, slug, status, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
+            """,
+            (normalized_name, normalized_type, normalized_domain, normalized_slug, actor_id, now, now),
+        )
+        conn.commit()
+        org_id = conn.execute("SELECT id FROM organizations WHERE slug = ?", (normalized_slug,)).fetchone()["id"]
+        
+        conn.execute(
+            """
+            INSERT INTO organization_branding (organization_id, primary_color, secondary_color, font_family, theme_mode, created_at, updated_at)
+            VALUES (?, '#2563EB', '#111827', 'Inter', 'light', ?, ?)
+            """,
+            (org_id, now, now),
+        )
+
+        for key in DEFAULT_FEATURE_KEYS:
+            conn.execute(
+                "INSERT INTO org_feature_flags (org_id, feature_key, is_enabled, updated_at) VALUES (?, ?, 0, ?)",
+                (org_id, key, now),
+            )
+
+        if moodle_setup in {"manual", "auto"}:
+            conn.execute(
+                "INSERT INTO moodle_tenants (org_id, moodle_cat_id, sync_status, created_at) VALUES (?, ?, 'pending', ?)",
+                (org_id, 0, now),
+            )
+
+        invitation = None
+        if super_admin_email:
+            invitation = _insert_org_invitation(
+                conn,
+                org_id=org_id,
+                email=super_admin_email,
+                role="super_admin",
+                invited_by=actor_id,
+            )
+
+        conn.commit()
+        org = get_organization(org_id) or {}
+        return {
+            "org": org,
+            "invitation": invitation,
+            "invitation_sent": bool(invitation),
+        }
+
+
 def update_organization(org_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """Update organization fields."""
+    """Update organization fields with normalization and collision checks."""
     allowed_fields = {"name", "domain", "slug", "status", "logo_url", "moodle_category_id", "moodle_tenant_key", "admin_user_id"}
     updates = {k: v for k, v in payload.items() if k in allowed_fields and v is not None}
     if not updates:
         raise ValueError("No valid fields to update.")
-    updates["updated_at"] = now_local()
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [org_id]
     with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id, name, domain, slug FROM organizations WHERE id = ?",
+            (org_id,),
+        ).fetchone()
+        if not existing:
+            raise ValueError("Organization not found.")
+
+        if "name" in updates:
+            normalized_name = str(updates["name"]).strip()
+            if not normalized_name:
+                raise ValueError("Organization name cannot be empty.")
+            updates["name"] = normalized_name
+
+        if "domain" in updates:
+            normalized_domain = str(updates["domain"]).strip().lower()
+            if not normalized_domain:
+                raise ValueError("Organization domain cannot be empty.")
+            domain_conflict = conn.execute(
+                "SELECT id FROM organizations WHERE lower(domain) = lower(?) AND id != ? LIMIT 1",
+                (normalized_domain, org_id),
+            ).fetchone()
+            if domain_conflict:
+                raise ValueError(f"Domain '{normalized_domain}' is already in use.")
+            updates["domain"] = normalized_domain
+
+        if "slug" in updates:
+            raw_slug = str(updates["slug"]).strip().lower()
+            if not raw_slug:
+                raise ValueError("Organization slug cannot be empty.")
+            normalized_slug = slugify(raw_slug)
+            if not normalized_slug:
+                raise ValueError("Organization slug is invalid.")
+            slug_conflict = conn.execute(
+                "SELECT id FROM organizations WHERE lower(slug) = lower(?) AND id != ? LIMIT 1",
+                (normalized_slug, org_id),
+            ).fetchone()
+            if slug_conflict:
+                raise ValueError(f"Slug '{normalized_slug}' is already in use.")
+            updates["slug"] = normalized_slug
+
+        if "logo_url" in updates:
+            updates["logo_url"] = str(updates["logo_url"]).strip()
+
+        updates["updated_at"] = now_local()
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [org_id]
         conn.execute(f"UPDATE organizations SET {set_clause} WHERE id = ?", values)
         conn.commit()
     return get_organization(org_id) or {}
@@ -1257,6 +1708,176 @@ def list_moodle_tenants() -> list[dict[str, Any]]:
         return [dict(r) for r in rows]
 
 
+def create_moodle_sync_log(
+    *,
+    org_id: int,
+    event_type: str,
+    status: str,
+    message: str,
+    moodle_tenant_id: int | None = None,
+    category_identifier: str | None = None,
+    duration_ms: int | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist a Moodle sync lifecycle event for later diagnostics and reporting."""
+    created_at = now_local()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO moodle_sync_logs (
+                org_id, moodle_tenant_id, category_identifier, event_type,
+                status, message, duration_ms, metadata_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                org_id,
+                moodle_tenant_id,
+                category_identifier,
+                event_type,
+                status,
+                message,
+                duration_ms,
+                json.dumps(metadata) if metadata else None,
+                created_at,
+            ),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM moodle_sync_logs WHERE id = (SELECT MAX(id) FROM moodle_sync_logs)"
+        ).fetchone()
+        return dict(row) if row else {}
+
+
+def list_moodle_sync_logs(
+    *,
+    org_id: int | None = None,
+    category_identifier: str | None = None,
+    status: str | None = None,
+    event_type: str | None = None,
+    query: str | None = None,
+    page: int = 1,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Return paginated Moodle sync logs enriched for platform admin views."""
+    clauses: list[str] = []
+    params: list[Any] = []
+    if org_id is not None:
+        clauses.append("msl.org_id = ?")
+        params.append(org_id)
+    if category_identifier:
+        clauses.append("msl.category_identifier = ?")
+        params.append(category_identifier)
+    if status:
+        clauses.append("msl.status = ?")
+        params.append(status)
+    if event_type:
+        clauses.append("msl.event_type = ?")
+        params.append(event_type)
+    if query:
+        clauses.append(
+            "(lower(msl.message) LIKE ? OR lower(msl.event_type) LIKE ? OR lower(COALESCE(msl.category_identifier, '')) LIKE ? OR lower(o.name) LIKE ?)"
+        )
+        search = f"%{query.lower()}%"
+        params.extend([search, search, search, search])
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    offset = (page - 1) * limit
+    with get_conn() as conn:
+        total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS count
+            FROM moodle_sync_logs msl
+            JOIN organizations o ON o.id = msl.org_id
+            LEFT JOIN moodle_tenants mt ON mt.org_id = msl.org_id
+            {where}
+            """,
+            params,
+        ).fetchone()["count"]
+        rows = conn.execute(
+            f"""
+            SELECT
+                msl.*,
+                o.name AS org_name,
+                o.type AS org_type,
+                o.status AS org_status,
+                mt.moodle_cat_id,
+                mt.sync_status AS tenant_sync_status,
+                mt.last_sync_at
+            FROM moodle_sync_logs msl
+            JOIN organizations o ON o.id = msl.org_id
+            LEFT JOIN moodle_tenants mt ON mt.org_id = msl.org_id
+            {where}
+            ORDER BY msl.created_at DESC, msl.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            params + [limit, offset],
+        ).fetchall()
+        logs = []
+        for row in rows:
+            item = dict(row)
+            item["metadata"] = _json_load(item.get("metadata_json"), {})
+            duration_ms = item.get("duration_ms")
+            item["duration_label"] = "—" if duration_ms is None else f"{duration_ms / 1000:.1f}s"
+            item["ts"] = item["created_at"]
+            item["catId"] = item.get("category_identifier") or (f"ORG-{item['org_id']:03d}")
+            item["tenant"] = item.get("org_name")
+            item["event"] = item.get("event_type")
+            status_value = str(item.get("status") or "").lower()
+            item["status_label"] = {
+                "success": "completed",
+                "successful": "completed",
+                "synced": "completed",
+                "ok": "completed",
+                "completed": "completed",
+                "failed": "failed",
+                "error": "failed",
+                "in_progress": "in_progress",
+                "running": "in_progress",
+                "syncing": "in_progress",
+                "pending": "pending",
+            }.get(status_value, status_value or "pending")
+            logs.append(item)
+        return {
+            "logs": logs,
+            "total": total,
+            "page": page,
+            "limit": limit,
+        }
+
+
+def get_platform_settings() -> dict[str, Any]:
+    """Return persisted platform settings merged onto the default settings contract."""
+    settings = json.loads(json.dumps(DEFAULT_PLATFORM_SETTINGS))
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT setting_key, setting_value_json FROM platform_settings ORDER BY setting_key"
+        ).fetchall()
+    for row in rows:
+        settings[row["setting_key"]] = _json_load(row["setting_value_json"], settings.get(row["setting_key"]))
+    return settings
+
+
+def update_platform_settings(updates: dict[str, Any], *, updated_by: str | None = None) -> dict[str, Any]:
+    """Persist one or more platform setting groups without touching the API layer yet."""
+    if not updates:
+        return get_platform_settings()
+    timestamp = now_local()
+    with get_conn() as conn:
+        for key, value in updates.items():
+            conn.execute(
+                """
+                INSERT INTO platform_settings (setting_key, setting_value_json, updated_by, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(setting_key) DO UPDATE SET
+                    setting_value_json = excluded.setting_value_json,
+                    updated_by = excluded.updated_by,
+                    updated_at = excluded.updated_at
+                """,
+                (key, json.dumps(value), updated_by, timestamp),
+            )
+        conn.commit()
+    return get_platform_settings()
+
+
 def upsert_moodle_tenant(org_id: int, moodle_cat_id: int) -> dict[str, Any]:
     """Create or update a moodle tenant record."""
     now = now_local()
@@ -1295,34 +1916,308 @@ def update_moodle_tenant_sync(org_id: int, *, status: str, error: str | None = N
         conn.commit()
 
 
+def run_moodle_sync_for_org(org_id: int) -> dict[str, Any]:
+    """Run the local per-org Moodle sync flow and persist sync lifecycle logs."""
+    started_at = time.perf_counter()
+    job_id = generate_job_id("sync")
+    category_identifier = f"ORG-{org_id:03d}"
+    with get_conn() as conn:
+        org_row = conn.execute(
+            "SELECT id, name, status, slug, moodle_category_id FROM organizations WHERE id = ?",
+            (org_id,),
+        ).fetchone()
+        if not org_row:
+            raise ValueError("Organization not found")
+        org = dict(org_row)
+        if org.get("status") != "active":
+            raise ValueError("Organization is not active")
+        tenant_row = conn.execute("SELECT * FROM moodle_tenants WHERE org_id = ?", (org_id,)).fetchone()
+        if not tenant_row:
+            conn.execute(
+                "INSERT INTO moodle_tenants (org_id, moodle_cat_id, sync_status, created_at) VALUES (?, ?, 'pending', ?)",
+                (org_id, int(org.get("moodle_category_id") or 0), now_local()),
+            )
+            conn.commit()
+            tenant_row = conn.execute("SELECT * FROM moodle_tenants WHERE org_id = ?", (org_id,)).fetchone()
+        tenant = dict(tenant_row) if tenant_row else {}
+
+        users_lms = conn.execute(
+            "SELECT COUNT(*) AS c FROM users WHERE org_id = ? AND COALESCE(is_platform_admin, 0) = 0",
+            (org_id,),
+        ).fetchone()["c"]
+        users_moodle = users_lms
+        courses = conn.execute("SELECT COUNT(*) AS c FROM courses WHERE org_id = ?", (org_id,)).fetchone()["c"]
+        enrollments = conn.execute(
+            "SELECT COUNT(*) AS c FROM enrollment_requests WHERE org_id = ? AND status = 'approved'",
+            (org_id,),
+        ).fetchone()["c"]
+
+    create_moodle_sync_log(
+        org_id=org_id,
+        moodle_tenant_id=tenant.get("moodle_cat_id"),
+        category_identifier=category_identifier,
+        event_type="sync.start",
+        status="in_progress",
+        message=f"Started Moodle sync for '{org['name']}'",
+        metadata={"org_slug": org.get("slug"), "job_id": job_id},
+    )
+
+    try:
+        update_moodle_tenant_sync(
+            org_id,
+            status="syncing",
+            total_users_lms=users_lms,
+            total_users_moodle=users_moodle,
+            total_courses=courses,
+            total_enrollments=enrollments,
+        )
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        update_moodle_tenant_sync(
+            org_id,
+            status="successful",
+            error=None,
+            total_users_lms=users_lms,
+            total_users_moodle=users_moodle,
+            total_courses=courses,
+            total_enrollments=enrollments,
+        )
+        create_moodle_sync_log(
+            org_id=org_id,
+            moodle_tenant_id=tenant.get("moodle_cat_id"),
+            category_identifier=category_identifier,
+            event_type="sync.complete",
+            status="successful",
+            message=f"Completed Moodle sync for '{org['name']}'",
+            duration_ms=duration_ms,
+            metadata={
+                "job_id": job_id,
+                "users_lms": users_lms,
+                "users_moodle": users_moodle,
+                "courses": courses,
+                "enrollments": enrollments,
+            },
+        )
+    except Exception as exc:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        update_moodle_tenant_sync(org_id, status="failed", error=str(exc))
+        create_moodle_sync_log(
+            org_id=org_id,
+            moodle_tenant_id=tenant.get("moodle_cat_id"),
+            category_identifier=category_identifier,
+            event_type="sync.fail",
+            status="failed",
+            message=f"Moodle sync failed for '{org['name']}': {exc}",
+            duration_ms=duration_ms,
+            metadata={"error": str(exc), "job_id": job_id},
+        )
+        raise
+
+    with get_conn() as conn:
+        updated_tenant = conn.execute("SELECT * FROM moodle_tenants WHERE org_id = ?", (org_id,)).fetchone()
+
+    return {
+        "org_id": org_id,
+        "org_name": org["name"],
+        "tenant": dict(updated_tenant) if updated_tenant else {},
+        "sync_job": {
+            "job_id": job_id,
+            "status": "successful",
+            "category_identifier": category_identifier,
+            "duration_ms": duration_ms,
+            "counts": {
+                "users_lms": users_lms,
+                "users_moodle": users_moodle,
+                "courses": courses,
+                "enrollments": enrollments,
+            },
+        },
+    }
+
+
+def run_moodle_sync_all() -> dict[str, Any]:
+    """Run the local Moodle sync flow for every active mapped organization."""
+    started_at = time.perf_counter()
+    batch_job_id = generate_job_id("sync-batch")
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT o.id, o.name
+            FROM organizations o
+            JOIN moodle_tenants mt ON mt.org_id = o.id
+            WHERE o.status = 'active'
+            ORDER BY o.id
+            """
+        ).fetchall()
+
+    results: list[dict[str, Any]] = []
+    successful = 0
+    failed = 0
+    for row in rows:
+        org_id = row["id"]
+        org_name = row["name"]
+        try:
+            sync_result = run_moodle_sync_for_org(org_id)
+            results.append(
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "status": "successful",
+                    "sync_job": sync_result["sync_job"],
+                    "tenant": sync_result["tenant"],
+                }
+            )
+            successful += 1
+        except Exception as exc:
+            results.append(
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "status": "failed",
+                    "error": str(exc),
+                }
+            )
+            failed += 1
+
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    return {
+        "job_id": batch_job_id,
+        "triggered": len(results),
+        "successful": successful,
+        "failed": failed,
+        "duration_ms": duration_ms,
+        "results": results,
+    }
+
+
+def get_moodle_sync_report(*, days: int = 30) -> dict[str, Any]:
+    """Build a compact reporting summary for the Moodle Sync reports tab."""
+    if days < 1:
+        days = 1
+    since_date = (datetime.now() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                msl.org_id,
+                msl.category_identifier,
+                msl.event_type,
+                msl.status,
+                msl.duration_ms,
+                msl.created_at,
+                o.name AS org_name
+            FROM moodle_sync_logs msl
+            JOIN organizations o ON o.id = msl.org_id
+            WHERE substr(msl.created_at, 1, 10) >= ?
+            ORDER BY msl.created_at ASC, msl.id ASC
+            """,
+            (since_date,),
+        ).fetchall()
+
+    logs = [dict(row) for row in rows]
+    sync_terminal_logs = [log for log in logs if log["event_type"] in {"sync.complete", "sync.fail"}]
+    total_syncs = len(sync_terminal_logs)
+    failed_syncs = sum(1 for log in sync_terminal_logs if str(log["status"]).lower() == "failed")
+    successful_syncs = total_syncs - failed_syncs
+    avg_duration_ms = round(
+        sum(log["duration_ms"] or 0 for log in sync_terminal_logs) / total_syncs, 1
+    ) if total_syncs else 0.0
+
+    daily_bucket: dict[str, dict[str, int]] = {}
+    for log in sync_terminal_logs:
+        day = str(log["created_at"])[:10]
+        bucket = daily_bucket.setdefault(day, {"successful": 0, "failed": 0})
+        if str(log["status"]).lower() == "failed":
+            bucket["failed"] += 1
+        else:
+            bucket["successful"] += 1
+    trend = []
+    for day in sorted(daily_bucket):
+        bucket = daily_bucket[day]
+        day_total = bucket["successful"] + bucket["failed"]
+        success_rate = round((bucket["successful"] / day_total) * 100, 1) if day_total else 0.0
+        trend.append(
+            {
+                "date": day,
+                "successful": bucket["successful"],
+                "failed": bucket["failed"],
+                "total": day_total,
+                "success_rate": success_rate,
+            }
+        )
+
+    health_map: dict[tuple[int, str], dict[str, Any]] = {}
+    for log in sync_terminal_logs:
+        category_identifier = log.get("category_identifier") or f"ORG-{log['org_id']:03d}"
+        key = (log["org_id"], category_identifier)
+        item = health_map.setdefault(
+            key,
+            {
+                "org_id": log["org_id"],
+                "tenant": log["org_name"],
+                "category_identifier": category_identifier,
+                "total_syncs": 0,
+                "successful": 0,
+                "failed": 0,
+                "duration_total_ms": 0,
+            },
+        )
+        item["total_syncs"] += 1
+        item["duration_total_ms"] += int(log["duration_ms"] or 0)
+        if str(log["status"]).lower() == "failed":
+            item["failed"] += 1
+        else:
+            item["successful"] += 1
+
+    health_rows = []
+    for item in health_map.values():
+        total = item["total_syncs"]
+        success_rate = round((item["successful"] / total) * 100, 1) if total else 0.0
+        avg_duration_ms = round(item["duration_total_ms"] / total, 1) if total else 0.0
+        health_rows.append(
+            {
+                "org_id": item["org_id"],
+                "tenant": item["tenant"],
+                "category_identifier": item["category_identifier"],
+                "total_syncs": total,
+                "successful": item["successful"],
+                "failed": item["failed"],
+                "success_rate": success_rate,
+                "avg_duration_ms": avg_duration_ms,
+                "avg_duration_label": "—" if not total else f"{avg_duration_ms / 1000:.1f}s",
+            }
+        )
+    health_rows.sort(key=lambda item: (-item["success_rate"], item["category_identifier"]))
+
+    return {
+        "window_days": days,
+        "kpis": {
+            "total_syncs": total_syncs,
+            "failed_syncs": failed_syncs,
+            "successful_syncs": successful_syncs,
+            "avg_duration_ms": avg_duration_ms,
+            "avg_duration_label": "—" if not total_syncs else f"{avg_duration_ms / 1000:.1f}s",
+            "success_rate": round((successful_syncs / total_syncs) * 100, 1) if total_syncs else 0.0,
+        },
+        "trend": trend,
+        "health_rows": health_rows,
+    }
+
+
 # ── Platform Admin: Invitations ───────────────────────────────────────────────
 
 
 def create_invitation(org_id: int, email: str, role: str, invited_by: str | None = None) -> dict[str, Any]:
     """Create an org invitation."""
-    now = now_local()
-    token = str(uuid.uuid4())
-    normalized_role = normalize_role(role)
-    if not is_admin_role(normalized_role):
-        raise ValueError("Invitations currently support admin roles only.")
-    # expires in 72 hours
-    from datetime import timedelta
-    expires_at = (datetime.now() + timedelta(hours=72)).strftime("%Y-%m-%d %H:%M")
     with get_conn() as conn:
-        # Check for existing pending invitation
-        existing = conn.execute(
-            "SELECT id FROM org_invitations WHERE email = ? AND org_id = ? AND accepted_at IS NULL AND expires_at > ?",
-            (email, org_id, now),
-        ).fetchone()
-        if existing:
-            raise ValueError(f"An active invitation for {email} already exists for this organization.")
-        conn.execute(
-            "INSERT INTO org_invitations (org_id, email, role, token, invited_by, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (org_id, email, normalized_role, token, invited_by, expires_at, now),
+        invitation = _insert_org_invitation(
+            conn,
+            org_id=org_id,
+            email=email,
+            role=role,
+            invited_by=invited_by,
         )
         conn.commit()
-        row = conn.execute("SELECT * FROM org_invitations WHERE token = ?", (token,)).fetchone()
-        return dict(row) if row else {}
+        return invitation
 
 
 def validate_invitation(token: str) -> dict[str, Any] | None:
@@ -1330,7 +2225,12 @@ def validate_invitation(token: str) -> dict[str, Any] | None:
     now = now_local()
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT inv.*, o.name AS org_name, o.type AS org_type FROM org_invitations inv JOIN organizations o ON o.id = inv.org_id WHERE inv.token = ? AND inv.accepted_at IS NULL AND inv.expires_at > ?",
+            """
+            SELECT inv.*, o.name AS org_name, o.type AS org_type
+            FROM org_invitations inv
+            JOIN organizations o ON o.id = inv.org_id
+            WHERE inv.token = ? AND inv.accepted_at IS NULL AND inv.revoked_at IS NULL AND inv.expires_at > ?
+            """,
             (token, now),
         ).fetchone()
         return dict(row) if row else None
@@ -1356,7 +2256,7 @@ def accept_invitation_signup(token: str, full_name: str, password: str) -> dict[
             SELECT inv.*, o.name AS org_name, o.type AS org_type
             FROM org_invitations inv
             JOIN organizations o ON o.id = inv.org_id
-            WHERE inv.token = ? AND inv.accepted_at IS NULL AND inv.expires_at > ?
+            WHERE inv.token = ? AND inv.accepted_at IS NULL AND inv.revoked_at IS NULL AND inv.expires_at > ?
             LIMIT 1
             """,
             (token, now),
@@ -1425,19 +2325,30 @@ def create_password_reset_token(email: str) -> dict[str, Any] | None:
         token = uuid.uuid4().hex
         conn.execute(
             """
-            INSERT INTO password_reset_tokens (user_id, token, expires_at, used_at, created_at)
-            VALUES (?, ?, ?, NULL, ?)
+            INSERT INTO password_reset_tokens (
+                user_id, token, expires_at, used_at, delivery_status, created_at
+            )
+            VALUES (?, ?, ?, NULL, 'pending', ?)
             """,
             (user["id"], token, expires_at, now),
         )
+        token_row = conn.execute(
+            "SELECT * FROM password_reset_tokens WHERE token = ? LIMIT 1",
+            (token,),
+        ).fetchone()
         conn.commit()
         return {
+            "id": token_row["id"] if token_row else None,
             "user_id": user["id"],
             "email": user["email"],
             "full_name": user["full_name"],
             "token": token,
             "expires_at": expires_at,
             "org_id": user.get("org_id"),
+            "delivery_status": token_row["delivery_status"] if token_row else "pending",
+            "delivery_error": token_row["delivery_error"] if token_row else None,
+            "delivery_attempted_at": token_row["delivery_attempted_at"] if token_row else None,
+            "delivered_at": token_row["delivered_at"] if token_row else None,
         }
 
 
@@ -1488,15 +2399,246 @@ def list_pending_invitations(org_id: int | None = None) -> list[dict[str, Any]]:
     with get_conn() as conn:
         if org_id is not None:
             rows = conn.execute(
-                "SELECT inv.*, o.name AS org_name FROM org_invitations inv JOIN organizations o ON o.id = inv.org_id WHERE inv.org_id = ? AND inv.accepted_at IS NULL AND inv.expires_at > ? ORDER BY inv.created_at DESC",
+                """
+                SELECT inv.*, o.name AS org_name
+                FROM org_invitations inv
+                JOIN organizations o ON o.id = inv.org_id
+                WHERE inv.org_id = ? AND inv.accepted_at IS NULL AND inv.revoked_at IS NULL AND inv.expires_at > ?
+                ORDER BY inv.created_at DESC
+                """,
                 (org_id, now),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT inv.*, o.name AS org_name FROM org_invitations inv JOIN organizations o ON o.id = inv.org_id WHERE inv.accepted_at IS NULL AND inv.expires_at > ? ORDER BY inv.created_at DESC",
+                """
+                SELECT inv.*, o.name AS org_name
+                FROM org_invitations inv
+                JOIN organizations o ON o.id = inv.org_id
+                WHERE inv.accepted_at IS NULL AND inv.revoked_at IS NULL AND inv.expires_at > ?
+                ORDER BY inv.created_at DESC
+                """,
                 (now,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+
+def revoke_invitation(
+    invitation_id: int,
+    *,
+    revoked_by: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Persist invitation revocation state for an active invitation."""
+    now = now_local()
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT inv.*, o.name AS org_name
+            FROM org_invitations inv
+            JOIN organizations o ON o.id = inv.org_id
+            WHERE inv.id = ?
+            LIMIT 1
+            """,
+            (invitation_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Invitation not found.")
+
+        invitation = dict(row)
+        if invitation.get("accepted_at"):
+            raise ValueError("Invitation has already been accepted.")
+        if invitation.get("revoked_at"):
+            raise ValueError("Invitation has already been revoked.")
+
+        conn.execute(
+            """
+            UPDATE org_invitations
+            SET revoked_at = ?, revoked_by = ?, revoke_reason = ?
+            WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+            """,
+            (now, revoked_by, reason, invitation_id),
+        )
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT inv.*, o.name AS org_name
+            FROM org_invitations inv
+            JOIN organizations o ON o.id = inv.org_id
+            WHERE inv.id = ?
+            LIMIT 1
+            """,
+            (invitation_id,),
+        ).fetchone()
+        return dict(row) if row else {}
+
+
+def record_invitation_resend(
+    invitation_id: int,
+    *,
+    rotate_token: bool = False,
+) -> dict[str, Any]:
+    """Validate and track a resend attempt for an active invitation."""
+    now = now_local()
+    next_token = str(uuid.uuid4()) if rotate_token else None
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT inv.*, o.name AS org_name
+            FROM org_invitations inv
+            JOIN organizations o ON o.id = inv.org_id
+            WHERE inv.id = ?
+            LIMIT 1
+            """,
+            (invitation_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Invitation not found.")
+
+        invitation = dict(row)
+        if invitation.get("accepted_at"):
+            raise ValueError("Invitation has already been accepted.")
+        if invitation.get("revoked_at"):
+            raise ValueError("Invitation has been revoked.")
+
+        expires_at = _parse_local_timestamp(invitation.get("expires_at"))
+        current_time = _parse_local_timestamp(now)
+        if expires_at and current_time and expires_at <= current_time:
+            raise ValueError("Invitation has expired.")
+
+        last_sent_at = _parse_local_timestamp(
+            invitation.get("last_resent_at") or invitation.get("last_sent_at")
+        )
+        if last_sent_at and current_time:
+            elapsed_seconds = (current_time - last_sent_at).total_seconds()
+            cooldown_seconds = INVITATION_RESEND_COOLDOWN_MINUTES * 60
+            if elapsed_seconds < cooldown_seconds:
+                remaining_minutes = max(
+                    1,
+                    int((cooldown_seconds - elapsed_seconds + 59) // 60),
+                )
+                raise ValueError(
+                    f"Invitation was already sent recently. Try again in {remaining_minutes} minute(s)."
+                )
+
+        if rotate_token:
+            conn.execute(
+                """
+                UPDATE org_invitations
+                SET resend_count = COALESCE(resend_count, 0) + 1,
+                    last_resent_at = ?,
+                    last_sent_at = ?,
+                    token = ?
+                WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+                """,
+                (now, now, next_token, invitation_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE org_invitations
+                SET resend_count = COALESCE(resend_count, 0) + 1,
+                    last_resent_at = ?,
+                    last_sent_at = ?
+                WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+                """,
+                (now, now, invitation_id),
+            )
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT inv.*, o.name AS org_name
+            FROM org_invitations inv
+            JOIN organizations o ON o.id = inv.org_id
+            WHERE inv.id = ?
+            LIMIT 1
+            """,
+            (invitation_id,),
+        ).fetchone()
+        return dict(row) if row else {}
+
+
+def record_invitation_delivery(
+    invitation_id: int,
+    *,
+    delivered: bool,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Persist the latest invitation delivery attempt outcome."""
+    now = now_local()
+    with get_conn() as conn:
+        if delivered:
+            conn.execute(
+                """
+                UPDATE org_invitations
+                SET delivery_status = 'delivered',
+                    delivery_error = NULL,
+                    delivery_attempted_at = ?,
+                    delivered_at = ?,
+                    last_sent_at = COALESCE(last_sent_at, ?)
+                WHERE id = ?
+                """,
+                (now, now, now, invitation_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE org_invitations
+                SET delivery_status = 'failed',
+                    delivery_error = ?,
+                    delivery_attempted_at = ?
+                WHERE id = ?
+                """,
+                (error or "Invitation email delivery failed", now, invitation_id),
+            )
+        conn.commit()
+        row = conn.execute("SELECT * FROM org_invitations WHERE id = ?", (invitation_id,)).fetchone()
+        return dict(row) if row else {}
+
+
+def record_password_reset_delivery(
+    reset_token_id: int,
+    *,
+    delivered: bool,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Persist the latest password reset delivery attempt outcome."""
+    now = now_local()
+    with get_conn() as conn:
+        if delivered:
+            conn.execute(
+                """
+                UPDATE password_reset_tokens
+                SET delivery_status = 'delivered',
+                    delivery_error = NULL,
+                    delivery_attempted_at = ?,
+                    delivered_at = ?
+                WHERE id = ?
+                """,
+                (now, now, reset_token_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE password_reset_tokens
+                SET delivery_status = 'failed',
+                    delivery_error = ?,
+                    delivery_attempted_at = ?
+                WHERE id = ?
+                """,
+                (error or "Password reset email delivery failed", now, reset_token_id),
+            )
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT prt.*, u.email, u.full_name, u.org_id
+            FROM password_reset_tokens prt
+            JOIN users u ON u.id = prt.user_id
+            WHERE prt.id = ?
+            LIMIT 1
+            """,
+            (reset_token_id,),
+        ).fetchone()
+        return dict(row) if row else {}
 
 
 # ── Platform Admin: Enhanced Audit Log ────────────────────────────────────────
@@ -1511,6 +2653,7 @@ def write_platform_audit(
     target_type: str = "",
     target_id: str = "",
     message: str = "",
+    result: str = "ok",
     severity: str = "INFO",
     ip_address: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -1525,7 +2668,7 @@ def write_platform_audit(
             (
                 actor_id, actor_name, action, target_type, target_id, message,
                 "blue",  # accent
-                "ok",    # result
+                result.lower(),
                 now_local(), org_id, severity, ip_address,
                 json.dumps(metadata) if metadata else None,
             ),
@@ -1533,18 +2676,20 @@ def write_platform_audit(
         conn.commit()
 
 
-def list_audit_logs(
+def _build_audit_log_where(
     *,
     org_id: int | None = None,
     actor_id: str | None = None,
+    actor_name: str | None = None,
     action: str | None = None,
+    target_type: str | None = None,
+    target_id: str | None = None,
+    result: str | None = None,
+    query: str | None = None,
     severity: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
-    page: int = 1,
-    limit: int = 50,
-) -> dict[str, Any]:
-    """List audit logs with filters and pagination."""
+) -> tuple[str, list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []
     if org_id is not None:
@@ -1553,9 +2698,35 @@ def list_audit_logs(
     if actor_id:
         clauses.append("actor_user_id = ?")
         params.append(actor_id)
+    if actor_name:
+        clauses.append("lower(actor_name) LIKE ?")
+        params.append(f"%{actor_name.lower()}%")
     if action:
         clauses.append("lower(action) LIKE ?")
         params.append(f"%{action.lower()}%")
+    if target_type:
+        clauses.append("lower(target_type) LIKE ?")
+        params.append(f"%{target_type.lower()}%")
+    if target_id:
+        clauses.append("lower(target_id) LIKE ?")
+        params.append(f"%{target_id.lower()}%")
+    if result:
+        clauses.append("lower(result) = ?")
+        params.append(result.lower())
+    if query:
+        clauses.append(
+            "("
+            "lower(actor_name) LIKE ? OR "
+            "lower(action) LIKE ? OR "
+            "lower(target_type) LIKE ? OR "
+            "lower(target_id) LIKE ? OR "
+            "lower(message) LIKE ? OR "
+            "lower(COALESCE(ip_address, '')) LIKE ? OR "
+            "lower(COALESCE(metadata_json, '')) LIKE ?"
+            ")"
+        )
+        query_like = f"%{query.lower()}%"
+        params.extend([query_like] * 7)
     if severity:
         clauses.append("severity = ?")
         params.append(severity)
@@ -1566,6 +2737,39 @@ def list_audit_logs(
         clauses.append("created_at <= ?")
         params.append(to_date)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    return where, params
+
+
+def list_audit_logs(
+    *,
+    org_id: int | None = None,
+    actor_id: str | None = None,
+    actor_name: str | None = None,
+    action: str | None = None,
+    target_type: str | None = None,
+    target_id: str | None = None,
+    result: str | None = None,
+    query: str | None = None,
+    severity: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    page: int = 1,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """List audit logs with filters and pagination."""
+    where, params = _build_audit_log_where(
+        org_id=org_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        result=result,
+        query=query,
+        severity=severity,
+        from_date=from_date,
+        to_date=to_date,
+    )
     with get_conn() as conn:
         total = conn.execute(f"SELECT COUNT(*) AS count FROM audit_log {where}", params).fetchone()["count"]
         offset = (page - 1) * limit
@@ -1574,6 +2778,84 @@ def list_audit_logs(
             params + [limit, offset],
         ).fetchall()
         return {"logs": [dict(r) for r in rows], "total": total, "page": page, "limit": limit}
+
+
+def export_audit_logs_csv(
+    *,
+    org_id: int | None = None,
+    actor_id: str | None = None,
+    actor_name: str | None = None,
+    action: str | None = None,
+    target_type: str | None = None,
+    target_id: str | None = None,
+    result: str | None = None,
+    query: str | None = None,
+    severity: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> tuple[str, int]:
+    """Serialize filtered audit logs into a CSV export."""
+    where, params = _build_audit_log_where(
+        org_id=org_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        result=result,
+        query=query,
+        severity=severity,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT created_at, severity, org_id, actor_user_id, actor_name, action,
+                   target_type, target_id, result, message, ip_address, metadata_json
+            FROM audit_log
+            {where}
+            ORDER BY created_at DESC
+            """,
+            params,
+        ).fetchall()
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "created_at",
+            "severity",
+            "org_id",
+            "actor_user_id",
+            "actor_name",
+            "action",
+            "target_type",
+            "target_id",
+            "result",
+            "message",
+            "ip_address",
+            "metadata_json",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row["created_at"],
+                row["severity"],
+                row["org_id"],
+                row["actor_user_id"],
+                row["actor_name"],
+                row["action"],
+                row["target_type"],
+                row["target_id"],
+                row["result"],
+                row["message"],
+                row["ip_address"],
+                row["metadata_json"] or "",
+            ]
+        )
+    return buffer.getvalue(), len(rows)
 
 
 # ── Platform Admin: Analytics ─────────────────────────────────────────────────
@@ -1628,6 +2910,324 @@ def platform_analytics_overview() -> dict[str, Any]:
             "moodle_health": moodle_health,
             "recent_activity": recent_activity,
         }
+
+
+def get_platform_org_analytics_detail(org_id: int, *, days: int = 30) -> dict[str, Any]:
+    """Build an expanded per-organization analytics detail payload."""
+    if days < 1:
+        days = 1
+    org = get_organization(org_id)
+    if not org:
+        raise ValueError("Organization not found")
+
+    since_date = (datetime.now() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        users = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT id, role, is_active, created_at, last_login, pal_score,
+                       courses_completed, total_courses
+                FROM users
+                WHERE org_id = ? AND COALESCE(is_platform_admin, 0) = 0
+                ORDER BY created_at ASC
+                """,
+                (org_id,),
+            ).fetchall()
+        ]
+        users_by_role = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT role, COUNT(*) AS count FROM users WHERE org_id = ? GROUP BY role",
+                (org_id,),
+            ).fetchall()
+        ]
+        course_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM courses WHERE org_id = ?",
+            (org_id,),
+        ).fetchone()["c"]
+        enrollment_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM enrollment_requests WHERE org_id = ?",
+            (org_id,),
+        ).fetchone()["c"]
+        approved_enrollments = conn.execute(
+            "SELECT COUNT(*) AS c FROM enrollment_requests WHERE org_id = ? AND status = 'approved'",
+            (org_id,),
+        ).fetchone()["c"]
+        moodle_tenant_row = conn.execute(
+            "SELECT * FROM moodle_tenants WHERE org_id = ?",
+            (org_id,),
+        ).fetchone()
+        sync_logs = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT event_type, status, duration_ms, created_at, message
+                FROM moodle_sync_logs
+                WHERE org_id = ? AND substr(created_at, 1, 10) >= ?
+                ORDER BY created_at ASC, id ASC
+                """,
+                (org_id, since_date),
+            ).fetchall()
+        ]
+        recent_activity = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT created_at, actor_name, action, target_type, target_id, message, severity
+                FROM audit_log
+                WHERE org_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 8
+                """,
+                (org_id,),
+            ).fetchall()
+        ]
+        alert_rules = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT id, org_id, metric, threshold, channel, is_enabled, created_by, created_at, updated_at
+                FROM alert_rules
+                WHERE org_id = ?
+                ORDER BY updated_at DESC, id DESC
+                """,
+                (org_id,),
+            ).fetchall()
+        ]
+
+    learner_users = [user for user in users if is_learner_role(user.get("role"))]
+    admin_users = [user for user in users if is_admin_role(user.get("role"))]
+    active_users = [user for user in users if bool(user.get("is_active"))]
+    avg_pal = round(
+        sum(float(user.get("pal_score") or 0) for user in learner_users) / max(len(learner_users), 1),
+        1,
+    ) if learner_users else 0.0
+    completion_rate = round(
+        (
+            sum(float(user.get("courses_completed") or 0) for user in learner_users)
+            / max(sum(float(user.get("total_courses") or 0) for user in learner_users), 1)
+        ) * 100,
+        1,
+    ) if learner_users and sum(float(user.get("total_courses") or 0) for user in learner_users) else 0.0
+
+    recent_login_cutoff = datetime.now() - timedelta(days=min(days, 7))
+    recent_logins = 0
+    for user in users:
+        login_at = _parse_local_timestamp(user.get("last_login"))
+        if login_at and login_at >= recent_login_cutoff:
+            recent_logins += 1
+
+    used_storage_gb = round(
+        len(users) * 0.15 + course_count * 0.8 + approved_enrollments * 0.02 + 2,
+        1,
+    )
+    total_storage_gb = 500 if org.get("type") == "company" else 1000
+    storage_used_pct = round((used_storage_gb / total_storage_gb) * 100, 1) if total_storage_gb else 0.0
+
+    sync_terminal_logs = [log for log in sync_logs if log["event_type"] in {"sync.complete", "sync.fail"}]
+    successful_syncs = [log for log in sync_terminal_logs if str(log.get("status")).lower() == "successful"]
+    failed_syncs = [log for log in sync_terminal_logs if str(log.get("status")).lower() == "failed"]
+    avg_sync_duration_ms = round(
+        sum(int(log.get("duration_ms") or 0) for log in sync_terminal_logs) / max(len(sync_terminal_logs), 1),
+        1,
+    ) if sync_terminal_logs else 0.0
+
+    trend_bucket: dict[str, dict[str, Any]] = {}
+    for user in users:
+        created_day = str(user.get("created_at") or "")[:10]
+        if created_day and created_day >= since_date:
+            bucket = trend_bucket.setdefault(
+                created_day,
+                {"date": created_day, "new_users": 0, "active_logins": 0},
+            )
+            bucket["new_users"] += 1
+        login_day = str(user.get("last_login") or "")[:10]
+        if login_day and login_day >= since_date:
+            bucket = trend_bucket.setdefault(
+                login_day,
+                {"date": login_day, "new_users": 0, "active_logins": 0},
+            )
+            bucket["active_logins"] += 1
+    trend = [trend_bucket[key] for key in sorted(trend_bucket)]
+
+    latest_sync_status = "pending"
+    if moodle_tenant_row:
+        latest_sync_status = moodle_tenant_row["sync_status"] or "pending"
+    health = "excellent"
+    if latest_sync_status == "failed" or storage_used_pct >= 85:
+        health = "warning"
+    elif latest_sync_status == "pending" or completion_rate < 50:
+        health = "stable"
+
+    return {
+        "org_id": org_id,
+        "org_name": org["name"],
+        "org_type": org.get("type"),
+        "window_days": days,
+        "kpis": {
+            "total_users": len(users),
+            "active_users": len(active_users),
+            "admin_users": len(admin_users),
+            "learner_users": len(learner_users),
+            "course_count": course_count,
+            "enrollment_count": enrollment_count,
+            "approved_enrollments": approved_enrollments,
+            "avg_pal_score": avg_pal,
+            "completion_rate": completion_rate,
+            "recent_logins_7d": recent_logins,
+        },
+        "users_by_role": users_by_role,
+        "storage": {
+            "used_gb": used_storage_gb,
+            "total_gb": total_storage_gb,
+            "used_pct": storage_used_pct,
+        },
+        "session_analytics": {
+            "recent_logins_7d": recent_logins,
+            "active_user_pct": round((len(active_users) / max(len(users), 1)) * 100, 1) if users else 0.0,
+        },
+        "sync_summary": {
+            "status": latest_sync_status,
+            "successful_syncs": len(successful_syncs),
+            "failed_syncs": len(failed_syncs),
+            "avg_duration_ms": avg_sync_duration_ms,
+            "avg_duration_label": f"{avg_sync_duration_ms / 1000:.1f}s" if avg_sync_duration_ms else "0.0s",
+        },
+        "moodle_tenant": dict(moodle_tenant_row) if moodle_tenant_row else None,
+        "trend": trend,
+        "recent_activity": recent_activity,
+        "alert_rules": alert_rules,
+        "health": health,
+    }
+
+
+ALLOWED_ALERT_METRICS = frozenset(
+    {
+        "storage_used_pct",
+        "avg_pal_score",
+        "completion_rate",
+        "recent_logins_7d",
+        "failed_syncs",
+    }
+)
+ALLOWED_ALERT_CHANNELS = frozenset({"email", "in_app"})
+
+
+def create_platform_alert_rule(
+    *,
+    org_id: int,
+    metric: str,
+    threshold: float,
+    channel: str,
+    created_by: str | None = None,
+) -> dict[str, Any]:
+    org = get_organization(org_id)
+    if not org:
+        raise ValueError("Organization not found")
+
+    normalized_metric = (metric or "").strip().lower()
+    normalized_channel = (channel or "").strip().lower()
+    if normalized_metric not in ALLOWED_ALERT_METRICS:
+        raise ValueError("Unsupported alert metric.")
+    if normalized_channel not in ALLOWED_ALERT_CHANNELS:
+        raise ValueError("Unsupported alert channel.")
+    if threshold < 0:
+        raise ValueError("Alert threshold must be non-negative.")
+
+    now = now_local()
+    with get_conn() as conn:
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM alert_rules
+            WHERE org_id = ? AND metric = ? AND channel = ?
+            LIMIT 1
+            """,
+            (org_id, normalized_metric, normalized_channel),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """
+                UPDATE alert_rules
+                SET threshold = ?, is_enabled = 1, created_by = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (threshold, created_by, now, existing["id"]),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM alert_rules WHERE id = ? LIMIT 1", (existing["id"],)).fetchone()
+            return dict(row) if row else {}
+
+        conn.execute(
+            """
+            INSERT INTO alert_rules (
+                org_id, metric, threshold, channel, is_enabled, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+            """,
+            (org_id, normalized_metric, threshold, normalized_channel, created_by, now, now),
+        )
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT *
+            FROM alert_rules
+            WHERE org_id = ? AND metric = ? AND channel = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (org_id, normalized_metric, normalized_channel),
+        ).fetchone()
+        return dict(row) if row else {}
+
+
+def export_platform_analytics_csv() -> str:
+    """Serialize the current platform analytics overview into CSV sections."""
+    overview = platform_analytics_overview()
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+
+    writer.writerow(["section", "metric", "value"])
+    writer.writerow(["overview", "total_orgs", overview["total_orgs"]])
+    writer.writerow(["overview", "total_colleges", overview["total_colleges"]])
+    writer.writerow(["overview", "total_companies", overview["total_companies"]])
+    writer.writerow(["overview", "total_users", overview["total_users"]])
+    writer.writerow(["overview", "total_super_admins", overview["total_super_admins"]])
+    writer.writerow([])
+
+    writer.writerow(["section", "sync_status", "count"])
+    for sync_status, count in overview["moodle_health"].items():
+        writer.writerow(["moodle_health", sync_status, count])
+    writer.writerow([])
+
+    writer.writerow(["section", "org_id", "org_name", "org_type", "user_count"])
+    for row in overview["org_usage"]:
+        writer.writerow(
+            [
+                "org_usage",
+                row.get("org_id"),
+                row.get("org_name"),
+                row.get("org_type"),
+                row.get("user_count"),
+            ]
+        )
+    writer.writerow([])
+
+    writer.writerow(["section", "created_at", "actor_name", "action", "target_type", "target_id", "message"])
+    for row in overview["recent_activity"]:
+        writer.writerow(
+            [
+                "recent_activity",
+                row.get("created_at"),
+                row.get("actor_name"),
+                row.get("action"),
+                row.get("target_type"),
+                row.get("target_id"),
+                row.get("message"),
+            ]
+        )
+
+    return buffer.getvalue()
 
 
 def seed_database(conn: sqlite3.Connection) -> None:
@@ -2056,8 +3656,8 @@ def list_categories(*, include_archived: bool = True, org_id: int | None = None)
         if not include_archived:
             clauses.append("c.status != 'archived'")
         if org_id is not None:
-            clauses.append("COALESCE(c.org_id, c.organization_id) = ?")
-            params.append(org_id)
+            clauses.append("(c.org_id = ? OR c.organization_id = ?)")
+            params.extend([org_id, org_id])
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         rows = conn.execute(
             f"""
@@ -2095,8 +3695,8 @@ def get_category(category_slug: str, org_id: int | None = None) -> dict[str, Any
         clauses = ["(id = ? OR slug = ?)"]
         params: list[Any] = [category_slug, category_slug]
         if org_id is not None:
-            clauses.append("COALESCE(org_id, organization_id) = ?")
-            params.append(org_id)
+            clauses.append("(org_id = ? OR organization_id = ?)")
+            params.extend([org_id, org_id])
         row = conn.execute(
             f"SELECT * FROM categories WHERE {' AND '.join(clauses)} LIMIT 1",
             params,
@@ -2160,6 +3760,148 @@ def list_admins(org_id: int | None = None) -> list[dict[str, Any]]:
         ).fetchall()
         admins = [serialize_user(row) for row in rows if row]
         return sorted((admin for admin in admins if admin), key=lambda admin: (role_priority(admin["role"]), admin["full_name"]))
+
+
+def list_platform_admin_directory(
+    *,
+    role: str | None = None,
+    status: str | None = None,
+    org_id: int | None = None,
+    query: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+) -> dict[str, Any]:
+    normalized_role = (role or "all").strip().lower()
+    normalized_status = (status or "all").strip().lower()
+    if normalized_role != "all":
+        normalized_role = normalize_role(normalized_role)
+        if normalized_role not in ADMIN_ROLES:
+            raise ValueError("Admin list filtering supports admin roles only.")
+    if normalized_status not in {"all", "active", "suspended", "pending"}:
+        raise ValueError("Unsupported admin status filter.")
+
+    safe_page = max(page, 1)
+    safe_limit = max(1, min(limit, 100))
+    offset = (safe_page - 1) * safe_limit
+    search_query = (query or "").strip().lower()
+    now = now_local()
+
+    admin_items: list[dict[str, Any]] = []
+    admin_total = 0
+    pending_items: list[dict[str, Any]] = []
+    pending_total = 0
+
+    with get_conn() as conn:
+        if normalized_status != "pending":
+            clauses = [f"u.role IN ({SQL_ADMIN_ROLES})", "u.status != 'inactive'"]
+            params: list[Any] = []
+            if normalized_role != "all":
+                clauses.append("u.role = ?")
+                params.append(normalized_role)
+            if normalized_status in {"active", "suspended"}:
+                clauses.append("u.status = ?")
+                params.append(normalized_status)
+            if org_id is not None:
+                clauses.append("u.org_id = ?")
+                params.append(org_id)
+            if search_query:
+                clauses.append(
+                    "(lower(u.full_name) LIKE ? OR lower(u.email) LIKE ? OR lower(COALESCE(o.name, '')) LIKE ?)"
+                )
+                q = f"%{search_query}%"
+                params.extend([q, q, q])
+
+            where = " AND ".join(clauses)
+            admin_total = conn.execute(
+                f"""
+                SELECT COUNT(*) AS count
+                FROM users u
+                LEFT JOIN organizations o ON o.id = u.org_id
+                WHERE {where}
+                """,
+                params,
+            ).fetchone()["count"]
+            admin_rows = conn.execute(
+                f"""
+                SELECT u.id, u.full_name, u.email, u.role, u.org_id, u.status, u.last_login,
+                       u.is_platform_admin, u.created_at,
+                       o.name AS org_name, o.type AS org_type
+                FROM users u
+                LEFT JOIN organizations o ON o.id = u.org_id
+                WHERE {where}
+                ORDER BY u.created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                params + [safe_limit, offset],
+            ).fetchall()
+            admin_items = [dict(row) for row in admin_rows]
+
+        if normalized_status in {"all", "pending"}:
+            pending_clauses = [
+                "inv.accepted_at IS NULL",
+                "inv.revoked_at IS NULL",
+                "inv.expires_at > ?",
+            ]
+            pending_params: list[Any] = [now]
+            if normalized_role != "all":
+                pending_clauses.append("inv.role = ?")
+                pending_params.append(normalized_role)
+            if org_id is not None:
+                pending_clauses.append("inv.org_id = ?")
+                pending_params.append(org_id)
+            if search_query:
+                pending_clauses.append(
+                    "(lower(inv.email) LIKE ? OR lower(COALESCE(o.name, '')) LIKE ?)"
+                )
+                q = f"%{search_query}%"
+                pending_params.extend([q, q])
+
+            pending_where = " AND ".join(pending_clauses)
+            pending_total = conn.execute(
+                f"""
+                SELECT COUNT(*) AS count
+                FROM org_invitations inv
+                JOIN organizations o ON o.id = inv.org_id
+                WHERE {pending_where}
+                """,
+                pending_params,
+            ).fetchone()["count"]
+            pending_rows = conn.execute(
+                f"""
+                SELECT inv.*, o.name AS org_name, o.type AS org_type
+                FROM org_invitations inv
+                JOIN organizations o ON o.id = inv.org_id
+                WHERE {pending_where}
+                ORDER BY inv.created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                pending_params + [safe_limit, offset],
+            ).fetchall()
+            pending_items = [dict(row) for row in pending_rows]
+
+    def _pagination(total: int) -> dict[str, int]:
+        total_pages = max(1, (total + safe_limit - 1) // safe_limit) if total else 0
+        return {
+            "page": safe_page,
+            "limit": safe_limit,
+            "total": total,
+            "total_pages": total_pages,
+        }
+
+    return {
+        "admins": admin_items,
+        "pending_invitations": pending_items,
+        "filters": {
+            "role": normalized_role,
+            "status": normalized_status,
+            "org_id": org_id,
+            "query": query or "",
+        },
+        "pagination": {
+            "admins": _pagination(admin_total),
+            "pending_invitations": _pagination(pending_total),
+        },
+    }
 
 
 def list_users(
@@ -2226,7 +3968,61 @@ def list_notifications(user_id: str) -> list[dict[str, Any]]:
             """,
             (user_id,),
         ).fetchall()
-        return [dict(row) for row in rows]
+        notifications = [dict(row) for row in rows]
+        for notification in notifications:
+            notification["metadata"] = _json_load(notification.get("metadata_json"), {})
+        return notifications
+
+
+def list_platform_notifications(user_id: str, *, include_read: bool = True, limit: int = 20) -> list[dict[str, Any]]:
+    """Return platform-admin-friendly notification records with optional unread filtering."""
+    clauses = ["user_id = ?"]
+    params: list[Any] = [user_id]
+    if not include_read:
+        clauses.append("is_read = 0")
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM notifications
+            WHERE {' AND '.join(clauses)}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            params + [limit],
+        ).fetchall()
+    notifications = [dict(row) for row in rows]
+    for notification in notifications:
+        notification["metadata"] = _json_load(notification.get("metadata_json"), {})
+    return notifications
+
+
+def mark_notifications_read(user_id: str, notification_ids: list[int] | None = None) -> int:
+    """Persist read-state changes for one or more notifications."""
+    timestamp = now_local()
+    with get_conn() as conn:
+        if notification_ids:
+            placeholders = ",".join("?" for _ in notification_ids)
+            result = conn.execute(
+                f"""
+                UPDATE notifications
+                SET is_read = 1
+                WHERE user_id = ? AND id IN ({placeholders}) AND is_read = 0
+                """,
+                [user_id, *notification_ids],
+            )
+        else:
+            result = conn.execute(
+                """
+                UPDATE notifications
+                SET is_read = 1
+                WHERE user_id = ? AND is_read = 0
+                """,
+                (user_id,),
+            )
+        conn.commit()
+        logger.info("Marked notifications as read for user=%s at=%s count=%s", user_id, timestamp, result.rowcount)
+        return int(result.rowcount or 0)
 
 
 def list_audit_entries(*, limit: int = 10, org_id: int | None = None) -> list[dict[str, Any]]:
@@ -2286,6 +4082,26 @@ def list_activity_entries(
             params + [limit],
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+def fetch_enrollment_request_by_id(request_id: str) -> dict[str, Any] | None:
+    """Fetch a single enrollment request by ID, returning None if not found."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM enrollment_requests WHERE id = ? LIMIT 1",
+            (request_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def fetch_task_by_id(task_id: str) -> dict[str, Any] | None:
+    """Fetch a single task by ID, returning None if not found."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM tasks WHERE id = ? LIMIT 1",
+            (task_id,),
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def list_enrollment_requests(
@@ -2411,14 +4227,33 @@ def count_active_learners(org_id: int | None = None) -> int:
         return row["count"]
 
 
-def create_session(user_id: str, refresh_token: str, expires_at: str) -> None:
+def create_session(
+    user_id: str,
+    refresh_token: str,
+    expires_at: str,
+    org_id: int | None = None,
+    user_agent: str | None = None,
+    ip_address: str | None = None,
+) -> None:
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO auth_sessions (id, user_id, refresh_token, expires_at, revoked_at, created_at)
-            VALUES (?,?,?,?,?,?)
+            INSERT INTO auth_sessions
+                (id, user_id, refresh_token, expires_at, revoked_at,
+                 created_at, org_id, user_agent, ip_address)
+            VALUES (?,?,?,?,?,?,?,?,?)
             """,
-            (str(uuid.uuid4()), user_id, refresh_token, expires_at, None, now_local()),
+            (
+                str(uuid.uuid4()),
+                user_id,
+                refresh_token,
+                expires_at,
+                None,
+                now_local(),
+                org_id,
+                user_agent,
+                ip_address,
+            ),
         )
         conn.commit()
 
@@ -2441,6 +4276,52 @@ def revoke_session(refresh_token: str) -> None:
         conn.execute(
             "UPDATE auth_sessions SET revoked_at = ? WHERE refresh_token = ?",
             (now_local(), refresh_token),
+        )
+        conn.commit()
+
+
+def revoke_sessions_for_user(user_id: str) -> int:
+    with get_conn() as conn:
+        cursor = conn.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+            (now_local(), user_id),
+        )
+        conn.commit()
+        return cursor.rowcount or 0
+
+
+def list_sessions_for_user(user_id: str) -> list[dict[str, Any]]:
+    """Return all active (non-revoked) sessions for a user."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, user_id, refresh_token, expires_at, created_at, org_id,
+                   user_agent, ip_address
+            FROM auth_sessions
+            WHERE user_id = ? AND revoked_at IS NULL
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_session_by_id(session_id: str) -> dict[str, Any] | None:
+    """Fetch a single session record by its ID."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM auth_sessions WHERE id = ? LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def revoke_session_by_id(session_id: str) -> None:
+    """Revoke a session by its ID (not by token)."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE id = ?",
+            (now_local(), session_id),
         )
         conn.commit()
 
@@ -2508,13 +4389,23 @@ def _insert_notification(
     user_id: str,
     title: str,
     body: str,
+    notification_type: str = "info",
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     conn.execute(
         """
-        INSERT INTO notifications (user_id, title, body, is_read, created_at)
-        VALUES (?,?,?,?,?)
+        INSERT INTO notifications (user_id, title, body, type, is_read, metadata_json, created_at)
+        VALUES (?,?,?,?,?,?,?)
         """,
-        (user_id, title, body, 0, now_local()),
+        (
+            user_id,
+            title,
+            body,
+            notification_type,
+            0,
+            json.dumps(metadata) if metadata else None,
+            now_local(),
+        ),
     )
 
 
@@ -2550,7 +4441,7 @@ def create_category(payload: dict[str, Any], actor: dict[str, Any]) -> dict[str,
                 id, name, slug, description, status, accent_color, admin_user_id,
                 planned_courses, avg_pal_target, moodle_category_id, org_type,
                 organization_id, org_id, created_at, archived_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 category_id,
@@ -2595,6 +4486,17 @@ def update_category_moodle_id(category_id: str, moodle_category_id: int) -> None
         )
         conn.commit()
         logger.info("Stored moodle_category_id=%d for category=%s", moodle_category_id, category_id)
+
+
+def update_course_moodle_id(course_id: str, moodle_course_id: int) -> None:
+    """Store the Moodle-assigned course ID after async Phase 5 sync."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE courses SET moodle_course_id = ? WHERE id = ?",
+            (moodle_course_id, course_id),
+        )
+        conn.commit()
+        logger.info("Stored moodle_course_id=%d for course=%s", moodle_course_id, course_id)
 
 
 def update_category(category_id: str, payload: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
@@ -2727,7 +4629,7 @@ def create_or_update_admin(payload: dict[str, Any], actor: dict[str, Any], user_
             conn.commit()
             return fetch_user_by_id(user_id) or existing
 
-        user_id = f"user-{slugify(payload['full_name'])}"
+        user_id = f"user-{slugify(payload['full_name'])}-{uuid.uuid4().hex[:6]}"
         duplicate = conn.execute(
             "SELECT 1 FROM users WHERE email = ? OR username = ?",
             (email, payload.get("username", slugify(payload["full_name"]))),
@@ -2735,7 +4637,7 @@ def create_or_update_admin(payload: dict[str, Any], actor: dict[str, Any], user_
         if duplicate:
             raise ValueError("A user with this email already exists.")
 
-        username = payload.get("username") or slugify(payload["full_name"]).replace("-", ".")
+        username = payload.get("username") or f"{slugify(payload['full_name']).replace('-', '.')}.{uuid.uuid4().hex[:4]}"
         category_scope = payload.get("category_scope")
         gradient_start, gradient_end = role_gradients(role)
         conn.execute(
@@ -2756,7 +4658,7 @@ def create_or_update_admin(payload: dict[str, Any], actor: dict[str, Any], user_
                 payload["full_name"],
                 role,
                 category_scope,
-                hash_password(payload.get("password", "Admin@1234")),
+                hash_password(payload.get("password", get_default_learner_password())),
                 initials(payload["full_name"]),
                 gradient_start,
                 gradient_end,
@@ -2991,7 +4893,7 @@ def create_manual_enrollment(payload: dict[str, Any], actor: dict[str, Any]) -> 
         if not selected_courses:
             raise ValueError("Select at least one course.")
 
-        user_id = f"user-{slugify(payload['full_name'])}"
+        user_id = f"user-{slugify(payload['full_name'])}-{uuid.uuid4().hex[:6]}"
         existing = conn.execute(
             "SELECT id FROM users WHERE lower(email) = lower(?)",
             (payload["email"],),
@@ -3029,7 +4931,7 @@ def create_manual_enrollment(payload: dict[str, Any], actor: dict[str, Any]) -> 
                 ),
             )
         else:
-            username = slugify(payload["full_name"]).replace("-", ".")
+            username = payload.get("username") or f"{slugify(payload['full_name']).replace('-', '.')}.{uuid.uuid4().hex[:4]}"
             conn.execute(
                 """
             INSERT INTO users (
@@ -3048,7 +4950,7 @@ def create_manual_enrollment(payload: dict[str, Any], actor: dict[str, Any]) -> 
                     payload["full_name"],
                     "learner",
                     category_slug,
-                    hash_password(payload.get("password", "Learner@1234")),
+                    hash_password(payload.get("password", get_default_learner_password())),
                     initials(payload["full_name"]),
                     "#2563EB",
                     "#7C3AED",
@@ -3185,7 +5087,7 @@ def approve_enrollment_request(request_id: str, actor: dict[str, Any]) -> dict[s
                 (request["category_slug"], request_org_id),
             ).fetchall()
         ]
-        user_id = f"user-{slugify(request['full_name'])}"
+        user_id = f"user-{slugify(request['full_name'])}-{uuid.uuid4().hex[:6]}"
         existing = conn.execute("SELECT id FROM users WHERE lower(email) = lower(?)", (request["email"],)).fetchone()
         if existing:
             user_id = existing["id"]
@@ -3216,7 +5118,7 @@ def approve_enrollment_request(request_id: str, actor: dict[str, Any]) -> dict[s
                 ),
             )
         else:
-            username = slugify(request["full_name"]).replace("-", ".")
+            username = f"{slugify(request['full_name']).replace('-', '.')}.{uuid.uuid4().hex[:4]}"
             conn.execute(
                 """
             INSERT INTO users (
@@ -3235,7 +5137,7 @@ def approve_enrollment_request(request_id: str, actor: dict[str, Any]) -> dict[s
                     request["full_name"],
                     "learner",
                     request["category_slug"],
-                    hash_password("Learner@1234"),
+                    hash_password(get_default_learner_password()),
                     initials(request["full_name"]),
                     "#2563EB",
                     "#7C3AED",
@@ -3340,14 +5242,38 @@ def reject_enrollment_request(request_id: str, actor: dict[str, Any], reason: st
 
 
 def approve_enrollment_requests_batch(request_ids: list[str], actor: dict[str, Any]) -> dict[str, Any]:
+    job_id = generate_job_id("enrol-batch")
     approved = 0
+    failed = 0
     for request_id in request_ids:
         try:
             approve_enrollment_request(request_id, actor)
             approved += 1
         except ValueError:
+            failed += 1
             continue
-    return {"approved": approved}
+
+    with get_conn() as conn:
+        _insert_audit(
+            conn,
+            actor_id=actor["id"],
+            actor_name=actor["full_name"],
+            action="enrol.approve_batch",
+            target_type="request_batch",
+            target_id=job_id,
+            message=f"{actor['full_name']} processed enrollment batch approval",
+            accent="teal",
+            result="success" if failed == 0 else "partial",
+            org_id=_extract_org_id(actor),
+        )
+        conn.commit()
+
+    return {
+        "job_id": job_id,
+        "approved": approved,
+        "failed": failed,
+        "requested": len(request_ids),
+    }
 
 
 def create_or_update_task(payload: dict[str, Any], actor: dict[str, Any], task_id: str | None = None) -> dict[str, Any]:
@@ -3504,7 +5430,7 @@ def submit_task(task_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         _insert_activity(
             conn,
             user_id=actor["id"],
-            category_slug=actor.get("category_scope"),
+            category_slug=actor.get("category_scope") or task.get("category_slug") or "default",
             icon="check",
             accent="emerald",
             message=f"{actor['full_name']} submitted task {task['title']}",
@@ -3567,6 +5493,42 @@ def set_user_active(user_id: str, is_active: bool, actor: dict[str, Any]) -> dic
 
 def soft_delete_user(user_id: str, actor: dict[str, Any]) -> dict[str, Any]:
     return set_user_active(user_id, False, actor)
+
+
+def hard_delete_user(user_id: str, actor: dict[str, Any]) -> dict[str, Any]:
+    """Permanently delete a user from the database. Cannot delete platform admins."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            raise ValueError("User not found.")
+        user = dict(row)
+        # Protect the global/platform admin from deletion
+        if user.get("is_platform_admin"):
+            raise ValueError("Cannot delete a platform admin account.")
+        # Protect self-deletion
+        if user_id == actor.get("id"):
+            raise ValueError("Cannot delete your own account.")
+        # Clean up related records first
+        conn.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM tasks WHERE assigned_to_user_id = ?", (user_id,))
+        # Hard delete the user
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        _insert_audit(
+            conn,
+            actor_id=actor["id"],
+            actor_name=actor["full_name"],
+            action="user.hard_delete",
+            target_type="user",
+            target_id=user_id,
+            message=f"{actor['full_name']} permanently deleted user {user['full_name']} ({user['email']})",
+            accent="red",
+            result="deleted",
+            org_id=_extract_org_id(user),
+        )
+        conn.commit()
+        return user
 
 
 def get_user_activity(user_id: str) -> list[dict[str, Any]]:
@@ -3885,7 +5847,9 @@ def build_learner_dashboard(user_id: str) -> dict[str, Any]:
 def get_system_settings() -> dict[str, Any]:
     with get_conn() as conn:
         domains = conn.execute("SELECT domain, label FROM allowed_domains ORDER BY domain").fetchall()
+    platform_settings = get_platform_settings()
     return {
+        **platform_settings,
         "moodle_url": os.getenv("MOODLE_URL", "http://localhost:8082"),
         "api_version": "5.0.0",
         "allowed_domains": [dict(row) for row in domains],
@@ -4123,6 +6087,7 @@ def approve_pending_verification(verification_id: str, actor: dict[str, Any]) ->
         "full_name": pv["full_name"],
         "system_role": approved_role,
         "signup_role": pv["role_name"],
+        "organization_id": pv["organization_id"],
         "program": pv.get("program"),
         "branch": pv.get("branch"),
         "id_number": pv.get("id_number"),

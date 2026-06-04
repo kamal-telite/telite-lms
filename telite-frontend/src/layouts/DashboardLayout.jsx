@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Badge, Avatar, Button } from "../components/common/ui";
 import { Icon } from "../components/common/icons";
+import AccountSwitcher from "../components/common/AccountSwitcher";
 
 export function DashboardShell({
   theme = "brand",
@@ -18,6 +19,8 @@ export function DashboardShell({
   tabBar,
   scrollRef,
   children,
+  session,
+  onSessionChange,
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -92,6 +95,9 @@ export function DashboardShell({
           <div className="topbar__actions">
             {topbarBadge ? <Badge tone={topbarBadge.tone}>{topbarBadge.label}</Badge> : null}
             {topbarActions}
+            {session ? (
+              <AccountSwitcher session={session} onSessionChange={onSessionChange} />
+            ) : null}
           </div>
         </header>
         {tabBar ? <div className="tabbar">{tabBar}</div> : null}
@@ -163,7 +169,7 @@ export function ProfileDropdown({ profile, onLogout, onNavigate }) {
             fontSize: "12px"
           }}
         >
-          {profile?.initials || "U"}
+          {profile?.initials ? profile.initials : <Icon name="profile" size={16} />}
         </div>
       </button>
       {open ? (

@@ -7,14 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.auth import TokenData, ensure_org_access, get_current_user, require_admin, require_super_admin, resolve_org_scope
-from app.integrations.moodle_bridge import (
-    moodle_create_category,
-    moodle_create_course,
-    moodle_delete_category,
-    moodle_delete_courses,
-    moodle_mode,
-    moodle_suspend_user,
-)
+from app.integrations.moodle_bridge import moodle_mode
+from app.integrations.moodle_events import publish_moodle_event
 from app.integrations.moodle_reports import build_moodle_settings_snapshot, build_moodle_user_directory
 from app.services.store import (
     archive_category,
@@ -38,11 +32,11 @@ from app.services.store import (
     list_courses,
     list_notifications,
     list_users,
+    hard_delete_user,
     remove_admin,
     set_user_active,
     soft_delete_user,
     update_category,
-    update_category_moodle_id,
     update_user_role,
 )
 
@@ -137,34 +131,18 @@ def post_category(
         raise HTTPException(status_code=400, detail="Category slug already exists.")
 
     try:
-        # Step 1: Sync to Moodle first
-        logger.info("Creating category in Moodle: name=%s slug=%s", payload["name"], payload["slug"])
-        moodle_sync = moodle_create_category(
-            payload["name"],
-            slug=payload["slug"],
-            description=payload.get("description", "") or "",
-        )
-        if not moodle_sync.get("success"):
-            logger.error("Moodle category sync failed: %s", moodle_sync.get("error"))
-            raise HTTPException(
-                status_code=502,
-                detail=f"Unable to create the category in Moodle: {moodle_sync.get('error', 'Unknown Moodle error')}",
-            )
-
-        # Step 2: Write to local DB
         created = create_category(payload, actor)
-
-        # Step 3: Store the Moodle category ID in local DB
-        moodle_category_id = moodle_sync.get("category_id")
-        if moodle_category_id and created:
-            update_category_moodle_id(created["id"], int(moodle_category_id))
-            logger.info(
-                "Category synced: local_id=%s moodle_id=%s already_existed=%s",
-                created["id"],
-                moodle_category_id,
-                moodle_sync.get("already_existed", False),
-            )
-
+        moodle_sync = publish_moodle_event(
+            "category.created",
+            org_id=scoped_org_id,
+            category_identifier=created["slug"],
+            payload={
+                "category_id": created["id"],
+                "name": created["name"],
+                "slug": created["slug"],
+                "description": created.get("description") or "",
+            },
+        )
         return {**created, "moodle_sync": moodle_sync}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -205,15 +183,19 @@ def delete_category(
             raise ValueError("Category not found.")
         ensure_org_access(current_user, _org_id(category_data))
 
-        # Try deleting in Moodle first
-        if category_data.get("moodle_category_id"):
-            moodle_res = moodle_delete_category(category_data["moodle_category_id"])
-            if not moodle_res.get("success"):
-                raise ValueError(f"Failed to sync deletion with Moodle: {moodle_res.get('error')}")
-
-        # If Moodle succeeds (or not linked), archive locally
         category = archive_category(category_id, actor)
-        return category
+        moodle_sync = None
+        if category_data.get("moodle_category_id"):
+            moodle_sync = publish_moodle_event(
+                "category.archived",
+                org_id=_org_id(category_data) or current_user.org_id or 1,
+                category_identifier=category_data["slug"],
+                payload={
+                    "category_id": category_data["id"],
+                    "moodle_category_id": category_data["moodle_category_id"],
+                },
+            )
+        return {**category, "moodle_sync": moodle_sync}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -283,12 +265,16 @@ def delete_admin(
         if not existing:
             raise HTTPException(status_code=404, detail="Admin not found")
         ensure_org_access(current_user, _org_id(existing))
-        user = remove_admin(user_id, actor)
+        user = hard_delete_user(user_id, actor)
         if user.get("moodle_user_id"):
-            moodle_suspend_user(user["moodle_user_id"])
+            publish_moodle_event(
+                "user.suspended",
+                org_id=_org_id(user) or current_user.org_id or 1,
+                payload={"user_id": user["id"], "moodle_user_id": user["moodle_user_id"]},
+            )
         return user
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @management_router.get("/categories/{category_slug}/courses")
@@ -325,29 +311,24 @@ def post_course(
         raise HTTPException(status_code=404, detail="Actor not found")
     try:
         ensure_category_access(actor, category_slug)
-        
-        # Step 1: Fetch local category to get Moodle category ID
         category_data = get_category(category_slug)
         if not category_data:
             raise ValueError("Category not found.")
-            
-        moodle_category_id = category_data.get("moodle_category_id")
-        moodle_sync = None
-        
-        # Step 2: Create in Moodle
-        if moodle_category_id:
-            logger.info("Creating course in Moodle: name=%s category_id=%s", body.name, moodle_category_id)
-            moodle_sync = moodle_create_course(body.name, moodle_category_id)
-            if not moodle_sync.get("success"):
-                logger.error("Moodle course sync failed: %s", moodle_sync.get("error"))
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Unable to create the course in Moodle: {moodle_sync.get('error', 'Unknown error')}"
-                )
-            body.moodle_course_id = moodle_sync.get("course_id")
-            
-        # Step 3: Write to local DB
         created_course = create_or_update_course(category_slug, body.model_dump(), actor)
+        moodle_sync = None
+        if category_data.get("moodle_category_id"):
+            moodle_sync = publish_moodle_event(
+                "course.created",
+                org_id=_org_id(category_data) or current_user.org_id or 1,
+                category_identifier=category_slug,
+                payload={
+                    "course_id": created_course["id"],
+                    "name": created_course["name"],
+                    "slug": created_course.get("slug"),
+                    "shortname": created_course.get("slug"),
+                    "moodle_category_id": category_data["moodle_category_id"],
+                },
+            )
         return {**created_course, "moodle_sync": moodle_sync}
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -387,8 +368,15 @@ def delete_course(
         ensure_category_access(actor, category_slug)
         course = archive_course(course_id, actor)
         if course.get("moodle_course_id"):
-            moodle_delete_courses([course["moodle_course_id"]])
-        return course
+            moodle_sync = publish_moodle_event(
+                "course.archived",
+                org_id=_org_id(course) or current_user.org_id or 1,
+                category_identifier=category_slug,
+                payload={"course_id": course["id"], "moodle_course_id": course["moodle_course_id"]},
+            )
+        else:
+            moodle_sync = None
+        return {**course, "moodle_sync": moodle_sync}
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -426,10 +414,10 @@ def get_users(
     page_size: int = Query(default=25, ge=1, le=100),
     current_user: TokenData = Depends(require_admin),
 ):
-    if source == "moodle" and is_tenant_super_admin_role(current_user.role) and moodle_mode() == "live":
-        return build_moodle_user_directory(role=role, query=query, page=page, page_size=page_size)
-
     scoped_org_id = resolve_org_scope(current_user, org_id)
+
+    if source == "moodle" and is_tenant_super_admin_role(current_user.role) and moodle_mode() == "live":
+        return build_moodle_user_directory(role=role, query=query, page=page, page_size=page_size, org_id=scoped_org_id)
     if is_category_admin_role(current_user.role):
         category_slug = current_user.category_scope
         if role and is_tenant_super_admin_role(role):
@@ -520,12 +508,16 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     ensure_org_access(current_user, _org_id(target))
     try:
-        user = soft_delete_user(user_id, actor)
+        user = hard_delete_user(user_id, actor)
         if user.get("moodle_user_id"):
-            moodle_suspend_user(user["moodle_user_id"])
+            publish_moodle_event(
+                "user.suspended",
+                org_id=_org_id(user) or current_user.org_id or 1,
+                payload={"user_id": user["id"], "moodle_user_id": user["moodle_user_id"]},
+            )
         return user
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @management_router.get("/users/{user_id}/activity")

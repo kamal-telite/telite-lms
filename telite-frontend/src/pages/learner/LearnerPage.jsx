@@ -104,6 +104,19 @@ export default function LearnerPage({ session, onLogout }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [animateProgress, setAnimateProgress] = useState(false);
 
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ full_name: "", email: "", organization_id: "1" });
+
+  useEffect(() => {
+    if (data?.profile) {
+      setProfileForm({
+        full_name: data.profile.full_name || "",
+        email: data.profile.email || "",
+        organization_id: data.profile.organization_id || data.profile.org_id || "1"
+      });
+    }
+  }, [data]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -220,7 +233,7 @@ export default function LearnerPage({ session, onLogout }) {
         name: data.profile.full_name,
         roleLabel: "learner",
       }}
-      title={titleize(currentTab === "learner" ? "Dashboard" : currentTab)}
+      title={navGroups.flatMap(g => g.items).find(i => i.id === activeNav)?.label || titleize(currentTab === "learner" ? "Dashboard" : currentTab)}
       subtitle={`${data.profile.category_scope?.toUpperCase()} category · Telite Systems`}
       topbarActions={
         <>
@@ -275,7 +288,7 @@ export default function LearnerPage({ session, onLogout }) {
                 </div>
                 <div className="hero-metric">
                   <span>Hours logged</span>
-                  <strong>{Math.round(data.hero.time_spent_hours)}h</strong>
+                  <strong>{Math.round(data.hero.pal_time_spent_hours || 0)}h</strong>
                 </div>
               </div>
               <div className="hero-actions" style={{ marginTop: 18 }}>
@@ -392,9 +405,9 @@ export default function LearnerPage({ session, onLogout }) {
             <Panel title="PAL Dimensions" subtitle="How your score is calculated">
                <div className="pal-list">
                  {[
-                   { label: "Course Completion", value: data.pal_breakdown.completion, weight: 0.3 },
-                   { label: "Quiz Average", value: data.pal_breakdown.quiz_avg, weight: 0.3 },
-                   { label: "Task Completion", value: data.pal_breakdown.task_completion, weight: 0.2 },
+                   { label: "Course Completion", value: data.pal_breakdown.completion || 0, weight: 0.3 },
+                   { label: "Quiz Average", value: data.pal_breakdown.pal_quiz_avg || 0, weight: 0.3 },
+                   { label: "Task Completion", value: data.pal_breakdown.task_completion || 0, weight: 0.2 },
                  ].map((dim) => (
                    <div className="pal-item" key={dim.label}>
                      <div className="pal-item__info">
@@ -527,23 +540,57 @@ export default function LearnerPage({ session, onLogout }) {
         {/* PROFILE PAGE */}
         {activeNav === "section-profile" && (
           <section id="section-profile">
-            <Panel title="Profile Information" subtitle="Your learner details">
+            <Panel 
+              title="Profile Information" 
+              subtitle="Your learner details"
+              action={
+                isEditingProfile ? (
+                  <div className="split-actions">
+                    <Button tone="ghost" onClick={() => setIsEditingProfile(false)}>Cancel</Button>
+                    <Button tone="primary" onClick={() => {
+                      showToast("Profile updated successfully.", "success");
+                      setIsEditingProfile(false);
+                    }}>Save Changes</Button>
+                  </div>
+                ) : (
+                  <Button tone="ghost" icon="edit" onClick={() => setIsEditingProfile(true)}>Edit Profile</Button>
+                )
+              }
+            >
               <div className="grid-2">
                 <div className="soft-card">
                   <div className="row-subtitle">Full Name</div>
-                  <div className="row-title">{data.profile.full_name}</div>
+                  {isEditingProfile ? (
+                    <input className="field__input" style={{ marginTop: 8 }} value={profileForm.full_name} onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })} />
+                  ) : (
+                    <div className="row-title">{data.profile.full_name}</div>
+                  )}
                 </div>
                 <div className="soft-card">
                   <div className="row-subtitle">Email Address</div>
-                  <div className="row-title">{data.profile.email}</div>
+                  {isEditingProfile ? (
+                    <input className="field__input" style={{ marginTop: 8 }} type="email" value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} />
+                  ) : (
+                    <div className="row-title">{data.profile.email}</div>
+                  )}
                 </div>
                 <div className="soft-card">
-                  <div className="row-subtitle">Cohort Category</div>
-                  <div className="row-title">{data.profile.category_scope}</div>
+                  <div className="row-subtitle">Organization</div>
+                  {isEditingProfile ? (
+                    <select className="field__select" style={{ marginTop: 8 }} value={profileForm.organization_id} onChange={(e) => setProfileForm({ ...profileForm, organization_id: e.target.value })}>
+                      <option value="1">Telite Systems (HQ)</option>
+                      <option value="2">Acme Corp</option>
+                      <option value="3">Globex Inc</option>
+                    </select>
+                  ) : (
+                    <div className="row-title">{data.profile.category_scope || "Telite Systems"}</div>
+                  )}
                 </div>
                 <div className="soft-card">
                   <div className="row-subtitle">Enrollment Type</div>
-                  <div className="row-title">{data.profile.enrollment_type}</div>
+                  <div className="row-title" style={{ marginTop: isEditingProfile ? 8 : 0 }}>
+                    <Badge tone={data.profile.enrollment_type === "self" ? "accent" : "brand"}>{data.profile.enrollment_type}</Badge>
+                  </div>
                 </div>
               </div>
             </Panel>

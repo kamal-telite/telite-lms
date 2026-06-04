@@ -46,6 +46,7 @@ import {
 } from "../../utils/formatters";
 import { useKpiPulse } from "../../hooks/useKpiPulse";
 import { ActivityFeedTab, SettingsTab, ReportsTab, PalTrackerTab, TasksTab, ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
+import { BrandingSettingsTab } from "../../components/dashboard/BrandingSettingsTab";
 import { useDashboardStore } from "../../store/dashboardStore";
 
 const COURSE_INITIAL = {
@@ -357,7 +358,10 @@ function CategoryAdminPageContent({ session, onLogout }) {
     },
     {
       label: "Settings",
-      items: [{ id: "settings", label: "Settings", icon: "settings" }],
+      items: [
+        { id: "settings", label: "Settings", icon: "settings" },
+
+      ],
     },
   ];
 
@@ -381,6 +385,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
   } else if (currentSegment === "settings") {
     activeNav = "settings";
     activeTab = "settings";
+
   } else if (currentSegment === "profile") {
     activeNav = "settings";
     activeTab = searchParams.get("tab") || "profile";
@@ -492,7 +497,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       showToast("Export failed: " + err.message, "error");
                     }
                   }}>
-                    📥 Export as CSV
+                    📥 All Reports (CSV)
                   </button>
                   <button type="button" onClick={() => {
                     setExportOpen(false);
@@ -544,7 +549,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       showToast("PDF export failed: " + err.message, "error");
                     }
                   }}>
-                    📄 Export as PDF
+                    📄 All Reports (PDF)
                   </button>
                 </div>
               ) : null}
@@ -890,7 +895,9 @@ function CategoryAdminPageContent({ session, onLogout }) {
                         <td>
                           <div className="split-actions">
                             <IconButton label="View learner" icon="eye" onClick={() => setDetailLearner(learner)} />
-                            <IconButton label="Delete learner" icon="trash" onClick={() => setDeleteLearnerId((value) => (value === learner.id ? null : learner.id))} />
+                            {learner.enrollment_type === "self" ? (
+                              <IconButton label="Delete learner" icon="trash" onClick={() => setDeleteLearnerId((value) => (value === learner.id ? null : learner.id))} />
+                            ) : null}
                           </div>
                           {deleteLearnerId === learner.id ? (
                             <div className="inline-confirm">
@@ -1143,6 +1150,8 @@ function CategoryAdminPageContent({ session, onLogout }) {
             <SettingsTab dashboard={dashboard} />
           ) : null}
 
+
+
           {activeTab === "reports" ? (
             <ReportsTab dashboard={dashboard} learners={learners} />
           ) : null}
@@ -1228,39 +1237,41 @@ function CategoryAdminPageContent({ session, onLogout }) {
                 <div className="row-subtitle">{detailLearner.enrollment_type} · {formatShortDate(detailLearner.created_at)}</div>
               </div>
             </div>
-            <div className="soft-card soft-card--tinted">
-              <div className="row-title" style={{ marginBottom: 10 }}>Enrolled courses</div>
-              <div className="activity-list">
-                {(dashboard?.courses || []).map((course) => {
-                  const progress = detailLearner.course_progress.find((item) => item.course_id === course.id);
-                  return (
-                    <div className="course-status-row" key={course.id}>
-                      <div style={{ flex: 1 }}>
-                        <div className="row-title">{course.name}</div>
-                        <div className="row-subtitle">{progress?.current_lesson || progress?.status || "Not started"}</div>
+            <div className="grid-2" style={{ marginTop: 24 }}>
+              <div className="soft-card soft-card--tinted">
+                <div className="row-title" style={{ marginBottom: 10 }}>Enrolled courses</div>
+                <div className="activity-list">
+                  {(dashboard?.courses || []).map((course) => {
+                    const progress = detailLearner.course_progress.find((item) => item.course_id === course.id);
+                    return (
+                      <div className="course-status-row" key={course.id}>
+                        <div style={{ flex: 1 }}>
+                          <div className="row-title">{course.name}</div>
+                          <div className="row-subtitle">{progress?.current_lesson || progress?.status || "Not started"}</div>
+                        </div>
+                        <div className="mono">{progress ? `${progress.progress}%` : "0%"}</div>
                       </div>
-                      <div className="mono">{progress ? `${progress.progress}%` : "0%"}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="soft-card soft-card--tinted">
-              <div className="row-title" style={{ marginBottom: 10 }}>PAL metrics</div>
-              {[
-                ["Completion", detailLearner.pal_completion_pct],
-                ["Quiz Avg", detailLearner.pal_quiz_avg],
-                ["Time", detailLearner.pal_time_spent_hours * 2],
-                ["Tasks", detailLearner.pal_task_completion_pct],
-              ].map(([label, value]) => (
-                <div className="metric-row" key={label} style={{ marginBottom: 10 }}>
-                  <div className="row-subtitle" style={{ width: 80 }}>{label}</div>
-                  <div className="progress-track">
-                    <div className="progress-fill" style={{ width: `${Math.min(100, value)}%`, background: getScoreColor(value) }} />
-                  </div>
-                  <div className="mono" style={{ width: 36, textAlign: "right" }}>{Math.round(value)}</div>
+                    );
+                  })}
                 </div>
-              ))}
+              </div>
+              <div className="soft-card soft-card--tinted">
+                <div className="row-title" style={{ marginBottom: 10 }}>PAL metrics</div>
+                {[
+                  ["Completion", detailLearner.pal_completion_pct],
+                  ["Quiz Avg", detailLearner.pal_quiz_avg],
+                  ["Time", detailLearner.pal_time_spent_hours * 2],
+                  ["Tasks", detailLearner.pal_task_completion_pct],
+                ].map(([label, value]) => (
+                  <div className="metric-row" key={label} style={{ marginBottom: 10 }}>
+                    <div className="row-subtitle" style={{ width: 80 }}>{label}</div>
+                    <div className="progress-track">
+                      <div className="progress-fill" style={{ width: `${Math.min(100, value)}%`, background: getScoreColor(value) }} />
+                    </div>
+                    <div className="mono" style={{ width: 36, textAlign: "right" }}>{Math.round(value)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
             {currentCourse ? (
               <div className="field__help">Current course: {currentCourse.name}</div>

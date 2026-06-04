@@ -1,0 +1,252 @@
+.learner-experience {
+    width: 100%;
+    color: white;
+}
+
+.learner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    padding: 0 4px;
+    gap: 16px;
+}
+
+.welcome-msg h3 {
+    font-size: 20px;
+    margin: 4px 0;
+    font-weight: 700;
+    font-family: var(--font-heading);
+}
+
+.encouragement {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: var(--font-copy);
+}
+
+.stats-pills {
+    display: flex;
+    gap: 12px;
+}
+
+.stat-pill {
+    background: var(--glass-bg-primary);
+    border: 1px solid var(--glass-border-primary);
+    padding: 6px 12px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pill-label {
+    font-size: 8px;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+}
+
+.pill-val {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.learner-grid {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 12px;
+}
+
+.dash-card {
+    background: var(--glass-bg-primary);
+    border: 1px solid var(--glass-border-primary);
+    border-radius: 16px;
+    padding: 16px;
+}
+
+.dash-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.module-count {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.3);
+    font-family: var(--font-mono);
+}
+
+.course-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.course-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.course-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.course-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.course-trend {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.3);
+    font-family: var(--font-mono);
+}
+
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--glass-bg-strong);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill { height: 100%; border-radius: 3px; transition: width var(--motion-cinematic) var(--motion-ease-cinematic); }
+.progress-fill.tone-primary { background: var(--primary); }
+.progress-fill.tone-success { background: var(--status-success); }
+.progress-fill.tone-info { background: var(--status-info); }
+
+.progress-val {
+    font-size: 10px;
+    font-weight: 700;
+    width: 28px;
+    text-align: right;
+    font-family: var(--font-mono);
+}
+
+.sidebar-column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ai-coach {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 14%, transparent) 0%, var(--glass-bg-primary) 100%);
+    border-color: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.ai-pulse {
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--primary);
+    animation: ai-glow 2s infinite alternate;
+}
+
+@keyframes ai-glow {
+    from { opacity: 0.4; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1.1); }
+}
+
+.rec-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rec-item {
+    display: flex;
+    gap: 10px;
+    background: var(--glass-bg-secondary);
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.rec-icon {
+    min-width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: white;
+    font-family: var(--font-mono);
+}
+
+.rec-item p {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.4;
+    margin: 0;
+}
+
+.rec-item strong { color: white; }
+
+.badge-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.badge-item {
+    width: 32px;
+    height: 32px;
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border-interactive);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 800;
+}
+
+.badge-item.empty {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 768px) {
+    .learner-header,
+    .course-info,
+    .progress-container {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .learner-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-pills {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+}

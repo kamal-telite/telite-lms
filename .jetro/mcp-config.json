@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "jetro": {
+      "command": "C:\\Users\\kamal\\.jetro\\runtime\\node-win32-x64.exe",
+      "args": [
+        "C:\\Users\\kamal\\.jetro\\mcp-server\\index.js"
+      ],
+      "env": {
+        "JET_WORKSPACE": "c:\\Users\\kamal\\OneDrive\\Desktop\\telite-lms",
+        "JET_API_URL": "https://api.jetro.ai",
+        "PATH": "C:\\Users\\kamal\\.jetro\\runtime;C:\\Program Files\\Alacritty\\;C:\\windows\\system32;C:\\windows;C:\\windows\\System32\\Wbem;C:\\windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\windows\\System32\\OpenSSH\\;C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\Java\\jdk-20\\bin;C:\\MinGW\\bin;C:\\xampp\\php;C:\\composer;C:\\ProgramData\\ComposerSetup\\bin;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Git\\mingw64\\bin;C:\\Program Files\\Git\\usr\\bin;C:\\Users\\kamal\\PycharmProjects\\PythonProject\\.venv\\Scripts;C:\\Program Files\\MongoDB\\Server\\8.0\\bin\\mongod.exe;C:\\Users\\kamal\\AppData\\Local\\nvm;C:\\nvm4w\\nodejs;C:\\Program Files\\nodejs\\;C:\\ProgramData\\chocolatey\\bin;C:\\Python311\\Scripts\\;C:\\Python311\\;C:\\Users\\kamal\\.local\\bin;C:\\Program Files\\Docker\\Docker\\resources\\bin;C:\\Users\\kamal\\AppData\\Local\\jcode\\bin;d:\\cursor\\resources\\app\\codeBin;C:\\Users\\kamal\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\;C:\\Users\\kamal\\AppData\\Local\\Programs\\Python\\Python311\\;C:\\Users\\kamal\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Users\\kamal\\AppData\\Local\\Microsoft\\WindowsApps;C:\\MinGW\\bin;C:\\Program Files\\Java\\jdk-20\\bin;C:\\Users\\kamal\\AppData\\Roaming\\Composer\\vendor\\bin;C:\\Program Files\\JetBrains\\PyCharm 2025.1.2\\bin;;C:\\Users\\kamal\\AppData\\Local\\nvm;C:\\nvm4w\\nodejs;C:\\Users\\kamal\\AppData\\Roaming\\npm;C:\\Users\\kamal\\AppData\\Local\\Programs\\Ollama;D:\\Kiro\\bin;D:\\cursor\\resources\\app\\bin;C:\\Users\\kamal\\AppData\\Local\\Programs\\Antigravity IDE\\bin;D:\\Antigravity IDE\\bin"
+      }
+    }
+  }
+}

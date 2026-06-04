@@ -4,10 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.auth import TokenData, get_current_user, require_admin, resolve_org_scope
+from app.core.rbac import validate_task_access
 from app.services.store import (
     create_or_update_task,
     delete_task,
     ensure_category_access,
+    fetch_task_by_id,
     fetch_user_by_id,
     is_category_admin_role,
     is_learner_role,
@@ -90,6 +92,14 @@ def remove_task(
     actor = fetch_user_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
+
+    # Validate org access before deletion
+    task = fetch_task_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task_org_id = task.get("org_id") or actor.get("org_id") or 1
+    validate_task_access(current_user, task_org_id, task.get("category_slug"))
+
     try:
         return delete_task(task_id, actor)
     except ValueError as exc:
@@ -104,8 +114,8 @@ def mark_task_submitted(
     actor = fetch_user_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
-    if not is_learner_role(actor["role"]):
-        raise HTTPException(status_code=403, detail="Learner access required")
+    if not is_learner_role(actor.get("role")) or not actor.get("is_active"):
+        raise HTTPException(status_code=403, detail="Active learner session required")
     try:
         return submit_task(task_id, actor)
     except ValueError as exc:

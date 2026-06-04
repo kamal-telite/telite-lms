@@ -4,17 +4,35 @@ services:
     container_name: telite_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT:-55432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
       interval: 10s
       timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: telite_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG || exit 1"]
+      interval: 10s
+      timeout: 3s
       retries: 5
 
   moodle:
@@ -50,21 +68,84 @@ services:
         required: false
     environment:
       TELITE_DB_BACKEND: ${TELITE_DB_BACKEND:-postgres}
-      TELITE_POSTGRES_HOST: postgres
-      TELITE_POSTGRES_PORT: 5432
-      TELITE_POSTGRES_DB: ${POSTGRES_DB}
-      TELITE_POSTGRES_USER: ${POSTGRES_USER}
-      TELITE_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TELITE_POSTGRES_HOST: ${TELITE_POSTGRES_HOST:-postgres}
+      TELITE_POSTGRES_PORT: ${TELITE_POSTGRES_PORT:-5432}
+      TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
+      TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
+      TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
       MOODLE_INTERNAL_URL: ${MOODLE_INTERNAL_URL:-http://moodle}
+      MOODLE_URL: ${MOODLE_URL:-http://localhost:8082}
       MOODLE_WWWROOT: ${MOODLE_WWWROOT:-http://localhost:8082}
       MOODLE_MODE: ${MOODLE_MODE:-mock}
     ports:
       - "${BACKEND_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/liveness', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       moodle:
         condition: service_started
+
+  # ── Phase 5: Celery worker for async Moodle sync ──────────────────────────
+  celery_worker:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_celery_worker
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=moodle_sync,reconcile,default --concurrency=2
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TELITE_DB_BACKEND: ${TELITE_DB_BACKEND:-postgres}
+      TELITE_POSTGRES_HOST: ${TELITE_POSTGRES_HOST:-postgres}
+      TELITE_POSTGRES_PORT: ${TELITE_POSTGRES_PORT:-5432}
+      TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
+      TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
+      TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      MOODLE_INTERNAL_URL: ${MOODLE_INTERNAL_URL:-http://moodle}
+      MOODLE_URL: ${MOODLE_URL:-http://localhost:8082}
+      MOODLE_MODE: ${MOODLE_MODE:-mock}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Phase 5: Celery Beat for scheduled reconciliation ─────────────────────
+  celery_beat:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_celery_beat
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+
 
   frontend:
     build:
@@ -75,10 +156,15 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   pgdata:
-    name: telite_pgdata
+    external: true
+    name: telite-lms_pgdata
   moodledata:
-    name: telite_moodledata
+    external: true
+    name: telite-lms_moodledata
+  redisdata:
+    name: telite-lms_redisdata

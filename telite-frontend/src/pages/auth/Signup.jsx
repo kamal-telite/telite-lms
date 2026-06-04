@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchSignupRoles, submitSignupRequest, getErrorMessage, fetchOrganizations } from "../../services/client";
+import { canUseWebGL, loadVantaDependencies } from "../../utils/scriptLoader";
 import "./Signup.css";
 
 /* ── Per-role field definitions ───────────────────────────────────────────── */
@@ -153,24 +154,35 @@ export default function Signup() {
     let ctx = null;
     let typeTimeout = null;
     const gsap = window.gsap;
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    if (window.VANTA && window.VANTA.NET) {
-      vantaEffect = window.VANTA.NET({
-        el: vantaRef.current,
-        mouseControls: true,
-        touchControls: true,
-        gyroControls: false,
-        minHeight: 200,
-        minWidth: 200,
-        scale: 1.0,
-        color: 0x6040d0,
-        backgroundColor: 0x050510,
-        points: 8,
-        maxDistance: 18,
-        spacing: 15,
-        showDots: false
-      });
-    }
+    const initVanta = async () => {
+      if (prefersReduced || !canUseWebGL()) return;
+      const VANTA = await loadVantaDependencies();
+      if (VANTA && VANTA.NET && vantaRef.current) {
+        try {
+          vantaEffect = VANTA.NET({
+            el: vantaRef.current,
+            mouseControls: false,
+            touchControls: false,
+            gyroControls: false,
+            minHeight: 200,
+            minWidth: 200,
+            scale: 1.0,
+            color: 0x6040d0,
+            backgroundColor: 0x050510,
+            points: 6,
+            maxDistance: 14,
+            spacing: 20,
+            showDots: false
+          });
+        } catch (error) {
+          console.warn("Signup Vanta disabled:", error);
+        }
+      }
+    };
+
+    initVanta();
 
     if (gsap) {
       ctx = gsap.context(() => {

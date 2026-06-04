@@ -1,13 +1,6 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
+import Lenis from "lenis";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import Login from "./pages/auth/Login";
-import Signup from "./pages/auth/Signup";
-import LandingPage from "./pages/landing/LandingPage";
-import SuperAdminPage from "./pages/super-admin/SuperAdminPage";
-import CategoryAdminPage from "./pages/company/CategoryAdminPage";
-import CategoryStatsPage from "./pages/super-admin/CategoryStatsPage";
-import LearnerPage from "./pages/learner/LearnerPage";
-import AcceptInvitePage from "./pages/auth/AcceptInvitePage";
 import { ToastProvider } from "./components/common/ui";
 import { fetchMe, logoutRequest } from "./services/client";
 import {
@@ -17,38 +10,32 @@ import {
   mergeSessionUser,
   persistSession,
 } from "./context/session";
-import PlatformAdminPage from "./pages/platform-admin/PlatformAdminPage";
+
+// Theme and Branding Providers
+import { ThemeProvider } from "./providers/ThemeProvider";
+import { BrandingProvider } from "./providers/BrandingProvider";
+
+// Modular Domain Routers
+import PlatformRouter from "./routes/platform_router";
+import OrgRouter from "./routes/org_router";
+import LearnerRouter from "./routes/learner_router";
+
+// Lazy Loaded Root Auth/Public Components
+const Login = lazy(() => import("./pages/auth/Login"));
+const Signup = lazy(() => import("./pages/auth/Signup"));
+const LandingPage = lazy(() => import("./pages/landing/LandingPage"));
+const AcceptInvitePage = lazy(() => import("./pages/auth/AcceptInvitePage"));
+const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
 
 function FullPageMessage({ title, body }) {
   return (
-    <div className="app-loader">
-      <div className="app-loader__panel">
-        <div className="spinner" />
-        <h1>{title}</h1>
-        <p>{body}</p>
+    <div className="loader" style={{ display: 'flex', flexDirection: 'column', zIndex: 999999 }}>
+      <div className="loader-logo">Telite <span>LMS</span></div>
+      <div style={{ marginTop: '24px', fontSize: '13px', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.05em' }}>
+        {title === "Loading..." ? "Preparing Workspace..." : title}
       </div>
     </div>
   );
-}
-
-function ProtectedRoute({ session, allowRoles, children }) {
-  if (!session?.accessToken) {
-    return <Navigate to="/login" replace />;
-  }
-  if (allowRoles && !allowRoles.includes(session.user?.role)) {
-    return <Navigate to={getDefaultRoute(session.user)} replace />;
-  }
-  return children;
-}
-
-function ProtectedPlatformRoute({ session, children }) {
-  if (!session?.accessToken) {
-    return <Navigate to="/login" replace />;
-  }
-  if (!session.user?.is_platform_admin && session.user?.role !== "platform_admin") {
-    return <Navigate to={getDefaultRoute(session.user)} replace />;
-  }
-  return children;
 }
 
 function AppRoutes({ session, setSession, onLogout, booting }) {
@@ -62,107 +49,92 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={
-          session?.accessToken ? (
-            <Navigate to={getDefaultRoute(session.user)} replace />
-          ) : (
-            <Login onAuthenticated={setSession} />
-          )
-        }
-      />
-      <Route
-        path="/signup"
-        element={
-          session?.accessToken ? (
-            <Navigate to={getDefaultRoute(session.user)} replace />
-          ) : (
-            <Signup />
-          )
-        }
-      />
-      <Route
-        path="/accept-invite"
-        element={
-          session?.accessToken ? (
-            <Navigate to={getDefaultRoute(session.user)} replace />
-          ) : (
-            <AcceptInvitePage onAuthenticated={setSession} />
-          )
-        }
-      />
-      <Route
-        path="/platform-admin/*"
-        element={
-          <ProtectedPlatformRoute session={session}>
-            <PlatformAdminPage session={session} onLogout={onLogout} />
-          </ProtectedPlatformRoute>
-        }
-      />
-      <Route
-        path="/super-admin/*"
-        element={
-          <ProtectedRoute session={session} allowRoles={["super_admin"]}>
-            <SuperAdminPage session={session} onLogout={onLogout} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/categories/:slug/admin/*"
-        element={
-          <ProtectedRoute session={session} allowRoles={["super_admin", "category_admin"]}>
-            <CategoryAdminPage session={session} onLogout={onLogout} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/categories/:slug/stats"
-        element={
-          <ProtectedRoute session={session} allowRoles={["super_admin", "category_admin"]}>
-            <CategoryStatsPage session={session} onLogout={onLogout} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/learner/*"
-        element={
-          <ProtectedRoute session={session} allowRoles={["learner"]}>
-            <LearnerPage session={session} onLogout={onLogout} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard"
-        element={
-          session?.accessToken ? (
-            <Navigate to={getDefaultRoute(session.user)} replace />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route path="/" element={<LandingPage session={session} />} />
-      <Route
-        path="*"
-        element={
-          <Navigate
-            to={session?.accessToken ? getDefaultRoute(session.user) : "/"}
-            replace
-          />
-        }
-      />
-    </Routes>
+    <Suspense fallback={null}>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            session?.user ? (
+              <Navigate to={getDefaultRoute(session.user)} replace />
+            ) : (
+              <Login onAuthenticated={setSession} />
+            )
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            session?.user ? (
+              <Navigate to={getDefaultRoute(session.user)} replace />
+            ) : (
+              <Signup />
+            )
+          }
+        />
+        <Route
+          path="/accept-invite"
+          element={<AcceptInvitePage onAuthenticated={setSession} />}
+        />
+        <Route
+          path="/set-password"
+          element={<AcceptInvitePage onAuthenticated={setSession} />}
+        />
+        <Route
+          path="/reset-password"
+          element={<ResetPasswordPage />}
+        />
+        
+        {/* Modular Routers */}
+        <Route
+          path="/platform-admin/*"
+          element={<PlatformRouter session={session} onLogout={onLogout} />}
+        />
+        
+        <Route
+          path="/super-admin/*"
+          element={<OrgRouter session={session} onLogout={onLogout} />}
+        />
+        <Route
+          path="/categories/:slug/*"
+          element={<OrgRouter session={session} onLogout={onLogout} />}
+        />
+        
+        <Route
+          path="/learner/*"
+          element={<LearnerRouter session={session} onLogout={onLogout} />}
+        />
+        
+        <Route
+          path="/dashboard"
+          element={
+            session?.user ? (
+              <Navigate to={getDefaultRoute(session.user)} replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route path="/" element={<LandingPage session={session} />} />
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to={session?.user ? getDefaultRoute(session.user) : "/"}
+              replace
+            />
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 }
 
 export default function App() {
   const [session, setSessionState] = useState(() => getSession());
-  const [booting, setBooting] = useState(() => Boolean(getSession()?.accessToken));
+  const [booting, setBooting] = useState(() => Boolean(getSession()?.user));
 
   const setSession = (nextSession) => {
-    if (nextSession?.accessToken) {
+    if (nextSession?.user) {
       persistSession(nextSession);
       setSessionState(nextSession);
     } else {
@@ -174,8 +146,8 @@ export default function App() {
   const onLogout = async () => {
     const activeSession = getSession();
     try {
-      if (activeSession?.accessToken) {
-        await logoutRequest(activeSession.refreshToken);
+      if (activeSession?.user) {
+        await logoutRequest();
       }
     } catch {
       // Best-effort logout.
@@ -187,11 +159,35 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Initialize smooth scrolling
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      direction: "vertical",
+      gestureDirection: "vertical",
+      smooth: true,
+      mouseMultiplier: 1,
+      smoothTouch: false,
+      touchMultiplier: 2,
+      infinite: false,
+    });
+    function raf(time) {
+      lenis.raf(time);
+      requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+
+    return () => {
+      lenis.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function restoreSession() {
       const stored = getSession();
-      if (!stored?.accessToken) {
+      if (!stored?.user) {
         setBooting(false);
         return;
       }
@@ -224,15 +220,19 @@ export default function App() {
   }, []);
 
   return (
-    <ToastProvider>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppRoutes
-          session={session}
-          setSession={setSession}
-          onLogout={onLogout}
-          booting={booting}
-        />
-      </BrowserRouter>
-    </ToastProvider>
+    <ThemeProvider>
+      <BrandingProvider session={session}>
+        <ToastProvider>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <AppRoutes
+              session={session}
+              setSession={setSession}
+              onLogout={onLogout}
+              booting={booting}
+            />
+          </BrowserRouter>
+        </ToastProvider>
+      </BrandingProvider>
+    </ThemeProvider>
   );
 }

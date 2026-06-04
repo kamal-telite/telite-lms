@@ -210,3 +210,40 @@ export function SkeletonLoader({ rows = 5, showStats = false }) {
     </div>
   );
 }
+
+export function Field({ label, id, helpText, children }) {
+  return (
+    <div className="field">
+      {label && <label htmlFor={id} className="field__label">{label}</label>}
+      {children}
+      {helpText && <div className="field__help">{helpText}</div>}
+    </div>
+  );
+}
+
+export function Input({ className = "", ...props }) {
+  return <input className={`field__input ${className}`.trim()} {...props} />;
+}
+
+export function Select({ options = [], className = "", ...props }) {
+  return (
+    <select className={`field__input ${className}`.trim()} {...props}>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  );
+}
+
+export function ColorPicker({ className = "", ...props }) {
+  return <input type="color" className={`field__input ${className}`.trim()} {...props} />;
+}
+
+export function FileUpload({ currentUrl, className = "", ...props }) {
+  return (
+    <div className={`file-upload ${className}`.trim()}>
+      {currentUrl && <img src={currentUrl} alt="Current" style={{ maxHeight: 40, marginBottom: 8, display: 'block' }} />}
+      <input type="file" className="field__input" {...props} />
+    </div>
+  );
+}

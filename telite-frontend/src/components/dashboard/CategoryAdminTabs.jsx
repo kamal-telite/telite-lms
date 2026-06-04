@@ -4,7 +4,8 @@ import autoTable from "jspdf-autotable";
 import { Avatar, Badge, Button, EmptyState, StatCard, Panel, useToast } from "../common/ui";
 import { TaskBoardKanban } from "./TaskBoard";
 import { ChartCanvas } from "../common/charts";
-import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent } from "../../utils/formatters";
+import { Icon } from "../common/icons";
+import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent, getRankColor } from "../../utils/formatters";
 
 export function ActivityFeedTab({ events = [] }) {
   const [filter, setFilter] = useState("all");
@@ -401,7 +402,9 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
                 {topPerformers.map((learner, idx) => (
                   <tr key={learner.id}>
                     <td>
-                      {idx === 0 ? "🥇 1" : idx === 1 ? "🥈 2" : idx === 2 ? "🥉 3" : `${idx + 1}`}
+                      <div className="leaderboard-rank" style={{ color: getRankColor(idx + 1), fontWeight: 700 }}>
+                        #{idx + 1}
+                      </div>
                     </td>
                     <td>
                       <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
@@ -609,33 +612,30 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
 
 export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
   const tabs = [
-    { id: "general", label: "General", icon: "👤" },
-    { id: "notifications", label: "Notifications", icon: "🔔" },
-    { id: "personalization", label: "Personalization", icon: "🎨" },
-    { id: "security", label: "Security", icon: "🔒" },
-    { id: "account", label: "Account", icon: "⚙️" },
+    { id: "general", label: "General", icon: "profile" },
+    { id: "notifications", label: "Notifications", icon: "bell" },
+    { id: "personalization", label: "Personalization", icon: "dashboard" },
+    { id: "security", label: "Security", icon: "shield" },
+    { id: "account", label: "Account", icon: "settings" },
   ];
 
   return (
     <div className="grid-3" style={{ gridTemplateColumns: "240px 1fr" }}>
-      <div className="panel">
-        <div className="panel-body" style={{ padding: "16px 8px" }}>
-          <div className="sidebar-nav__items">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`nav-item ${activeTab === tab.id ? "is-active" : ""}`}
-                onClick={() => setActiveTab(tab.id)}
-                style={{ padding: "10px 16px", borderRadius: 8, textAlign: "left" }}
-              >
-                <span className="nav-item__left">
-                  <span>{tab.icon}</span>
-                  <span style={{ marginLeft: 8 }}>{tab.label}</span>
-                </span>
-              </button>
-            ))}
-          </div>
+      <div>
+        <div className="sidebar-nav__items" style={{ padding: "0 16px" }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`nav-item ${activeTab === tab.id ? "is-active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span className="nav-item__left">
+                <Icon name={tab.icon} size={16} />
+                <span>{tab.label}</span>
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -658,7 +658,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
               <div className="grid-2">
                 <label className="field">
                   <span className="field__label">Full Name</span>
-                  <input className="field__input" defaultValue={session?.user?.name || "Category Admin"} />
+                  <input className="field__input" defaultValue={session?.user?.name || "User"} />
                 </label>
                 <label className="field">
                   <span className="field__label">Email Address</span>
@@ -667,7 +667,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
               </div>
               <label className="field">
                 <span className="field__label">Role</span>
-                <input className="field__input" defaultValue="Category Admin" disabled />
+                <input className="field__input" defaultValue={titleize(session?.user?.role || "Category Admin")} disabled />
               </label>
               <div className="panel-footer" style={{ marginTop: 24, padding: "16px 0 0", borderTop: "1px solid var(--border)", textAlign: "right" }}>
                 <Button tone="primary">Save Changes</Button>

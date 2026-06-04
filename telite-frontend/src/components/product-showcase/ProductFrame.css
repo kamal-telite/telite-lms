@@ -1,0 +1,55 @@
+.product-frame {
+    background: #0b0b1e;
+    border: 1px solid var(--glass-border-strong);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-cinematic);
+    position: relative;
+    backdrop-filter: blur(20px);
+}
+
+.frame-header {
+    background: var(--glass-bg-secondary);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--glass-border-primary);
+}
+
+.frame-dots {
+    display: flex;
+    gap: 8px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    opacity: 0.8;
+}
+
+.dot.red { background: #ff5f56; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green { background: #27c93f; }
+
+.frame-title {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    font-family: var(--font-copy);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.frame-content {
+    padding: 28px;
+    min-height: 440px;
+}
+
+@media (max-width: 768px) {
+    .frame-content {
+        padding: 18px;
+        min-height: auto;
+    }
+}

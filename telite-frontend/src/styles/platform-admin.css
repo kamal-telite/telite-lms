@@ -350,3 +350,177 @@ tr.group:hover .row-actions, .org-row:hover .row-actions { opacity: 1; }
 .btn-icon.warn:hover { background: var(--amber-bg); }
 .btn-icon.danger { color: var(--red); }
 .btn-icon.danger:hover { background: var(--red-bg); }
+
+/* ── SPIN + GATEWAY PULSE ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes gatewayPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(5,150,105,.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(5,150,105,0); }
+  100% { box-shadow: 0 0 0 0 rgba(5,150,105,0); }
+}
+
+/* ── DONUT LEGEND ── */
+.donut-legend-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; transition: background .15s; }
+.donut-legend-item:hover { background: var(--border2); }
+
+/* ── SYNC TIMELINE ── */
+.sync-timeline { display: flex; flex-direction: column; gap: 0; }
+.sync-tl-item  { position: relative; padding: 8px 8px 8px 24px; border-left: 2px solid var(--border2); }
+.sync-tl-item:last-child { border-left-color: transparent; }
+.sync-tl-dot   { position: absolute; left: -5px; top: 12px; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sync-tl-time  { font-family: var(--fm); font-size: 10px; color: var(--tx3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 2px; }
+.sync-tl-msg   { font-size: 12px; color: var(--tx1); line-height: 1.5; }
+
+/* ── HELP ACCORDION ── */
+.help-accordion { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: #fff; margin-bottom: 10px; }
+.help-accordion summary {
+  padding: 13px 16px; cursor: pointer; display: flex; justify-content: space-between;
+  align-items: center; font-size: 13px; font-weight: 600; color: var(--tx1);
+  list-style: none; user-select: none; transition: background .15s;
+}
+.help-accordion summary::-webkit-details-marker { display: none; }
+.help-accordion summary:hover { background: var(--border2); }
+.help-accordion[open] summary { border-bottom: 1px solid var(--border2); background: var(--page); }
+.help-accordion .accordion-body { padding: 14px 16px; font-size: 13px; color: var(--tx2); line-height: 1.65; }
+.help-accordion .chevron { transition: transform .2s; color: var(--tx3); font-size: 17px; flex-shrink: 0; }
+.help-accordion[open] .chevron { transform: rotate(180deg); }
+
+/* ── KBD CHIP ── */
+.kbd-chip {
+  background: var(--border2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 2px 8px; font-family: var(--fm); font-size: 12px; color: var(--tx2);
+  white-space: nowrap; display: inline-block;
+}
+
+/* ── HELP QUICK LINK ROW ── */
+.help-ql-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; border-radius: var(--r); cursor: pointer;
+  font-size: 13px; color: var(--tx1); transition: all .15s; border: 1px solid var(--border2);
+}
+.help-ql-row:hover { background: var(--primary-lt); border-color: rgba(70,72,212,.2); color: var(--primary-tx); }
+.help-ql-arrow { font-size: 15px; color: var(--tx3); opacity: 0; transition: opacity .15s; }
+.help-ql-row:hover .help-ql-arrow { opacity: 1; color: var(--primary); }
+
+/* ── SYNC TAB PANELS ── */
+.sync-tab-panel { animation: fadeIn .2s ease; }
+.sync-tenant-row.sync-selected { background: var(--primary-lt) !important; }
+
+/* ── ANALYTICS + AUDIT ── */
+#analyticsTable tr:hover td,
+#auditTableBody tr:hover td { background: #FAFBFF; }
+#analyticsTable td,
+#auditTableBody td { border-top: 1px solid var(--border2); }
+
+/* ── TOGGLE SWITCH (REACT COMPONENT COMPATIBLE) ── */
+.toggle-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  position: relative;
+  transition: background .2s;
+  flex-shrink: 0;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: left .2s;
+}
+
+/* Settings Specific Toggles */
+.st-track {
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
+  position: relative;
+  transition: background .2s;
+  cursor: pointer;
+}
+.st-thumb {
+  position: absolute;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: left .2s;
+}
+
+/* Custom chart layout classes */
+.bar-col {
+  transition: height 0.4s ease, opacity 0.2s;
+}
+.bar-col:hover {
+  opacity: 0.75;
+}
+
+/* Toast stacking positioning */
+.toast-stack {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tx1);
+  min-width: 260px;
+  animation: slideUp 0.25s ease;
+}
+.toast.success { border-left: 4px solid var(--green); }
+.toast.error { border-left: 4px solid var(--red); }
+.toast.info { border-left: 4px solid var(--primary); }
+.toast.warn { border-left: 4px solid var(--amber); }
+
+/* Grid custom classes */
+.quick-link-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 10px;
+}
+.ql-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: center;
+}
+.ql-item:hover {
+  background: var(--border2);
+}
+.ql-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ql-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tx2);
+}

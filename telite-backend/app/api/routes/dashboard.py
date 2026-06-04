@@ -25,7 +25,7 @@ def get_super_admin_dashboard(
 ):
     scoped_org_id = resolve_org_scope(current_user, org_id)
     if moodle_mode() == "live":
-        return build_super_admin_dashboard_from_moodle()
+        return build_super_admin_dashboard_from_moodle(scoped_org_id)
     return build_super_admin_dashboard(scoped_org_id)
 
 

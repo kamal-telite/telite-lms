@@ -150,6 +150,113 @@ If you did not request a reset, you can ignore this email.
         return False
 
 
+def send_invitation_email(
+    *,
+    to_email: str,
+    org_name: str,
+    role: str,
+    token: str,
+    expires_at: str,
+) -> bool:
+    invite_url = f"{APP_URL}/set-password?token={token}"
+    if not SMTP_USER or not SMTP_PASSWORD:
+        print(
+            "\n".join(
+                [
+                    "-" * 48,
+                    "[EMAIL NOT SENT - SMTP not configured]",
+                    f"To: {to_email}",
+                    "Subject: You're invited to Telite LMS",
+                    f"Organization: {org_name}",
+                    f"Role: {role}",
+                    f"Login Email: {to_email}",
+                    f"Set Password URL: {invite_url}",
+                    f"Expires At: {expires_at}",
+                    "-" * 48,
+                ]
+            )
+        )
+        return False
+
+    subject = f"You're invited to join {org_name} on Telite LMS"
+    plain_body = f"""
+Hello,
+
+You have been invited to join {org_name} on Telite LMS as {role}.
+
+Login email:
+  {to_email}
+
+Set your password:
+  {invite_url}
+
+This invitation expires at {expires_at}.
+    """.strip()
+    html_body = f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f766e,#2563eb);padding:28px 32px;">
+            <div style="font-size:22px;font-weight:700;color:#fff;">Telite LMS</div>
+            <div style="font-size:14px;color:rgba(255,255,255,0.8);margin-top:4px;">Organization invitation</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <p style="font-size:16px;color:#374151;margin:0 0 20px;">Hello,</p>
+            <p style="font-size:14px;color:#6b7280;margin:0 0 24px;">
+              You have been invited to join <strong>{org_name}</strong> on Telite LMS as <strong>{role}</strong>.
+            </p>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:16px 18px;margin:0 0 24px;">
+              <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Login email</div>
+              <div style="font-size:16px;font-weight:600;color:#111827;">{to_email}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:8px;">
+                You'll create your password on the next screen after opening the secure link below.
+              </div>
+            </div>
+            <p style="margin:0 0 24px;">
+              <a href="{invite_url}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;">
+                Set Your Password
+              </a>
+            </p>
+            <p style="font-size:13px;color:#6b7280;margin:0;">This invitation expires at {expires_at}.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+    """.strip()
+
+    try:
+        message = MIMEMultipart("alternative")
+        message["Subject"] = subject
+        message["From"] = f"{FROM_NAME} <{SMTP_USER}>"
+        message["To"] = to_email
+        message.attach(MIMEText(plain_body, "plain"))
+        message.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, to_email, message.as_string())
+        print(f"[EMAIL SENT] Invitation email sent to {to_email}")
+        return True
+    except smtplib.SMTPAuthenticationError:
+        print("[EMAIL ERROR] Gmail authentication failed. Check SMTP_USER and SMTP_PASSWORD in .env")
+        print("[EMAIL HINT] Use an App Password, not your Gmail password.")
+        return False
+    except Exception as exc:
+        print(f"[EMAIL ERROR] {exc}")
+        return False
+
+
 def _build_console_preview(
     to_email: str,
     name: str,

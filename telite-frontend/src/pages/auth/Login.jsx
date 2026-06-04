@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { loginRequest, getErrorMessage } from "../../services/client";
 import { buildSessionFromAuth, getDefaultRoute } from "../../context/session";
+import { canUseWebGL, loadVantaDependencies } from "../../utils/scriptLoader";
 import "./Login.css";
 
 const credentialRows = [
@@ -29,24 +30,36 @@ export default function Login({ onAuthenticated }) {
 
     let vantaEffect = null;
     const gsap = window.gsap;
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const enablePointerEffects = !prefersReduced && window.matchMedia("(pointer: fine)").matches && window.innerWidth >= 1100;
 
-    if (window.VANTA && window.VANTA.NET) {
-      vantaEffect = window.VANTA.NET({
-        el: vantaRef.current,
-        mouseControls: true,
-        touchControls: true,
-        gyroControls: false,
-        minHeight: 200,
-        minWidth: 200,
-        scale: 1.0,
-        color: 0x4648d4,
-        backgroundColor: 0x0d0b2e,
-        points: 14,
-        maxDistance: 26,
-        spacing: 18,
-        showDots: true
-      });
-    }
+    const initVanta = async () => {
+      if (prefersReduced || !canUseWebGL()) return;
+      const VANTA = await loadVantaDependencies();
+      if (VANTA && VANTA.NET && vantaRef.current) {
+        try {
+          vantaEffect = VANTA.NET({
+            el: vantaRef.current,
+            mouseControls: false,
+            touchControls: false,
+            gyroControls: false,
+            minHeight: 200,
+            minWidth: 200,
+            scale: 1.0,
+            color: 0x4648d4,
+            backgroundColor: 0x0d0b2e,
+            points: 8,
+            maxDistance: 16,
+            spacing: 22,
+            showDots: false
+          });
+        } catch (error) {
+          console.warn("Login Vanta disabled:", error);
+        }
+      }
+    };
+
+    initVanta();
 
     const onMouseMove = (e) => {
       if (gsap && cursorRef.current && cursorDotRef.current) {
@@ -71,7 +84,9 @@ export default function Login({ onAuthenticated }) {
       }
     };
     
-    document.addEventListener("mousemove", onMouseMove);
+    if (enablePointerEffects) {
+      document.addEventListener("mousemove", onMouseMove, { passive: true });
+    }
 
     if (window.VanillaTilt && modalRef.current) {
       document.fonts.ready.then(() => {
@@ -87,8 +102,6 @@ export default function Login({ onAuthenticated }) {
       });
     }
 
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    
     function startTyped() {
       if (window.Typed) {
         typedRef.current = new window.Typed("#typed-word", {

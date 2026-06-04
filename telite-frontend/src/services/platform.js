@@ -11,7 +11,11 @@ export const platformApi = {
   // Admins
   listAdmins: () => api.get("/api/platform/admins"),
   inviteAdmin: (payload) => api.post("/api/platform/admins/invite", payload),
+  resendAdminInvitation: (invitationId) => api.post(`/api/platform/admins/invitations/${invitationId}/resend`),
+  revokeAdminInvitation: (invitationId) => api.delete(`/api/platform/admins/invitations/${invitationId}`),
   updateAdminStatus: (userId, status) => api.patch(`/api/platform/admins/${userId}/status`, { status }),
+  deleteAdmin: (userId) => api.delete(`/api/platform/admins/${userId}`),
+  resetAdminPassword: (userId) => api.post(`/api/platform/admins/${userId}/reset-password`),
 
   // Analytics
   getAnalyticsOverview: () => api.get("/api/platform/analytics/overview"),
@@ -19,6 +23,8 @@ export const platformApi = {
 
   // Moodle
   listMoodleTenants: () => api.get("/api/platform/moodle/tenants"),
+  listMoodleSyncLogs: (params) => api.get("/api/platform/moodle/logs", { params }),
+  getMoodleSyncReportSummary: (params) => api.get("/api/platform/moodle/reports/summary", { params }),
   syncOrgMoodle: (orgId) => api.post(`/api/platform/moodle/sync/${orgId}`),
   syncAllMoodle: () => api.post("/api/platform/moodle/sync-all"),
 

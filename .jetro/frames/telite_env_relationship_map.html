@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TELITE LMS — Env Variable Relationship Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0b0f19;
+    color: #cbd5e1;
+    padding: 30px;
+    min-height: 100vh;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 35px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 20px;
+  }
+  .header h1 {
+    font-size: 24px;
+    font-weight: 800;
+    color: #f8fafc;
+    background: linear-gradient(135deg, #a78bfa, #f472b6, #fbbf24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+  .header .tagline {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 6px;
+  }
+
+  /* Two column layout for structure */
+  .grid-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+  }
+
+  .panel {
+    background: #0f172a;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 24px;
+  }
+  .panel-title {
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #f1f5f9;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  /* Box Styles */
+  .env-box {
+    background: #1e293b;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 18px;
+  }
+  .env-box:last-child { margin-bottom: 0; }
+  .env-box-hdr {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #94a3b8;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .var-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .var-row {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255,255,255,0.02);
+    border-radius: 6px;
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .var-name { color: #f1f5f9; font-weight: 600; }
+  .var-val { color: #a5b4fc; }
+
+  /* Priority list formatting */
+  .prio-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+  }
+  .prio-badge {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .prio-1 { background: rgba(52,211,153,0.15); color: #34d399; border: 1px solid rgba(52,211,153,0.3); }
+  .prio-2 { background: rgba(96,165,250,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }
+  .prio-3 { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+  .prio-4 { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+  .prio-body { flex: 1; min-width: 0; }
+  .prio-title { font-size: 11.5px; font-weight: 700; color: #f1f5f9; margin-bottom: 2px; }
+  .prio-desc { font-size: 9.5px; color: #94a3b8; line-height: 1.4; }
+
+  /* Alert / Conflict styles */
+  .warn-box {
+    background: rgba(251,191,36,0.06);
+    border: 1px solid rgba(251,191,36,0.2);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #fde68a;
+  }
+  .warn-box strong { color: #fbbf24; }
+
+  .err-box {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #fca5a5;
+  }
+  .err-box strong { color: #f87171; }
+
+  /* Flow arrows */
+  .arrow-h {
+    text-align: center;
+    color: #475569;
+    font-size: 20px;
+    margin: 15px 0;
+  }
+
+  .badge {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .badge-src { background: rgba(139,92,246,0.15); color: #c4b5fd; }
+  .badge-map { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .badge-sqlite { background: rgba(14,165,233,0.15); color: #38bdf8; }
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>TELITE LMS — Environment Variable Relationship Map</h1>
+  <div class="tagline">Visualizing variable sources, mappings, conflict states, and backend fallback priority chains</div>
+</div>
+
+<div class="grid-layout">
+
+  <!-- LEFT COLUMN: SOURCES AND MAPPINGS -->
+  <div class="panel">
+    <div class="panel-title">📥 Variable Sources &amp; Docker Mappings</div>
+
+    <!-- Root .env -->
+    <div class="env-box" style="border-left: 4px solid #8b5cf6;">
+      <div class="env-box-hdr">
+        <span>1. Master Config: root .env</span>
+        <span class="badge badge-src">Source File</span>
+      </div>
+      <div class="var-list">
+        <div class="var-row"><span class="var-name">MOODLE_DB_NAME</span><span class="var-val">moodle</span></div>
+        <div class="var-row"><span class="var-name">MOODLE_DB_USER</span><span class="var-val">moodleuser</span></div>
+        <div class="var-row"><span class="var-name">TELITE_POSTGRES_DB</span><span class="var-val">telite_backend</span></div>
+        <div class="var-row"><span class="var-name">TELITE_POSTGRES_USER</span><span class="var-val">telite_backend_user</span></div>
+        <div class="var-row"><span class="var-name">POSTGRES_DB</span><span class="var-val">postgres <span style="font-size:8px; color:#fbbf24;">(Bootstrap user)</span></span></div>
+      </div>
+    </div>
+
+    <!-- telite-backend/.env -->
+    <div class="env-box" style="border-left: 4px solid #0ea5e9;">
+      <div class="env-box-hdr">
+        <span>2. Local Dev: telite-backend/.env</span>
+        <span class="badge badge-sqlite">SQLite Context</span>
+      </div>
+      <div style="font-size:10.5px; line-height:1.4; color:#94a3b8; margin-bottom:10px;">
+        Used during <code>uvicorn app.main:app</code> runs. Under SQLite mode, it decouples the local server from Postgres:
+      </div>
+      <div class="var-list">
+        <div class="var-row"><span class="var-name">TELITE_DB_BACKEND</span><span class="var-val" style="color:#34d399;">sqlite</span></div>
+        <div class="var-row"><span class="var-name">TELITE_DATABASE_URL</span><span class="var-val" style="color:#64748b;">(empty)</span></div>
+        <div class="var-row"><span class="var-name">TELITE_SQLITE_SOURCE_PATH</span><span class="var-val">telite_lms.db</span></div>
+      </div>
+    </div>
+
+    <div class="arrow-h">▼ Environment Mappings ▼</div>
+
+    <!-- Mappings -->
+    <div class="env-box" style="border-left: 4px solid #3b82f6;">
+      <div class="env-box-hdr">
+        <span>3. Orchestration Map: docker-compose.yml</span>
+        <span class="badge badge-map">Mapping Layer</span>
+      </div>
+      <div class="var-list">
+        <div class="var-row" style="border-left: 3px solid #fbbf24;"><span class="var-name">moodle.environment.MOODLE_DB_NAME</span><span class="var-val">${MOODLE_DB_NAME}</span></div>
+        <div class="var-row" style="border-left: 3px solid #34d399;"><span class="var-name">backend.environment.TELITE_POSTGRES_DB</span><span class="var-val">${TELITE_POSTGRES_DB}</span></div>
+      </div>
+    </div>
+
+    <div class="env-box" style="border-left: 4px solid #f59e0b;">
+      <div class="env-box-hdr">
+        <span>4. Moodle Config: docker-config.php</span>
+        <span class="badge badge-map">PHP Mapping</span>
+      </div>
+      <div class="var-list">
+        <div class="var-row"><span class="var-name">$CFG->dbname</span><span class="var-val">getenv('MOODLE_DB_NAME')</span></div>
+        <div class="var-row"><span class="var-name">$CFG->dbuser</span><span class="var-val">getenv('MOODLE_DB_USER')</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN: RESOLUTION PRIORITY & WARNINGS -->
+  <div class="panel">
+    <div class="panel-title">🛡 Backend Resolution Priority (store.py)</div>
+
+    <div style="font-size:10.5px; line-height:1.5; color:#94a3b8; margin-bottom:15px;">
+      The FastAPI store module resolved DSN using the following priority order:
+    </div>
+
+    <!-- Priority List -->
+    <div class="prio-item">
+      <div class="prio-badge prio-1">1</div>
+      <div class="prio-body">
+        <div class="prio-title">TELITE_DATABASE_URL</div>
+        <div class="prio-desc">Direct Postgres URI specification string. If present, it bypasses all other variables.</div>
+      </div>
+    </div>
+
+    <div class="prio-item">
+      <div class="prio-badge prio-2">2</div>
+      <div class="prio-body">
+        <div class="prio-title">TELITE_POSTGRES_* Group</div>
+        <div class="prio-desc">Separate backend connection credentials (<code>TELITE_POSTGRES_DB</code>, <code>TELITE_POSTGRES_USER</code>).</div>
+      </div>
+    </div>
+
+    <div class="prio-item">
+      <div class="prio-badge prio-3">3</div>
+      <div class="prio-body">
+        <div class="prio-title">MOODLE_DB_* Fallback <span style="font-weight:normal; opacity:.6;">(Legacy)</span></div>
+        <div class="prio-desc">Checks for Moodle DB variables. Left for compatibility in simple single-db setups.</div>
+      </div>
+    </div>
+
+    <div class="prio-item">
+      <div class="prio-badge prio-4">4</div>
+      <div class="prio-body">
+        <div class="prio-title">POSTGRES_* Fallback <span style="font-weight:normal; opacity:.6;">(Legacy)</span></div>
+        <div class="prio-desc">Last-resort DB variables. Resolves to standard Postgres settings.</div>
+      </div>
+    </div>
+
+    <!-- Warnings / Conflicts Box -->
+    <div class="panel-title" style="margin-top:25px; margin-bottom:12px; font-size:12px;">🚨 Identified Conflicts &amp; Issues</div>
+
+    <div class="err-box">
+      <strong>Duplicate Credential Mappings in Compose</strong><br>
+      The backend container was mapping <code>TELITE_POSTGRES_DB: ${POSTGRES_DB}</code>. 
+      Because <code>POSTGRES_DB=moodle</code>, the backend was forced to use the Moodle database. 
+      The separate <code>TELITE_POSTGRES_DB</code> variable in the root `.env` was ignored.
+    </div>
+
+    <div class="warn-box">
+      <strong>SQLite Fallback Behavior</strong><br>
+      If <code>TELITE_DB_BACKEND</code> is set to <code>sqlite</code>, the resolution engine bypasses the entire PostgreSQL fallback priority chain and connects to the local SQLite database path. This prevents local runs from crashing when no Postgres server is running.
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

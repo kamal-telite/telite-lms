@@ -72,8 +72,9 @@ def build_moodle_user_directory(
     query: str | None = None,
     page: int = 1,
     page_size: int = 25,
+    org_id: int | None = None,
 ) -> dict[str, Any]:
-    local_users = list_users(include_inactive=True)["users"]
+    local_users = list_users(include_inactive=True, org_id=org_id)["users"]
     moodle_users = moodle_get_users()
     normalized = [
         _normalize_moodle_user(moodle_user, local_users, index)
@@ -121,10 +122,10 @@ def _match_moodle_category(local_category: dict[str, Any], moodle_categories: li
     return None
 
 
-def build_super_admin_dashboard_from_moodle() -> dict[str, Any]:
-    local_categories = list_categories(include_archived=False)
+def build_super_admin_dashboard_from_moodle(org_id: int | None = None) -> dict[str, Any]:
+    local_categories = list_categories(include_archived=False, org_id=org_id)
     moodle_categories = moodle_get_categories()
-    all_users = build_moodle_user_directory(page=1, page_size=5000)["users"]
+    all_users = build_moodle_user_directory(page=1, page_size=5000, org_id=org_id)["users"]
     learner_counts = Counter(
         user["category_scope"]
         for user in all_users

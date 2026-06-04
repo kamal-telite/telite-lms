@@ -1,0 +1,984 @@
+﻿commit 73cf1c421d59ff74342552460bb047cc9a98effe
+Author: fireside4137 <swapnilupadhyay4137@gmail.com>
+Date:   Sun May 24 14:26:40 2026 +0530
+
+    Normalize profile and dashboard spacing
+
+diff --git a/context.md b/context.md
+index 9d74086..8ac72ba 100644
+--- a/context.md
++++ b/context.md
+@@ -181,6 +181,20 @@ Last updated: 2026-05-23
+   - Removed a non-functional "View all" action from the enrollment audit panel.
+   - Updated the PAL "Full report" action to route to the first available category report instead of hardcoding the ATS category; it now shows a warning toast if no category exists.
+   - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
++- 2026-05-23: Completed Admin/SuperAdmin/Learner profile UI continuity batch.
++  - Reworked the shared Admin/SuperAdmin profile settings route into a two-column profile layout with consistent panel padding, dashboard fonts, shared icons, and tokenized button styling.
++  - Normalized profile route tabs so `tab=profile` and other unknown profile tab values open the General profile panel instead of rendering an empty Settings shell.
++  - Replaced broken emoji text in the profile dropdown with shared SVG icons and consistent menu button dimensions.
++  - Added learner profile edit mode with editable full name/email fields, read-only category/enrollment fields, and matching Save/Cancel/Edit button styles.
++  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
++  - Browser visual attach could not complete in this environment because the browser runtime hit a local `AppData` permission error; use the local dev server for final visual QA.
++- 2026-05-23: Completed padding-only continuity cleanup across dashboard panels, tables, forms, and modals.
++  - Added shared padding compatibility for older `panel-header`, `panel-body`, `panel-footer`, `panel-title`, and `panel-subtitle` classes so older tabs match the newer `Panel` component spacing.
++  - Standardized table cell horizontal padding and minimum table width to stop text/progress values from touching or spilling past holder borders.
++  - Standardized form grid gaps and minimum widths so inputs/selects/radio chips stay inside their containers.
++  - Adjusted modal header/content/footer padding and scrolling so modal footer buttons no longer overlap form fields or detail cards.
++  - No feature behavior was changed.
++  - Build result: `npm.cmd run build` passes. The existing large JS chunk warning remains.
+ 
+ ## Next Planned Fix Order
+ 
+diff --git a/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx b/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx
+index 3ff7c48..8b681b7 100644
+--- a/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx
++++ b/telite-frontend/src/components/dashboard/CategoryAdminTabs.jsx
+@@ -2,6 +2,7 @@ import React, { useState } from "react";
+ import jsPDF from "jspdf";
+ import autoTable from "jspdf-autotable";
+ import { Avatar, Badge, Button, EmptyState, StatCard, Panel, useToast } from "../common/ui";
++import { Icon } from "../common/icons";
+ import { TaskBoardKanban } from "./TaskBoard";
+ import { ChartCanvas } from "../common/charts";
+ import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent } from "../../utils/formatters";
+@@ -608,142 +609,151 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
+ }
+ 
+ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
++  const { showToast } = useToast();
+   const tabs = [
+-    { id: "general", label: "General", icon: "≡ƒæñ" },
+-    { id: "notifications", label: "Notifications", icon: "≡ƒöö" },
+-    { id: "personalization", label: "Personalization", icon: "≡ƒÄ¿" },
+-    { id: "security", label: "Security", icon: "≡ƒöÆ" },
+-    { id: "account", label: "Account", icon: "ΓÜÖ∩╕Å" },
++    { id: "general", label: "General", icon: "profile" },
++    { id: "notifications", label: "Notifications", icon: "bell" },
++    { id: "personalization", label: "Personalization", icon: "settings" },
++    { id: "security", label: "Security", icon: "shield" },
++    { id: "account", label: "Account", icon: "settings" },
+   ];
++  const selectedTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : "general";
++  const userName = session?.user?.name || "Admin User";
++  const userEmail = session?.user?.email || "admin@telite.io";
++  const roleLabel = session?.user?.role === "super_admin" ? "Super Admin" : "Category Admin";
+ 
+   return (
+-    <div className="grid-3" style={{ gridTemplateColumns: "240px 1fr" }}>
+-      <div className="panel">
+-        <div className="panel-body" style={{ padding: "16px 8px" }}>
+-          <div className="sidebar-nav__items">
+-            {tabs.map((tab) => (
+-              <button
+-                key={tab.id}
+-                type="button"
+-                className={`nav-item ${activeTab === tab.id ? "is-active" : ""}`}
+-                onClick={() => setActiveTab(tab.id)}
+-                style={{ padding: "10px 16px", borderRadius: 8, textAlign: "left" }}
+-              >
+-                <span className="nav-item__left">
+-                  <span>{tab.icon}</span>
+-                  <span style={{ marginLeft: 8 }}>{tab.label}</span>
+-                </span>
+-              </button>
+-            ))}
++    <div className="profile-settings">
++      <aside className="profile-settings__nav panel">
++        <div className="profile-settings__summary">
++          <Avatar initials={getInitials(userName)} gradient={["#2563EB", "#7C3AED"]} size={42} />
++          <div>
++            <div className="row-title">{userName}</div>
++            <div className="row-subtitle">{roleLabel}</div>
+           </div>
+         </div>
+-      </div>
+-
+-      <div className="panel">
+-        <div className="panel-header">
+-          <h2 className="panel-title">{tabs.find(t => t.id === activeTab)?.label || "Settings"}</h2>
+-          <p className="panel-subtitle">Manage your profile preferences and account settings.</p>
++        <div className="profile-settings__tabs">
++          {tabs.map((tab) => (
++            <button
++              key={tab.id}
++              type="button"
++              className={`profile-settings__tab ${selectedTab === tab.id ? "is-active" : ""}`}
++              onClick={() => setActiveTab(tab.id)}
++            >
++              <Icon name={tab.icon} size={15} />
++              <span>{tab.label}</span>
++            </button>
++          ))}
+         </div>
+-        
+-        <div className="panel-body">
+-          {activeTab === "general" && (
+-            <div className="dashboard-stack">
+-              <div style={{ display: "flex", gap: 24, alignItems: "center", marginBottom: 24 }}>
+-                <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "#059669"]} size={80} />
+-                <div>
+-                  <Button tone="ghost" style={{ marginBottom: 8 }}>Upload new photo</Button>
+-                  <div className="muted" style={{ fontSize: 12 }}>JPG, GIF or PNG. Max size of 800K</div>
++      </aside>
++
++      <Panel
++        className="profile-settings__panel"
++        title={tabs.find((tab) => tab.id === selectedTab)?.label || "Profile"}
++        subtitle="Manage your profile preferences and account settings."
++      >
++        {selectedTab === "general" && (
++          <div className="dashboard-stack">
++            <div className="profile-settings__hero">
++              <Avatar initials={getInitials(userName)} gradient={["#2563EB", "#059669"]} size={64} />
++              <div>
++                <div className="row-title">{userName}</div>
++                <div className="row-subtitle">{userEmail}</div>
++                <div className="profile-settings__actions">
++                  <Button tone="ghost" icon="pencil" size="small" onClick={() => showToast("Photo upload is not connected yet.", "info")}>Change photo</Button>
+                 </div>
+               </div>
+-              <div className="grid-2">
+-                <label className="field">
+-                  <span className="field__label">Full Name</span>
+-                  <input className="field__input" defaultValue={session?.user?.name || "Category Admin"} />
+-                </label>
+-                <label className="field">
+-                  <span className="field__label">Email Address</span>
+-                  <input className="field__input" defaultValue={session?.user?.email || "admin@telite.io"} disabled />
+-                </label>
+-              </div>
++            </div>
++            <div className="grid-2">
+               <label className="field">
+-                <span className="field__label">Role</span>
+-                <input className="field__input" defaultValue="Category Admin" disabled />
++                <span className="field__label">Full Name</span>
++                <input className="field__input" defaultValue={userName} />
++              </label>
++              <label className="field">
++                <span className="field__label">Email Address</span>
++                <input className="field__input" defaultValue={userEmail} disabled />
+               </label>
+-              <div className="panel-footer" style={{ marginTop: 24, padding: "16px 0 0", borderTop: "1px solid var(--border)", textAlign: "right" }}>
+-                <Button tone="primary">Save Changes</Button>
+-              </div>
+             </div>
+-          )}
+-
+-          {activeTab === "notifications" && (
+-            <div className="dashboard-stack">
+-              {[
+-                { title: "Enrollment Requests", desc: "Get notified when a user requests enrollment to a course." },
+-                { title: "Verification Alerts", desc: "Get notified about new account verification requests." },
+-                { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
+-                { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." }
+-              ].map((item, idx) => (
+-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--border)" }}>
+-                  <div>
+-                    <div className="row-title">{item.title}</div>
+-                    <div className="row-subtitle">{item.desc}</div>
+-                  </div>
+-                  <label className="chip"><input type="checkbox" defaultChecked /> Enabled</label>
+-                </div>
+-              ))}
++            <label className="field">
++              <span className="field__label">Role</span>
++              <input className="field__input" defaultValue={roleLabel} disabled />
++            </label>
++            <div className="profile-settings__footer">
++              <Button tone="primary" onClick={() => showToast("Profile preferences saved locally.", "success")}>Save changes</Button>
+             </div>
+-          )}
+-
+-          {activeTab === "personalization" && (
+-            <div className="dashboard-stack">
+-              <div className="row-title">Default Tab on Login</div>
+-              <div className="toolbar">
+-                <label className="chip"><input type="radio" name="default_tab" defaultChecked /> Overview</label>
+-                <label className="chip"><input type="radio" name="default_tab" /> Tasks</label>
+-                <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
+-              </div>
++          </div>
++        )}
+ 
+-              <div className="row-title" style={{ marginTop: 24 }}>Dashboard Density</div>
+-              <div className="toolbar">
+-                <label className="chip"><input type="radio" name="density" /> Compact</label>
+-                <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
++        {selectedTab === "notifications" && (
++          <div className="dashboard-stack">
++            {[
++              { title: "Enrollment Requests", desc: "Get notified when a user requests enrollment to a course." },
++              { title: "Verification Alerts", desc: "Get notified about new account verification requests." },
++              { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
++              { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." },
++            ].map((item) => (
++              <div className="profile-settings__option" key={item.title}>
++                <div>
++                  <div className="row-title">{item.title}</div>
++                  <div className="row-subtitle">{item.desc}</div>
++                </div>
++                <label className="chip"><input type="checkbox" defaultChecked /> Enabled</label>
+               </div>
++            ))}
++          </div>
++        )}
++
++        {selectedTab === "personalization" && (
++          <div className="dashboard-stack">
++            <div className="row-title">Default Tab on Login</div>
++            <div className="toolbar">
++              <label className="chip"><input type="radio" name="default_tab" defaultChecked /> Overview</label>
++              <label className="chip"><input type="radio" name="default_tab" /> Tasks</label>
++              <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
++            </div>
++
++            <div className="row-title">Dashboard Density</div>
++            <div className="toolbar">
++              <label className="chip"><input type="radio" name="density" /> Compact</label>
++              <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
+             </div>
+-          )}
++          </div>
++        )}
+ 
+-          {activeTab === "security" && (
+-            <div className="dashboard-stack">
++        {selectedTab === "security" && (
++          <div className="dashboard-stack">
++            <label className="field">
++              <span className="field__label">Current Password</span>
++              <input type="password" className="field__input" placeholder="Current password" />
++            </label>
++            <div className="grid-2">
+               <label className="field">
+-                <span className="field__label">Current Password</span>
+-                <input type="password" className="field__input" placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó" />
++                <span className="field__label">New Password</span>
++                <input type="password" className="field__input" />
+               </label>
+-              <div className="grid-2">
+-                <label className="field">
+-                  <span className="field__label">New Password</span>
+-                  <input type="password" className="field__input" />
+-                </label>
+-                <label className="field">
+-                  <span className="field__label">Confirm New Password</span>
+-                  <input type="password" className="field__input" />
+-                </label>
+-              </div>
+-              <div style={{ marginTop: 16 }}>
+-                <Button tone="primary">Update Password</Button>
+-              </div>
++              <label className="field">
++                <span className="field__label">Confirm New Password</span>
++                <input type="password" className="field__input" />
++              </label>
++            </div>
++            <div className="profile-settings__footer">
++              <Button tone="primary" onClick={() => showToast("Password update is not connected yet.", "info")}>Update password</Button>
+             </div>
+-          )}
+-
+-          {activeTab === "account" && (
+-            <div className="dashboard-stack">
+-              <div className="soft-card" style={{ background: "var(--red-light)", border: "1px solid var(--red-mid)" }}>
+-                <div className="row-title" style={{ color: "var(--red)" }}>Danger Zone</div>
+-                <div className="row-subtitle" style={{ marginBottom: 16 }}>Permanently delete your account and all associated data.</div>
+-                <Button tone="danger">Delete Account</Button>
++          </div>
++        )}
++
++        {selectedTab === "account" && (
++          <div className="dashboard-stack">
++            <div className="profile-settings__danger">
++              <div>
++                <div className="row-title">Danger Zone</div>
++                <div className="row-subtitle">Account deletion requires platform approval.</div>
+               </div>
++              <Button tone="danger" onClick={() => showToast("Account deletion requires approval before it can be enabled.", "warning")}>Request deletion</Button>
+             </div>
+-          )}
+-        </div>
+-      </div>
++          </div>
++        )}
++      </Panel>
+     </div>
+   );
+ }
+diff --git a/telite-frontend/src/layouts/DashboardLayout.jsx b/telite-frontend/src/layouts/DashboardLayout.jsx
+index 5e3a543..a1a346e 100644
+--- a/telite-frontend/src/layouts/DashboardLayout.jsx
++++ b/telite-frontend/src/layouts/DashboardLayout.jsx
+@@ -123,70 +123,50 @@ export function SectionTitle({ label, actions }) {
+ export function ProfileDropdown({ profile, onLogout, onNavigate }) {
+   const [open, setOpen] = useState(false);
+ 
+-  // Added a small inline click-away listener logic or simple toggle
+   return (
+-    <div className="profile-dropdown-wrapper" style={{ position: "relative" }}>
++    <div className="profile-dropdown-wrapper">
+       <button 
+         type="button"
+         className="profile-btn" 
+         onClick={() => setOpen(!open)}
+-        style={{
+-          background: "transparent",
+-          border: "1px solid var(--border)",
+-          borderRadius: "99px",
+-          padding: "2px",
+-          cursor: "pointer",
+-          display: "flex",
+-          alignItems: "center"
+-        }}
++        aria-label="Open profile menu"
+       >
+-        <div 
+-          style={{
+-            width: 32, 
+-            height: 32, 
+-            borderRadius: "50%", 
+-            background: profile?.gradient ? `linear-gradient(135deg, ${profile.gradient.join(", ")})` : "var(--border)",
+-            display: "flex",
+-            alignItems: "center",
+-            justifyContent: "center",
+-            color: "#fff",
+-            fontWeight: 600,
+-            fontSize: "12px"
+-          }}
++        <div
++          className="profile-btn__avatar"
++          style={{ background: profile?.gradient ? `linear-gradient(135deg, ${profile.gradient.join(", ")})` : "var(--border)" }}
+         >
+           {profile?.initials || "U"}
+         </div>
+       </button>
+       {open ? (
+-        <div 
+-          className="menu-popover" 
+-          style={{ 
+-            position: "absolute", 
+-            top: "44px", 
+-            right: "0", 
+-            minWidth: "220px", 
+-            background: "var(--surface)", 
+-            border: "1px solid var(--border)", 
+-            borderRadius: "12px", 
+-            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+-            zIndex: 50,
+-            display: "flex",
+-            flexDirection: "column",
+-            overflow: "hidden"
+-          }}
+-        >
+-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+-            <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>{profile?.name || "Admin User"}</div>
+-            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{profile?.roleLabel || "System Admin"}</div>
++        <div className="profile-menu">
++          <div className="profile-menu__header">
++            <div className="row-title">{profile?.name || "Admin User"}</div>
++            <div className="row-subtitle">{profile?.roleLabel || "System Admin"}</div>
+           </div>
+-          <div style={{ padding: "8px" }}>
+-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('profile'); }}>≡ƒæñ Profile</button>
+-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('settings'); }}>ΓÜÖ∩╕Å Settings</button>
+-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('notifications'); }}>≡ƒöö Notifications</button>
+-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('help'); }}>Γ¥ô Help & Support</button>
++          <div className="profile-menu__items">
++            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('profile'); }}>
++              <Icon name="profile" size={15} />
++              <span>Profile</span>
++            </button>
++            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('settings'); }}>
++              <Icon name="settings" size={15} />
++              <span>Settings</span>
++            </button>
++            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('notifications'); }}>
++              <Icon name="bell" size={15} />
++              <span>Notifications</span>
++            </button>
++            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('help'); }}>
++              <Icon name="circle" size={15} />
++              <span>Help & Support</span>
++            </button>
+           </div>
+-          <div style={{ padding: "8px", borderTop: "1px solid var(--border)" }}>
+-            <button type="button" className="dropdown-item" style={{ color: "var(--danger)" }} onClick={onLogout}>≡ƒÜ¬ Log out</button>
++          <div className="profile-menu__items profile-menu__items--footer">
++            <button type="button" className="dropdown-item dropdown-item--danger" onClick={onLogout}>
++              <Icon name="logout" size={15} />
++              <span>Log out</span>
++            </button>
+           </div>
+         </div>
+       ) : null}
+diff --git a/telite-frontend/src/pages/learner/LearnerPage.jsx b/telite-frontend/src/pages/learner/LearnerPage.jsx
+index a11649b..a471641 100644
+--- a/telite-frontend/src/pages/learner/LearnerPage.jsx
++++ b/telite-frontend/src/pages/learner/LearnerPage.jsx
+@@ -133,6 +133,13 @@ export default function LearnerPage({ session, onLogout }) {
+   const [taskFilter, setTaskFilter] = useState("all");
+   const [showNotifications, setShowNotifications] = useState(false);
+   const [animateProgress, setAnimateProgress] = useState(false);
++  const [editingProfile, setEditingProfile] = useState(false);
++  const [learnerProfileForm, setLearnerProfileForm] = useState({
++    full_name: "",
++    email: "",
++    category_scope: "",
++    enrollment_type: "",
++  });
+ 
+   useEffect(() => {
+     load();
+@@ -147,6 +154,17 @@ export default function LearnerPage({ session, onLogout }) {
+     return undefined;
+   }, [loading, data]);
+ 
++  useEffect(() => {
++    if (data?.profile) {
++      setLearnerProfileForm({
++        full_name: data.profile.full_name || "",
++        email: data.profile.email || "",
++        category_scope: data.profile.category_scope || "",
++        enrollment_type: data.profile.enrollment_type || "",
++      });
++    }
++  }, [data?.profile]);
++
+   const currentPath = location.pathname.replace(/\/$/, "");
+   const pathParts = currentPath.split("/");
+   const currentTab = pathParts[pathParts.length - 1];
+@@ -208,6 +226,12 @@ export default function LearnerPage({ session, onLogout }) {
+     return <ErrorState body={error || "Your learner dashboard did not return any data."} action={<Button tone="primary" onClick={load}>Retry</Button>} />;
+   }
+ 
++  function handleSaveLearnerProfile(event) {
++    event.preventDefault();
++    setEditingProfile(false);
++    showToast("Profile details saved locally.", "success");
++  }
++
+   const courses = Array.isArray(data.courses) ? data.courses : [];
+   const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+   const leaderboard = Array.isArray(data.recommendation?.leaderboard) ? data.recommendation.leaderboard : [];
+@@ -575,25 +599,75 @@ export default function LearnerPage({ session, onLogout }) {
+         {/* PROFILE PAGE */}
+         {activeNav === "section-profile" && (
+           <section id="section-profile">
+-            <Panel title="Profile Information" subtitle="Your learner details">
+-              <div className="grid-2">
+-                <div className="soft-card">
+-                  <div className="row-subtitle">Full Name</div>
+-                  <div className="row-title">{data.profile.full_name}</div>
+-                </div>
+-                <div className="soft-card">
+-                  <div className="row-subtitle">Email Address</div>
+-                  <div className="row-title">{data.profile.email}</div>
+-                </div>
+-                <div className="soft-card">
+-                  <div className="row-subtitle">Cohort Category</div>
+-                  <div className="row-title">{data.profile.category_scope}</div>
++            <Panel
++              title="Profile Information"
++              subtitle="Manage the details shown in your learner workspace"
++              action={
++                !editingProfile ? (
++                  <Button tone="ghost" icon="pencil" onClick={() => setEditingProfile(true)}>Edit profile</Button>
++                ) : null
++              }
++            >
++              <form className="profile-form" onSubmit={handleSaveLearnerProfile}>
++                <div className="profile-settings__hero">
++                  <Avatar initials={data.profile.avatar_initials || getInitials(learnerProfileForm.full_name)} gradient={data.profile.avatar_gradient || ["#0ea5e9", "#6366f1"]} size={64} />
++                  <div>
++                    <div className="row-title">{learnerProfileForm.full_name || data.profile.full_name}</div>
++                    <div className="row-subtitle">{learnerProfileForm.email || data.profile.email}</div>
++                    {editingProfile ? (
++                      <div className="profile-settings__actions">
++                        <Button tone="ghost" icon="pencil" size="small" onClick={() => showToast("Photo upload is not connected yet.", "info")}>Change photo</Button>
++                      </div>
++                    ) : null}
++                  </div>
+                 </div>
+-                <div className="soft-card">
+-                  <div className="row-subtitle">Enrollment Type</div>
+-                  <div className="row-title">{data.profile.enrollment_type}</div>
++
++                <div className="grid-2">
++                  <label className="field">
++                    <span className="field__label">Full Name</span>
++                    <input
++                      className="field__input"
++                      value={learnerProfileForm.full_name}
++                      disabled={!editingProfile}
++                      onChange={(event) => setLearnerProfileForm((current) => ({ ...current, full_name: event.target.value }))}
++                    />
++                  </label>
++                  <label className="field">
++                    <span className="field__label">Email Address</span>
++                    <input
++                      className="field__input"
++                      value={learnerProfileForm.email}
++                      disabled={!editingProfile}
++                      onChange={(event) => setLearnerProfileForm((current) => ({ ...current, email: event.target.value }))}
++                    />
++                  </label>
++                  <label className="field">
++                    <span className="field__label">Cohort Category</span>
++                    <input className="field__input" value={learnerProfileForm.category_scope} disabled />
++                  </label>
++                  <label className="field">
++                    <span className="field__label">Enrollment Type</span>
++                    <input className="field__input" value={learnerProfileForm.enrollment_type} disabled />
++                  </label>
+                 </div>
+-              </div>
++
++                {editingProfile ? (
++                  <div className="profile-settings__footer">
++                    <Button tone="ghost" onClick={() => {
++                      setLearnerProfileForm({
++                        full_name: data.profile.full_name || "",
++                        email: data.profile.email || "",
++                        category_scope: data.profile.category_scope || "",
++                        enrollment_type: data.profile.enrollment_type || "",
++                      });
++                      setEditingProfile(false);
++                    }}>
++                      Cancel
++                    </Button>
++                    <Button tone="primary" type="submit">Save changes</Button>
++                  </div>
++                ) : null}
++              </form>
+             </Panel>
+           </section>
+         )}
+diff --git a/telite-frontend/src/styles/global.css b/telite-frontend/src/styles/global.css
+index de1a76f..6d83f7f 100644
+--- a/telite-frontend/src/styles/global.css
++++ b/telite-frontend/src/styles/global.css
+@@ -440,8 +440,14 @@ a {
+   box-shadow: var(--shadow-sm);
+ }
+ 
++.panel {
++  overflow: hidden;
++}
++
+ .panel__header,
+-.panel__footer {
++.panel__footer,
++.panel-header,
++.panel-footer {
+   padding: 14px 18px;
+   display: flex;
+   align-items: center;
+@@ -449,28 +455,33 @@ a {
+   gap: 12px;
+ }
+ 
+-.panel__header {
++.panel__header,
++.panel-header {
+   border-bottom: 1px solid var(--border);
+ }
+ 
+-.panel__footer {
++.panel__footer,
++.panel-footer {
+   border-top: 1px solid var(--border);
+ }
+ 
+ .panel__header h3,
+-.panel__header h4 {
++.panel__header h4,
++.panel-title {
+   margin: 0;
+   font-size: 13px;
+   font-weight: 600;
+ }
+ 
+-.panel__header p {
++.panel__header p,
++.panel-subtitle {
+   margin: 2px 0 0;
+   color: var(--text-muted);
+   font-size: 11px;
+ }
+ 
+-.panel__body {
++.panel__body,
++.panel-body {
+   padding: 16px 18px;
+ }
+ 
+@@ -609,6 +620,83 @@ a {
+   background: var(--surface-2);
+ }
+ 
++.profile-dropdown-wrapper {
++  position: relative;
++}
++
++.profile-btn {
++  display: flex;
++  align-items: center;
++  padding: 2px;
++  border: 1px solid var(--border);
++  border-radius: 999px;
++  background: transparent;
++  cursor: pointer;
++}
++
++.profile-btn__avatar {
++  width: 32px;
++  height: 32px;
++  border-radius: 50%;
++  display: grid;
++  place-items: center;
++  color: #fff;
++  font-size: 12px;
++  font-weight: 700;
++}
++
++.profile-menu {
++  position: absolute;
++  top: 44px;
++  right: 0;
++  z-index: 50;
++  width: 224px;
++  overflow: hidden;
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  background: var(--surface);
++  box-shadow: var(--shadow-md);
++}
++
++.profile-menu__header {
++  padding: 12px 14px;
++  border-bottom: 1px solid var(--border);
++}
++
++.profile-menu__items {
++  padding: 6px;
++}
++
++.profile-menu__items--footer {
++  border-top: 1px solid var(--border);
++}
++
++.dropdown-item {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  width: 100%;
++  min-height: 34px;
++  padding: 8px 10px;
++  border: 0;
++  border-radius: 6px;
++  background: transparent;
++  color: var(--text-secondary);
++  cursor: pointer;
++  font-size: 12.5px;
++  font-weight: 500;
++  text-align: left;
++}
++
++.dropdown-item:hover {
++  background: var(--surface-2);
++  color: var(--text-primary);
++}
++
++.dropdown-item--danger {
++  color: var(--red);
++}
++
+ .badge {
+   display: inline-flex;
+   align-items: center;
+@@ -686,12 +774,14 @@ a {
+ .field-grid {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
++  gap: 14px 12px;
+ }
+ 
+ .field {
+   display: flex;
+   flex-direction: column;
+   gap: 6px;
++  min-width: 0;
+ }
+ 
+ .field__label {
+@@ -704,6 +794,7 @@ a {
+ .field__select,
+ .field__textarea {
+   width: 100%;
++  min-width: 0;
+   border: 1px solid var(--border);
+   background: var(--surface);
+   color: var(--text-primary);
+@@ -790,6 +881,7 @@ a {
+ table {
+   width: 100%;
+   border-collapse: collapse;
++  min-width: 680px;
+ }
+ 
+ th {
+@@ -799,13 +891,28 @@ th {
+   letter-spacing: 0.08em;
+   font-weight: 600;
+   text-align: left;
+-  padding: 0 0 10px;
++  padding: 0 16px 10px;
++  white-space: nowrap;
+ }
+ 
+ td {
+   border-top: 1px solid var(--border);
+-  padding: 12px 0;
+-  vertical-align: top;
++  padding: 12px 16px;
++  vertical-align: middle;
++}
++
++th:first-child,
++td:first-child {
++  padding-left: 18px;
++}
++
++th:last-child,
++td:last-child {
++  padding-right: 18px;
++}
++
++td > * {
++  min-width: 0;
+ }
+ 
+ tbody tr:hover {
+@@ -973,6 +1080,127 @@ code {
+   margin-top: 0;
+ }
+ 
++.profile-settings {
++  display: grid;
++  grid-template-columns: 240px minmax(0, 1fr);
++  gap: 14px;
++  align-items: start;
++}
++
++.profile-settings__nav {
++  overflow: hidden;
++}
++
++.profile-settings__summary {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 14px;
++  border-bottom: 1px solid var(--border);
++}
++
++.profile-settings__tabs {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++  padding: 8px;
++}
++
++.profile-settings__tab {
++  display: flex;
++  align-items: center;
++  gap: 9px;
++  min-height: 36px;
++  padding: 8px 10px;
++  border: 0;
++  border-radius: 6px;
++  background: transparent;
++  color: var(--text-secondary);
++  cursor: pointer;
++  font-size: 12.5px;
++  font-weight: 500;
++  text-align: left;
++}
++
++.profile-settings__tab:hover {
++  background: var(--surface-2);
++}
++
++.profile-settings__tab.is-active {
++  background: var(--theme-accent-light);
++  color: var(--theme-accent);
++  font-weight: 600;
++}
++
++.profile-settings__panel .panel__body {
++  min-height: 220px;
++}
++
++.profile-settings__hero {
++  display: flex;
++  align-items: center;
++  gap: 14px;
++  padding: 14px;
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  background: var(--surface-2);
++}
++
++.profile-settings__actions {
++  margin-top: 10px;
++  display: flex;
++  gap: 8px;
++  flex-wrap: wrap;
++}
++
++.toolbar {
++  align-items: center;
++}
++
++.profile-settings__option,
++.profile-settings__danger {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++  padding: 12px 0;
++  border-bottom: 1px solid var(--border);
++}
++
++.profile-settings__option:last-child {
++  border-bottom: 0;
++}
++
++.profile-settings__danger {
++  padding: 14px;
++  border: 1px solid var(--red-mid);
++  border-radius: 8px;
++  background: var(--red-light);
++}
++
++.profile-settings__danger .row-title {
++  color: var(--red);
++}
++
++.profile-settings__footer {
++  display: flex;
++  justify-content: flex-end;
++  gap: 8px;
++  padding-top: 14px;
++  border-top: 1px solid var(--border);
++}
++
++.profile-settings .btn,
++.profile-form .btn {
++  min-height: 34px;
++}
++
++.profile-form {
++  display: flex;
++  flex-direction: column;
++  gap: 16px;
++}
++
+ .bar-score {
+   width: 80px;
+ }
+@@ -995,8 +1223,9 @@ code {
+   background: var(--surface);
+   border-radius: 14px;
+   box-shadow: var(--shadow-md);
+-  padding: 24px;
++  padding: 0;
+   transform: scale(1);
++  overflow: hidden;
+ }
+ 
+ .modal-card__top {
+@@ -1004,6 +1233,7 @@ code {
+   justify-content: space-between;
+   gap: 12px;
+   align-items: flex-start;
++  padding: 24px 24px 0;
+ }
+ 
+ .modal-card__top h2 {
+@@ -1017,19 +1247,40 @@ code {
+ }
+ 
+ .modal-card__content {
+-  margin-top: 18px;
+-  overflow-y: visible;
++  margin-top: 0;
++  padding: 18px 24px 0;
++  overflow-y: auto;
+   flex: 1;
+   min-height: 0;
+ }
+ 
+ .modal-card__footer {
+-  margin-top: 18px;
++  margin-top: 0;
++  padding: 16px 24px 24px;
+   display: flex;
+   justify-content: flex-end;
+   gap: 10px;
+   flex-shrink: 0;
+   z-index: 10;
++  background: var(--surface);
++  border-top: 1px solid var(--border);
++}
++
++.modal-card .form-stack {
++  gap: 14px;
++}
++
++.modal-card .field-grid {
++  gap: 14px 12px;
++}
++
++.modal-card .radio-row,
++.modal-card .checkbox-grid {
++  gap: 8px;
++}
++
++.modal-card .radio-pill {
++  min-height: 34px;
+ }
+ 
+ .toast-stack {
+@@ -1915,6 +2166,10 @@ code {
+     grid-template-columns: 1fr;
+   }
+ 
++  .profile-settings {
++    grid-template-columns: 1fr;
++  }
++
+   .learner-card__badges,
+   .learner-card__actions {
+     grid-column: auto;
+@@ -1979,6 +2234,18 @@ code {
+     grid-template-columns: 1fr;
+   }
+ 
++  .profile-settings__option,
++  .profile-settings__danger,
++  .profile-settings__footer {
++    align-items: flex-start;
++    flex-direction: column;
++  }
++
++  .profile-settings__footer .btn,
++  .profile-form .btn {
++    width: 100%;
++  }
++
+   .tabbar {
+     overflow-x: auto;
+   }

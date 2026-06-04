@@ -1,0 +1,97 @@
+.product-carousel {
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.carousel-nav {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+}
+
+.carousel-nav button {
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border-interactive);
+    color: rgba(255, 255, 255, 0.72);
+    padding: 10px 20px;
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-copy);
+    cursor: pointer;
+    transition:
+        background var(--motion-medium) var(--motion-ease-standard),
+        border-color var(--motion-medium) var(--motion-ease-standard),
+        color var(--motion-medium) var(--motion-ease-standard),
+        box-shadow var(--motion-medium) var(--motion-ease-standard),
+        transform var(--motion-medium) var(--motion-ease-standard);
+}
+
+.carousel-nav button:hover {
+    background: var(--glass-bg-primary);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.carousel-nav button.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    box-shadow: var(--shadow-primary);
+}
+
+.carousel-nav button span {
+    display: block;
+    line-height: 1.2;
+}
+
+.carousel-stage {
+    position: relative;
+    z-index: 1;
+}
+
+.ambient-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140%;
+    height: 140%;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, var(--showcase-active-glow) 0%, transparent 70%);
+    transition: background var(--motion-cinematic) var(--motion-ease-cinematic);
+    opacity: 0.8;
+}
+
+.panel-transition-wrapper {
+    animation: panel-in var(--panel-duration, var(--motion-cinematic)) var(--panel-easing, var(--motion-ease-cinematic)) forwards;
+}
+
+@keyframes panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(var(--panel-translate-start, 10px)) scale(var(--panel-scale-start, 0.99));
+        filter: blur(var(--panel-blur-start, 10px));
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .carousel-nav {
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    .carousel-nav button {
+        padding: 8px 16px;
+        font-size: 12px;
+    }
+}

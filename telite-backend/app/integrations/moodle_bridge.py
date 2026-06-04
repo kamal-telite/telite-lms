@@ -14,6 +14,7 @@ import hashlib
 import logging
 import os
 import time
+from urllib.parse import urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -40,6 +41,25 @@ def _get_moodle_url() -> str:
 
 def _get_moodle_token() -> str:
     return os.getenv("MOODLE_TOKEN", "").strip()
+
+
+def _moodle_host_header() -> str | None:
+    """Return the public host header when Docker uses an internal service URL.
+
+    Moodle enforces its canonical wwwroot host and may redirect API requests if the
+    inbound Host header doesn't match. In Docker we often connect to `http://moodle`
+    internally while Moodle's public URL remains `http://localhost:8082`, so we keep
+    the internal TCP route but send the public Host header.
+    """
+    public_url = os.getenv("MOODLE_URL", "").strip()
+    if not public_url:
+        return None
+
+    public_host = urlparse(public_url).netloc
+    internal_host = urlparse(_get_moodle_url()).netloc
+    if public_host and internal_host and public_host != internal_host:
+        return public_host
+    return None
 
 
 def _rest_endpoint() -> str:
@@ -115,8 +135,18 @@ def _call(function: str, *, _retries: int = _MAX_RETRIES, **params) -> dict:
             time.sleep(wait)
 
         try:
-            logger.info("[MOODLE CALL] function=%s endpoint=%s", function, _rest_endpoint())
-            response = httpx.post(_rest_endpoint(), data=payload, timeout=15)
+            headers: dict[str, str] = {}
+            host_header = _moodle_host_header()
+            if host_header:
+                headers["Host"] = host_header
+
+            logger.info(
+                "[MOODLE CALL] function=%s endpoint=%s host_header=%s",
+                function,
+                _rest_endpoint(),
+                host_header or "-",
+            )
+            response = httpx.post(_rest_endpoint(), data=payload, headers=headers, timeout=15)
             response.raise_for_status()
             data = response.json()
 
@@ -679,3 +709,74 @@ def moodle_get_users() -> list[dict]:
 
     users = result["data"].get("users", [])
     return [user for user in users if str(user.get("username") or "").lower() != "guest"]
+
+
+# ── Drift comparison read APIs (Phase 5) ─────────────────────────────────────
+
+
+def moodle_get_enrolled_users(course_id: int) -> list[dict]:
+    """Get all users enrolled in a specific Moodle course.
+
+    Uses core_enrol_get_enrolled_users which returns user objects
+    with id, username, email, firstname, lastname, roles, etc.
+    """
+    if moodle_mode() == "mock":
+        return []
+
+    result = _call(
+        "core_enrol_get_enrolled_users",
+        **{"courseid": str(course_id)},
+    )
+    if result["error"] or not isinstance(result["data"], list):
+        logger.warning(
+            "[MOODLE GET ENROLLED USERS] course_id=%d error=%s",
+            course_id,
+            result.get("error"),
+        )
+        return []
+
+    return result["data"]
+
+
+def moodle_get_all_courses() -> list[dict]:
+    """Get all courses from Moodle.
+
+    Uses core_course_get_courses with no arguments to retrieve every course.
+    Returns list of course dicts with id, fullname, shortname, categoryid, etc.
+    """
+    if moodle_mode() == "mock":
+        return []
+
+    result = _call("core_course_get_courses")
+    if result["error"] or not isinstance(result["data"], list):
+        logger.warning(
+            "[MOODLE GET ALL COURSES] error=%s",
+            result.get("error"),
+        )
+        return []
+
+    # Filter out the default Moodle site course (id=1)
+    return [c for c in result["data"] if int(c.get("id", 0)) != 1]
+
+
+def moodle_get_user_by_id(moodle_user_id: int) -> dict | None:
+    """Check if a specific user exists in Moodle by their Moodle ID.
+
+    Uses core_user_get_users_by_field with field=id.
+    Returns user dict if found, None otherwise.
+    """
+    if moodle_mode() == "mock":
+        return {"id": moodle_user_id, "username": f"mock_user_{moodle_user_id}"}
+
+    result = _call(
+        "core_user_get_users_by_field",
+        **{
+            "field": "id",
+            "values[0]": str(moodle_user_id),
+        },
+    )
+    if result["error"] or not isinstance(result["data"], list):
+        return None
+
+    return result["data"][0] if result["data"] else None
+

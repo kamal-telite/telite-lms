@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { platformApi } from "../../services/platform";
-import { getDefaultRoute, buildSessionFromAuth } from "../../context/session";
+import { getDefaultRoute, buildSessionFromAuth, getSession } from "../../context/session";
 import { getErrorMessage } from "../../services/client";
 import { useToast } from "../../components/common/ui";
 
@@ -23,6 +23,8 @@ export default function AcceptInvitePage({ onAuthenticated }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const [activeSession] = useState(() => getSession());
 
   useEffect(() => {
     let cancelled = false;
@@ -116,19 +118,25 @@ export default function AcceptInvitePage({ onAuthenticated }) {
           </div>
 
           <div className="login-copy">
-            <p className="eyebrow">Accept invite</p>
-            <h1>Join your organization workspace.</h1>
+            <p className="eyebrow">Set your password</p>
+            <h1>Finish your admin account setup.</h1>
             <p className="login-copy__body">
-              Set your name and password to activate your admin account.
+              Confirm your details below and create a password to activate your admin account.
             </p>
           </div>
         </section>
 
         <section className="login-card">
           <div className="login-card__header">
-            <h2>Complete signup</h2>
-            <p>We’ll verify the invitation token and create your account.</p>
+            <h2>Create your password</h2>
+            <p>We’ll verify the secure invitation link and activate your admin account.</p>
           </div>
+
+          {activeSession ? (
+            <div className="form-alert" style={{ marginBottom: 16, backgroundColor: "#fffbeb", borderColor: "#fcd34d", color: "#92400e" }}>
+              <strong>Heads up:</strong> You are currently logged in as <strong>{activeSession.user?.email || "another user"}</strong>. Activating this invitation will log you into the new account.
+            </div>
+          ) : null}
 
           {loadingInvite ? <div className="spinner" /> : null}
           {!loadingInvite && inviteError ? (
@@ -182,7 +190,7 @@ export default function AcceptInvitePage({ onAuthenticated }) {
                 </label>
 
                 <button className="btn btn--primary btn--block" type="submit" disabled={submitting}>
-                  {submitting ? "Creating account..." : "Accept invitation"}
+                  {submitting ? "Activating account..." : "Set password and continue"}
                 </button>
               </form>
             </>
@@ -192,4 +200,3 @@ export default function AcceptInvitePage({ onAuthenticated }) {
     </div>
   );
 }
-

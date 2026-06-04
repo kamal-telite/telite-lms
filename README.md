@@ -124,6 +124,76 @@ Important variables:
 - `MOODLE_MODE`: `mock` for local development, live mode when real Moodle credentials are configured
 - `BACKEND_PORT`, `FRONTEND_PORT`, `MOODLE_PORT`, `POSTGRES_PORT`: local service ports
 
+## Database Architecture
+
+Telite LMS uses one PostgreSQL server with two logically isolated databases in Docker and PostgreSQL-backed environments:
+
+| Database | Owner | Used By |
+| --- | --- | --- |
+| `moodle` | `moodleuser` | Moodle PHP application |
+| `telite_backend` | `telite_backend_user` | FastAPI backend |
+
+Critical rules:
+
+- `MOODLE_DB_*` settings are for Moodle only.
+- `TELITE_POSTGRES_*` settings are for the backend only.
+- `POSTGRES_*` settings are only for PostgreSQL container bootstrap/admin access.
+- Local backend development can stay on SQLite by setting `TELITE_DB_BACKEND=sqlite`.
+
+The Docker bootstrap script under [docker/init/01-create-databases.sh](/abs/path/c:/Users/kamal/OneDrive/Desktop/telite-lms/docker/init/01-create-databases.sh) creates both logical databases on first initialization. If your Postgres volume already exists, create the second database and user manually or recreate the volume before relying on the script.
+
+### Fresh Volume Bootstrap
+
+Use this when you want the target production layout from scratch:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+That path uses:
+
+- `POSTGRES_*` for PostgreSQL bootstrap/admin access
+- `MOODLE_DB_*` for Moodle only
+- `TELITE_POSTGRES_*` for the FastAPI backend only
+
+### Existing Volume Repair
+
+If Docker is still running the old containers like `moodle_db_final` and `moodle_app_final`, the init script will not re-run because the Postgres cluster already exists.
+
+Inspect the live cluster:
+
+```powershell
+docker exec moodle_db_final psql -U moodleuser -d postgres -c "\l"
+docker exec moodle_db_final psql -U moodleuser -d postgres -c "\du"
+```
+
+Repair the existing cluster in place with the repo script:
+
+```powershell
+.\scripts\provision-existing-postgres.ps1
+```
+
+That script:
+
+- creates the missing `postgres` admin role if the old cluster does not have one
+- creates `telite_backend_user` if needed
+- creates `telite_backend` if needed
+- reapplies ownership and grants for `moodle`, `telite_backend`, and `postgres`
+
+The SQL it runs lives in [docker/sql/provision-existing-postgres.sql](/abs/path/c:/Users/kamal/OneDrive/Desktop/telite-lms/docker/sql/provision-existing-postgres.sql).
+
+### Backend Data Migration
+
+If your local FastAPI backend has real data in SQLite that you want to preserve, switch the backend to PostgreSQL config and then run:
+
+```powershell
+cd telite-backend
+python scripts/migrate_backend_to_postgres.py
+```
+
+That copies the SQLite records into `telite_backend`. If you do not need old local data, the backend will auto-create and seed its PostgreSQL schema on first startup.
+
 ## Docker Setup
 
 ```bash

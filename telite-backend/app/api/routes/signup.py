@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 import pandas as pd
 import io
 from pydantic import BaseModel, Field
+from app.core.password_utils import get_default_learner_password
 
 from app.api.auth import TokenData, ensure_org_access, require_admin, require_super_admin, resolve_org_scope
 from app.services.email import send_signup_approval_email, send_signup_rejection_email
@@ -20,7 +21,7 @@ from app.services.store import (
     list_pending_verifications,
     reject_pending_verification,
     slugify,
-    update_user_moodle_id,
+    write_platform_audit,
 )
 
 logger = logging.getLogger("telite.signup")
@@ -164,29 +165,30 @@ def get_verification_detail(
 
 
 def _process_approval(verification_id: str, actor: dict[str, Any]) -> dict[str, Any]:
-    """Helper to approve a signup locally and sync to Moodle."""
+    """Helper to approve a signup locally and enqueue Moodle sync."""
     result = approve_pending_verification(verification_id, actor)
-    
-    # Sync to Moodle
+
     try:
-        from app.integrations.moodle_bridge import moodle_create_user
-        m_res = moodle_create_user(
-            username=result["username"],
-            password="Learner@1234",
-            firstname=result["full_name"].split()[0],
-            lastname=result["full_name"].split()[-1] if len(result["full_name"].split()) > 1 else "",
-            email=result["email"],
-            custom_fields={
+        from app.integrations.moodle_events import publish_moodle_event
+
+        result["moodle_sync"] = publish_moodle_event(
+            "user.created",
+            org_id=result.get("organization_id") or actor.get("org_id") or actor.get("organization_id") or 1,
+            payload={
+                "user_id": result["user_id"],
+                "username": result["username"],
+                "temporary_password": get_default_learner_password(),
+                "full_name": result["full_name"],
+                "email": result["email"],
+                "custom_fields": {
                 "program": result.get("program"),
                 "branch": result.get("branch"),
                 "id_number": result.get("id_number"),
-            }
+                },
+            },
         )
-        if m_res.get("user_id"):
-            update_user_moodle_id(result["user_id"], m_res["user_id"])
-            result["moodle_id"] = m_res["user_id"]
     except Exception as m_exc:
-        logger.error("Failed to sync approved user to Moodle: %s", m_exc)
+        logger.error("Failed to enqueue approved user Moodle sync: %s", m_exc)
 
     # Send approval email
     try:
@@ -350,6 +352,25 @@ async def bulk_upload_verifications(
                     pass
             except Exception as e:
                 errors.append(f"Failed to reject {pv['email']}: {str(e)}")
+
+    write_platform_audit(
+        action="signup.bulk_review",
+        actor_id=actor["id"],
+        actor_name=actor["full_name"],
+        org_id=scoped_org_id,
+        target_type="pending_verification_batch",
+        target_id=file.filename or "bulk-upload",
+        message=f"{actor['full_name']} processed signup bulk review file {file.filename or 'bulk-upload'}",
+        result="success" if not errors else "partial",
+        metadata={
+            "filename": file.filename,
+            "approved": approved_count,
+            "rejected": rejected_count,
+            "skipped": skipped_count,
+            "error_count": len(errors),
+            "reviewed_candidates": len(pending_by_email),
+        },
+    )
 
     return {
         "status": "success",

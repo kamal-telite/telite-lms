@@ -1,0 +1,62 @@
+:root {
+  /* Brand */
+  --primary:        #4648d4;
+  --primary-dark:   #2f2ebe;
+  --primary-light:  #6063ee;
+  --amber:          #f98012;
+  --green:          #10b981;
+  --error:          #ba1a1a;
+
+  /* Typography */
+  --font-display: 'Clash Display', 'Inter', sans-serif;
+  --font-body:    'Cabinet Grotesk', 'Inter', sans-serif;
+
+  /* Layout */
+  --container-max:  1200px;
+  --nav-height:     68px;
+  --section-py:     clamp(80px, 8vw, 120px);
+  --section-px:     clamp(24px, 4vw, 48px);
+
+  /* Motion */
+  --ease-expo:   cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --dur-fast:    180ms;
+  --dur-med:     300ms;
+  --dur-slow:    600ms;
+
+  /* Dark theme defaults (this site is dark-first) */
+  --surface-0:     #07080F;
+  --surface-1:     #0D1326;
+  --surface-2:     #121933;
+  --surface-3:     #1C2040;
+  --surface-card:  rgba(255,255,255,0.06);
+  --sidebar:       #1e1b4b;
+
+  --text:          rgba(255,255,255,0.96);
+  --text-secondary:rgba(255,255,255,0.72);
+  --text-muted:    rgba(255,255,255,0.48);
+
+  --border:        rgba(255,255,255,0.08);
+  --border-hover:  rgba(70,72,212,0.35);
+
+  --shadow-card:   0 4px 20px rgba(0,0,0,0.25);
+  --shadow-hover:  0 12px 40px rgba(70,72,212,0.2);
+}
+
+[data-theme="light"] {
+  --surface-0:     #f8f9ff;
+  --surface-1:     #ffffff;
+  --surface-2:     #eef0ff;
+  --surface-3:     #e4e7ff;
+  --surface-card:  rgba(255,255,255,0.8);
+
+  --text:          #0b1c30;
+  --text-secondary:#374151;
+  --text-muted:    #6b7280;
+
+  --border:        rgba(70,72,212,0.1);
+  --border-hover:  rgba(70,72,212,0.3);
+
+  --shadow-card:   0 4px 20px rgba(70,72,212,0.07);
+  --shadow-hover:  0 12px 40px rgba(70,72,212,0.13);
+}
