@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getSession } from '../context/session';
 import { 
   fetchAdminDashboard, 
   fetchVerifications, 
@@ -88,12 +89,20 @@ export const useSuperAdminStore = create((set) => ({
         fetchVerifications({ status: "pending" }),
         fetchOrganizations(),
       ]);
+      const session = getSession();
+      const user = session?.user;
+
+      let isolatedOrgs = orgPayload || [];
+      if (user && !user.is_platform_admin && user.org_id) {
+        isolatedOrgs = isolatedOrgs.filter(org => org.id === user.org_id);
+      }
+
       set({
         dashboard: dashboardPayload,
         users: userPayload.users || [],
         settings: settingsPayload,
         verifications: verifPayload.verifications || [],
-        organizations: orgPayload || [],
+        organizations: isolatedOrgs,
         loading: false
       });
     } catch (err) {

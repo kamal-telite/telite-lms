@@ -169,23 +169,18 @@ def _process_approval(verification_id: str, actor: dict[str, Any]) -> dict[str, 
     result = approve_pending_verification(verification_id, actor)
 
     try:
-        from app.integrations.moodle_events import publish_moodle_event
+        from app.integrations.moodle_events import publish_user_created
 
-        result["moodle_sync"] = publish_moodle_event(
-            "user.created",
+        result["moodle_sync"] = publish_user_created(
+            user_id=result["user_id"],
+            username=result["username"],
+            email=result["email"],
+            full_name=result["full_name"],
             org_id=result.get("organization_id") or actor.get("org_id") or actor.get("organization_id") or 1,
-            payload={
-                "user_id": result["user_id"],
-                "username": result["username"],
-                "temporary_password": get_default_learner_password(),
-                "full_name": result["full_name"],
-                "email": result["email"],
-                "custom_fields": {
-                "program": result.get("program"),
-                "branch": result.get("branch"),
-                "id_number": result.get("id_number"),
-                },
-            },
+            password=get_default_learner_password(),
+            program=result.get("program"),
+            branch=result.get("branch"),
+            id_number=result.get("id_number"),
         )
     except Exception as m_exc:
         logger.error("Failed to enqueue approved user Moodle sync: %s", m_exc)
