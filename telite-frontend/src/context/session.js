@@ -156,14 +156,14 @@ export function getDefaultRoute(user) {
   if (user.is_platform_admin || user.role === "platform_admin") {
     return "/platform-admin";
   }
-  if (user.role === "super_admin") {
-    return "/super-admin";
-  }
   if (
-    user.role === "category_admin" ||
+    user.role === "super_admin" ||
     user.role === "college_super_admin" ||
     user.role === "company_super_admin"
   ) {
+    return "/super-admin";
+  }
+  if (user.role === "category_admin") {
     return `/categories/${user.category_scope || "ats"}/admin`;
   }
   return "/learner";
