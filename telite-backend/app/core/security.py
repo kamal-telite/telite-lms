@@ -68,6 +68,7 @@ def create_access_token(payload: dict[str, Any]) -> str:
         "iat": now,  # Issued at
         "exp": now + timedelta(hours=ACCESS_TOKEN_HOURS),  # Expiration
         "type": "access",
+        "jti": secrets.token_urlsafe(16),
     }
     
     return jwt.encode(token_payload, AUTH_SECRET, algorithm=JWT_ALGORITHM)
@@ -94,6 +95,7 @@ def create_refresh_token(payload: dict[str, Any]) -> str:
         "iat": now,
         "exp": now + timedelta(days=REFRESH_TOKEN_DAYS),
         "type": "refresh",
+        "jti": secrets.token_urlsafe(16),
     }
     
     return jwt.encode(token_payload, AUTH_SECRET, algorithm=JWT_ALGORITHM)

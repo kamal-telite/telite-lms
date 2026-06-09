@@ -1,5 +1,13 @@
 import { api } from "./client";
 
+function describeRequestError(err, fallback) {
+  const status = err?.response?.status;
+  const detail = err?.response?.data?.detail;
+  if (status && detail) return `${fallback} (${status}: ${detail})`;
+  if (status) return `${fallback} (${status})`;
+  return fallback;
+}
+
 export async function validateCourseForPublishing(courseId) {
   const errors = [];
   const warnings = [];
@@ -46,7 +54,14 @@ export async function validateCourseForPublishing(courseId) {
 
     for (const result of blockResults) {
       if (result.status === "rejected") {
-        errors.push({ type: "system", message: "Failed to load blocks for one or more modules." });
+        const mod = allModules[blockResults.indexOf(result)];
+        errors.push({
+          type: "system",
+          message: describeRequestError(
+            result.reason,
+            `Failed to load blocks for module "${mod?.title || mod?.id || "unknown"}".`
+          ),
+        });
         continue;
       }
       const { mod, blocks } = result.value;
@@ -72,7 +87,10 @@ export async function validateCourseForPublishing(courseId) {
     }
 
   } catch (err) {
-    errors.push({ type: "system", message: "Failed to load course structure for validation." });
+    errors.push({
+      type: "system",
+      message: describeRequestError(err, "Failed to load course structure for validation."),
+    });
   }
 
   return {
