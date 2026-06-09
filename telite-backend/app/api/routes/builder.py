@@ -8,8 +8,35 @@ from app.db.engine import db_session
 from app.repositories.course_repo import CourseRepository
 from app.repositories.builder_repo import BuilderRepository
 from app.models.course_module import CourseModule
+from app.models.media_asset import MediaAsset
+from app.services.r2_client import generate_presigned_download_url
 
 builder_router = APIRouter(prefix="/authoring", tags=["Builder Gateway"])
+
+
+def _download_url_for_asset(asset: MediaAsset) -> str:
+    if asset.object_key.startswith("/uploads/"):
+        return asset.object_key
+    return generate_presigned_download_url(asset.object_key)
+
+
+def _block_to_response(block, db: Session, org_id: int) -> dict:
+    block_dict = block.to_dict()
+    settings = block_dict.pop("metadata_json", {}) or {}
+    if block.media_asset_id:
+        settings.setdefault("asset_id", block.media_asset_id)
+        asset = db.query(MediaAsset).filter(
+            MediaAsset.id == block.media_asset_id,
+            MediaAsset.org_id == org_id,
+            MediaAsset.deleted_at.is_(None),
+        ).first()
+        if asset:
+            settings.setdefault("url", _download_url_for_asset(asset))
+            settings.setdefault("filename", asset.filename)
+            settings.setdefault("mime_type", asset.mime_type)
+            settings.setdefault("asset_version", asset.asset_version)
+    block_dict["settings"] = settings
+    return block_dict
 
 # -----------------------------------------------------------------------------
 # 1. Builder Structure Fetch
@@ -191,6 +218,7 @@ class BlockPayload(BaseModel):
     module_id: int
     block_type: str
     content: str
+    media_asset_id: Optional[int] = None
     settings: Dict[str, Any] = {}
     sort_order: int
     is_deleted: bool = False
@@ -209,9 +237,7 @@ def get_module_blocks(
     blocks = builder_repo.get_blocks(module_id, current_user.org_id)
     results = []
     for b in blocks:
-        block_dict = b.to_dict()
-        block_dict["settings"] = block_dict.pop("metadata_json", {})
-        results.append(block_dict)
+        results.append(_block_to_response(b, db, current_user.org_id))
     return {"blocks": results}
 
 @builder_router.put("/courses/{course_id}/blocks", dependencies=[Depends(require_admin)])
@@ -234,6 +260,7 @@ def save_module_blocks(
     results = []
     
     for bp in request.blocks:
+        media_asset_id = bp.media_asset_id or bp.settings.get("asset_id")
         if bp.is_deleted and bp.id:
             block = builder_repo.get_block_by_id(bp.id, current_user.org_id)
             if block:
@@ -246,14 +273,13 @@ def save_module_blocks(
                 # Basic optimistic concurrency could go here by checking a version number if it existed
                 block.block_type = bp.block_type
                 block.content = bp.content
+                block.media_asset_id = media_asset_id
                 block.metadata_json = bp.settings
                 block.sort_order = bp.sort_order
                 builder_repo.save_block(block)
                 builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_UPDATED", json.dumps({"block_id": block.id, "type": block.block_type}))
                 
-                block_dict = block.to_dict()
-                block_dict["settings"] = block_dict.pop("metadata_json", {})
-                results.append(block_dict)
+                results.append(_block_to_response(block, db, current_user.org_id))
         else:
             # Create new
             block = LessonBlock(
@@ -261,15 +287,14 @@ def save_module_blocks(
                 org_id=current_user.org_id,
                 block_type=bp.block_type,
                 content=bp.content,
+                media_asset_id=media_asset_id,
                 metadata_json=bp.settings,
                 sort_order=bp.sort_order
             )
             builder_repo.save_block(block)
             builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_CREATED", json.dumps({"block_id": block.id, "type": block.block_type}))
             
-            block_dict = block.to_dict()
-            block_dict["settings"] = block_dict.pop("metadata_json", {})
-            results.append(block_dict)
+            results.append(_block_to_response(block, db, current_user.org_id))
 
     db.commit()
     return {"success": True, "blocks": results}

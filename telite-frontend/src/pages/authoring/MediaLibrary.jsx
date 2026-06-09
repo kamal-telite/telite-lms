@@ -5,7 +5,7 @@ import { api, getErrorMessage } from "../../services/client";
 export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
   const { showToast } = useToast();
   const fileInputRef = useRef(null);
-  
+
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -59,44 +59,65 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
   const handleDelete = async (e, assetId) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure you want to delete this asset?")) return;
-    
+
     try {
       await api.delete(`/authoring/media/${assetId}`);
       showToast("Asset deleted.", "warning");
-      setAssets(assets.filter(a => a.id !== assetId));
+      setAssets(assets.filter((a) => a.id !== assetId));
     } catch (err) {
       showToast(getErrorMessage(err, "Failed to delete asset."), "error");
     }
   };
 
-  const filteredAssets = assets.filter(a => {
-    if (search && !a.filename.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterType && !a.mime_type.startsWith(filterType)) return false;
+  const filteredAssets = assets.filter((asset) => {
+    if (search && !asset.filename.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterType && !asset.mime_type.startsWith(filterType)) return false;
     return true;
   });
+
+  const formatSize = (bytes = 0) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+
+  const renderPreview = (asset) => {
+    if (asset.mime_type.startsWith("image/")) {
+      return (
+        <img
+          src={asset.download_url}
+          alt={asset.filename}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      );
+    }
+    if (asset.mime_type.startsWith("video/")) {
+      return <span style={{ color: "#475569", fontWeight: 700 }}>Video</span>;
+    }
+    if (asset.mime_type === "application/pdf") {
+      return <span style={{ color: "#475569", fontWeight: 700 }}>PDF</span>;
+    }
+    return <span style={{ color: "#475569", fontWeight: 700 }}>File</span>;
+  };
 
   return (
     <Modal open={open} onClose={onClose} title="Media Library" width="800px">
       <div style={{ display: "flex", gap: "16px", marginBottom: "20px" }}>
-        <input 
-          className="field__input" 
-          placeholder="Search media..." 
-          style={{ flex: 1 }} 
+        <input
+          className="field__input"
+          placeholder="Search media..."
+          style={{ flex: 1 }}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <Button 
-          tone="primary" 
-          icon="upload" 
-          disabled={uploading} 
+        <Button
+          tone="primary"
+          icon="upload"
+          disabled={uploading}
           onClick={() => fileInputRef.current?.click()}
         >
           {uploading ? "Uploading..." : "Upload Media"}
         </Button>
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          style={{ display: "none" }} 
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: "none" }}
           onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
         />
       </div>
@@ -111,39 +132,33 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
             No media found. Upload an asset to get started.
           </div>
         ) : (
-          <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-            {filteredAssets.map(asset => (
-              <div 
-                key={asset.id} 
-                style={{ 
-                  background: "#fff", 
-                  border: "1px solid #cbd5e1", 
-                  borderRadius: "8px", 
+          <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px" }}>
+            {filteredAssets.map((asset) => (
+              <div
+                key={asset.id}
+                style={{
+                  background: "#fff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
                   overflow: "hidden",
-                  cursor: "pointer",
-                  transition: "all 0.2s"
+                  transition: "all 0.2s",
                 }}
-                onClick={() => onSelect(asset)}
               >
                 <div style={{ height: "120px", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {asset.mime_type.startsWith("image/") ? (
-                    <img src={asset.download_url} alt={asset.filename} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : asset.mime_type.startsWith("video/") ? (
-                    <span style={{ fontSize: "32px" }}>🎥</span>
-                  ) : (
-                    <span style={{ fontSize: "32px" }}>📄</span>
-                  )}
+                  {renderPreview(asset)}
                 </div>
                 <div style={{ padding: "12px", fontSize: "13px" }}>
                   <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={asset.filename}>
                     {asset.filename}
                   </div>
                   <div style={{ color: "#64748b", marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>{(asset.size_bytes / 1024 / 1024).toFixed(2)} MB</span>
+                    <span>{formatSize(asset.size_bytes)}</span>
                     <Badge tone="neutral">v{asset.asset_version}</Badge>
                   </div>
-                  <div style={{ marginTop: "8px", display: "flex", justifyContent: "flex-end" }}>
-                    <IconButton icon="trash" size="small" onClick={(e) => handleDelete(e, asset.id)} />
+                  <div style={{ marginTop: "8px", display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                    <Button tone="primary" onClick={() => onSelect(asset)}>Select</Button>
+                    <Button tone="neutral" onClick={() => window.open(asset.download_url, "_blank", "noopener,noreferrer")}>Preview</Button>
+                    <IconButton icon="trash" size="small" label={`Delete ${asset.filename}`} onClick={(e) => handleDelete(e, asset.id)} />
                   </div>
                 </div>
               </div>

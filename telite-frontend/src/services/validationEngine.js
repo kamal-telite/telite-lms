@@ -38,12 +38,12 @@ export function validateBlocks(blocks) {
       case "image":
       case "video":
       case "pdf":
-        if (!block.settings?.url) {
+        if (!(block.media_asset_id || block.settings?.asset_id || block.settings?.url)) {
           errors.push({
             blockId: block.id || `temp-${index}`,
             message: `${block.block_type.toUpperCase()} block #${blockNum} is missing media.`,
           });
-        } else if (!block.settings?.asset_id) {
+        } else if (!(block.media_asset_id || block.settings?.asset_id)) {
           warnings.push({
             blockId: block.id || `temp-${index}`,
             message: `${block.block_type.toUpperCase()} block #${blockNum} has an external or broken asset reference without a valid Media Library ID.`,

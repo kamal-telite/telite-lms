@@ -92,10 +92,12 @@ function SortableBlock({ block, onChange, onDelete, onOpenMedia }) {
         {(block.block_type === "image" || block.block_type === "video" || block.block_type === "pdf") && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ background: "#f8fafc", padding: "32px", textAlign: "center", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
-              {block.settings?.url ? (
+              {block.media_asset_id || block.settings?.asset_id || block.settings?.url ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}>
                   <div style={{ color: "#059669", fontWeight: 500 }}>Media Attached</div>
-                  <div style={{ fontSize: "12px", color: "#64748b", wordBreak: "break-all" }}>{block.settings.url}</div>
+                  <div style={{ fontSize: "12px", color: "#64748b", wordBreak: "break-all" }}>
+                    {block.settings?.filename || block.settings?.url || `Asset #${block.media_asset_id || block.settings?.asset_id}`}
+                  </div>
                   <Button tone="neutral" size="small" onClick={() => onOpenMedia(block.id || block._tempId, block.block_type.split("/")[0])}>Replace Media</Button>
                 </div>
               ) : (
@@ -252,10 +254,13 @@ export function LessonBlockEditor({ courseId, moduleId }) {
   const handleMediaSelected = (asset) => {
     if (activeMediaBlockId) {
       updateBlock(activeMediaBlockId, {
+        media_asset_id: asset.id,
         settings: {
           url: asset.download_url,
           asset_id: asset.id,
-          asset_version: asset.asset_version
+          asset_version: asset.asset_version,
+          filename: asset.filename,
+          mime_type: asset.mime_type,
         }
       });
     }

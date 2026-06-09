@@ -74,9 +74,9 @@ export async function validateCourseForPublishing(courseId) {
           errors.push({ type: "block", message: `Heading block #${bNum} in module "${mod.title}" is missing a title.` });
         }
         if (["image", "video", "pdf"].includes(block.block_type)) {
-          if (!block.settings?.url) {
+          if (!(block.media_asset_id || block.settings?.asset_id || block.settings?.url)) {
             errors.push({ type: "block", message: `${block.block_type.toUpperCase()} block #${bNum} in module "${mod.title}" is missing media.` });
-          } else if (!block.settings?.asset_id) {
+          } else if (!(block.media_asset_id || block.settings?.asset_id)) {
             warnings.push({ type: "block", message: `${block.block_type.toUpperCase()} block #${bNum} in module "${mod.title}" has an external/broken reference.` });
           }
         }

@@ -33,6 +33,7 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved }) {
         .filter(b => !(b.is_deleted && !b.id))   // skip deleted new blocks
         .map(b => ({
           ...b,
+          media_asset_id: b.media_asset_id || b.settings?.asset_id || null,
           // Strip _tempId — backend doesn't know about it
           id: b.id || null,
         }));

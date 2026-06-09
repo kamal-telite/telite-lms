@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, IconButton, Badge, useToast } from "../../components/common/ui";
+import { Button, IconButton, Badge, Modal, useToast } from "../../components/common/ui";
 import { LessonBlockEditor } from "./LessonBlockEditor";
 import { PublishToolbar } from "./PublishToolbar";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
@@ -22,49 +22,74 @@ export function CourseBuilderLayout({
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [courseStatus, setCourseStatus] = useState("draft");
+  const [sectionModalOpen, setSectionModalOpen] = useState(false);
+  const [moduleModalSection, setModuleModalSection] = useState(null);
+  const [sectionTitle, setSectionTitle] = useState("");
+  const [moduleTitle, setModuleTitle] = useState("");
+  const [moduleDuration, setModuleDuration] = useState("30 mins");
+  const [isCreatingStructure, setIsCreatingStructure] = useState(false);
 
-  const handleAddSection = async () => {
+  const openSectionModal = () => {
     if (!course?.id) return;
-    const title = window.prompt("Section title", `Section ${sections.length + 1}`);
-    if (!title?.trim()) return;
+    setSectionTitle(`Section ${sections.length + 1}`);
+    setSectionModalOpen(true);
+  };
 
+  const openModuleModal = (section) => {
+    if (!course?.id || !section) return;
+    setModuleModalSection(section);
+    setModuleTitle("New module");
+    setModuleDuration("30 mins");
+  };
+
+  const handleCreateSection = async (event) => {
+    event.preventDefault();
+    if (!course?.id || !sectionTitle.trim()) return;
+
+    setIsCreatingStructure(true);
     try {
       const { data } = await api.post(`/authoring/courses/${course.id}/sections`, {
-        title: title.trim(),
+        title: sectionTitle.trim(),
         sort_order: sections.length,
       });
       setSections([...(sections || []), { ...data, modules: [] }]);
+      setSectionModalOpen(false);
       showToast("Section added.", "success");
     } catch (err) {
       showToast(getErrorMessage(err, "Failed to add section."), "error");
+    } finally {
+      setIsCreatingStructure(false);
     }
   };
 
-  const handleAddModule = async (section) => {
-    if (!course?.id || !section) return;
-    const title = window.prompt("Module title", "New module");
-    if (!title?.trim()) return;
+  const handleCreateModule = async (event) => {
+    event.preventDefault();
+    if (!course?.id || !moduleModalSection || !moduleTitle.trim()) return;
 
+    setIsCreatingStructure(true);
     try {
       const { data } = await api.post("/authoring/modules", {
         course_id: course.id,
-        section: section.sort_order ?? 0,
-        section_id: section.id || null,
-        title: title.trim(),
+        section: moduleModalSection.sort_order ?? 0,
+        section_id: moduleModalSection.id || null,
+        title: moduleTitle.trim(),
         module_type: "page",
       });
       const module = data.module;
       setSections((current) =>
         current.map((s) =>
-          s.id === section.id
+          s.id === moduleModalSection.id
             ? { ...s, modules: [...(s.modules || []), module] }
             : s
         )
       );
       setActiveModuleId(module.id);
+      setModuleModalSection(null);
       showToast("Module added.", "success");
     } catch (err) {
       showToast(getErrorMessage(err, "Failed to add module."), "error");
+    } finally {
+      setIsCreatingStructure(false);
     }
   };
   
@@ -160,11 +185,11 @@ export function CourseBuilderLayout({
               setSections={setSections} 
               activeModuleId={activeModuleId}
               onSelectModule={setActiveModuleId}
-              onAddModule={handleAddModule}
+              onAddModule={openModuleModal}
             />
           </div>
           <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0' }}>
-            <Button tone="neutral" style={{ width: '100%', justifyContent: 'center' }} icon="plus" onClick={handleAddSection}>
+            <Button tone="neutral" style={{ width: '100%', justifyContent: 'center' }} icon="plus" onClick={openSectionModal}>
               Add Section
             </Button>
           </div>
@@ -200,6 +225,68 @@ export function CourseBuilderLayout({
         courseId={course?.id} 
         courseName={course?.name} 
       />
+
+      <Modal
+        open={sectionModalOpen}
+        onClose={() => setSectionModalOpen(false)}
+        title="Create Section"
+        width={440}
+        footer={
+          <>
+            <Button tone="neutral" onClick={() => setSectionModalOpen(false)}>Cancel</Button>
+            <Button tone="primary" type="submit" form="create-section-form" disabled={!sectionTitle.trim() || isCreatingStructure}>
+              {isCreatingStructure ? "Creating..." : "Create Section"}
+            </Button>
+          </>
+        }
+      >
+        <form id="create-section-form" onSubmit={handleCreateSection}>
+          <label className="field">
+            <span className="field__label">Section Name *</span>
+            <input
+              className="field__input"
+              value={sectionTitle}
+              onChange={(event) => setSectionTitle(event.target.value)}
+              autoFocus
+            />
+          </label>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(moduleModalSection)}
+        onClose={() => setModuleModalSection(null)}
+        title="Create Module"
+        width={440}
+        footer={
+          <>
+            <Button tone="neutral" onClick={() => setModuleModalSection(null)}>Cancel</Button>
+            <Button tone="primary" type="submit" form="create-module-form" disabled={!moduleTitle.trim() || isCreatingStructure}>
+              {isCreatingStructure ? "Creating..." : "Create Module"}
+            </Button>
+          </>
+        }
+      >
+        <form id="create-module-form" onSubmit={handleCreateModule}>
+          <label className="field">
+            <span className="field__label">Module Name *</span>
+            <input
+              className="field__input"
+              value={moduleTitle}
+              onChange={(event) => setModuleTitle(event.target.value)}
+              autoFocus
+            />
+          </label>
+          <label className="field" style={{ marginTop: "16px" }}>
+            <span className="field__label">Duration</span>
+            <input
+              className="field__input"
+              value={moduleDuration}
+              onChange={(event) => setModuleDuration(event.target.value)}
+            />
+          </label>
+        </form>
+      </Modal>
     </div>
   );
 }
