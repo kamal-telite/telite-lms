@@ -12,7 +12,7 @@ export function NativePlayer({ cmid, onExit }) {
     async function initPlayer() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`/api/player/modules/${cmid}/launch`, {
+        const res = await fetch(`/api/v1/player/modules/${cmid}/launch`, {
           headers: {
             Authorization: `Bearer ${token}`
           }

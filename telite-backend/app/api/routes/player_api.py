@@ -22,7 +22,7 @@ class TrackingEvent(BaseModel):
     value: str
 
 class TrackingSyncRequest(BaseModel):
-    module_id: str
+    module_id: int
     protocol: str  # 'scorm_12', 'scorm_2004', 'xapi'
     events: list[TrackingEvent]
     status: str | None = None
@@ -70,7 +70,7 @@ def sync_tracking(
             progress.status = request.status
         if request.score is not None:
             progress.score = request.score
-        progress.time_spent_seconds += request.time_spent_seconds
+        progress.time_spent_seconds = (progress.time_spent_seconds or 0) + request.time_spent_seconds
 
     # Process individual cmi/xapi tracking events
     for evt in request.events:

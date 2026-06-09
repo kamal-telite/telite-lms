@@ -144,7 +144,7 @@ class OfflineSyncManager {
     const token = localStorage.getItem('token');
     if (!token) throw new Error('No auth token available');
 
-    const res = await fetch('/api/player/tracking', {
+    const res = await fetch('/api/v1/player/tracking', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

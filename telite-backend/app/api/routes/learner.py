@@ -311,6 +311,8 @@ def heartbeat(
     if not enrollment_repo.has_access(current_user.id, req.course_id, current_user.org_id):
         raise HTTPException(status_code=403, detail="Not enrolled or access denied")
 
+    now = datetime.utcnow()
+
     # Record event
     event = LearnerEvent(
         user_id=current_user.id,
@@ -320,19 +322,60 @@ def heartbeat(
         event_type="HEARTBEAT",
         schema_version="1.0",
         payload_json={"time_spent_seconds": req.time_spent_seconds},
-        created_at=datetime.utcnow(),
+        created_at=now,
         org_id=current_user.org_id
     )
     db.add(event)
-    
+
     # Update time spent in course progress
     progress_repo = ProgressRepository(db)
     cp = progress_repo.get_course_progress(current_user.id, req.course_id, current_user.org_id)
-    if cp:
-        cp.time_spent_seconds += req.time_spent_seconds
-        cp.last_viewed_at = datetime.utcnow()
-        db.add(cp)
-        
+    if not cp:
+        cp = CourseProgress(
+            user_id=current_user.id,
+            course_id=req.course_id,
+            org_id=current_user.org_id,
+            status="in_progress",
+            completion_percentage=0.0,
+            time_spent_seconds=0,
+            started_at=now,
+        )
+        db.add(LearnerEvent(
+            user_id=current_user.id,
+            course_id=req.course_id,
+            event_type="COURSE_STARTED",
+            schema_version="1.0",
+            payload_json={},
+            created_at=now,
+            org_id=current_user.org_id,
+        ))
+    elif cp.status == "not_started":
+        cp.status = "in_progress"
+        cp.started_at = cp.started_at or now
+
+    cp.time_spent_seconds = (cp.time_spent_seconds or 0) + req.time_spent_seconds
+    cp.last_viewed_at = now
+    progress_repo.upsert_course_progress(cp)
+
+    if req.module_id:
+        mp = progress_repo.get_module_progress(current_user.id, req.module_id, current_user.org_id)
+        if not mp:
+            mp = ModuleProgress(
+                user_id=current_user.id,
+                module_id=req.module_id,
+                org_id=current_user.org_id,
+                status="in_progress",
+                started_at=now,
+            )
+        elif mp.status == "not_started":
+            mp.status = "in_progress"
+            mp.started_at = mp.started_at or now
+        mp.time_spent_seconds = (mp.time_spent_seconds or 0) + req.time_spent_seconds
+        mp.last_viewed_at = now
+        if req.block_id:
+            mp.last_block_id = str(req.block_id)
+        progress_repo.upsert_module_progress(mp)
+
     db.commit()
     return {"status": "success"}
 
