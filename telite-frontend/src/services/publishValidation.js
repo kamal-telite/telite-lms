@@ -8,6 +8,10 @@ function describeRequestError(err, fallback) {
   return fallback;
 }
 
+function validationError(type, message, context = {}) {
+  return { type, message, ...context };
+}
+
 export async function validateCourseForPublishing(courseId) {
   const errors = [];
   const warnings = [];
@@ -18,7 +22,7 @@ export async function validateCourseForPublishing(courseId) {
     const sections = data.sections || [];
 
     if (sections.length === 0) {
-      errors.push({ type: "course", message: "Course has no sections." });
+      errors.push(validationError("course", "Course has no sections."));
       return { isValid: false, errors, warnings };
     }
 
@@ -32,14 +36,25 @@ export async function validateCourseForPublishing(courseId) {
       const section = sections[sIdx];
       const secNum = sIdx + 1;
       if (!section.title || section.title.trim() === "") {
-        errors.push({ type: "section", message: `Section #${secNum} is missing a title.` });
+        errors.push(validationError("section", `Section #${secNum} is missing a title.`, {
+          sectionId: section.id,
+          sectionTitle: section.title || `Section #${secNum}`,
+        }));
       }
       if (!section.modules || section.modules.length === 0) {
-        errors.push({ type: "section", message: `Section "${section.title || secNum}" has no modules.` });
+        errors.push(validationError("section", `Section "${section.title || secNum}" has no modules.`, {
+          sectionId: section.id,
+          sectionTitle: section.title || `Section #${secNum}`,
+        }));
       }
       (section.modules || []).forEach((mod, mIdx) => {
         if (!mod.title || mod.title.trim() === "") {
-          errors.push({ type: "module", message: `Module #${mIdx + 1} in Section "${section.title}" is missing a title.` });
+          errors.push(validationError("module", `Module #${mIdx + 1} in Section "${section.title}" is missing a title.`, {
+            sectionId: section.id,
+            sectionTitle: section.title,
+            moduleId: mod.id,
+            moduleTitle: mod.title || `Module #${mIdx + 1}`,
+          }));
         }
       });
     }
@@ -55,42 +70,72 @@ export async function validateCourseForPublishing(courseId) {
     for (const result of blockResults) {
       if (result.status === "rejected") {
         const mod = allModules[blockResults.indexOf(result)];
-        errors.push({
-          type: "system",
-          message: describeRequestError(
+        errors.push(validationError(
+          "system",
+          describeRequestError(
             result.reason,
             `Failed to load blocks for module "${mod?.title || mod?.id || "unknown"}".`
           ),
-        });
+          {
+            moduleId: mod?.id,
+            moduleTitle: mod?.title,
+            sectionTitle: mod?._sectionTitle,
+          }
+        ));
         continue;
       }
       const { mod, blocks } = result.value;
       if (blocks.length === 0) {
-        warnings.push({ type: "module", message: `Module "${mod.title || mod.id}" is empty.` });
+        warnings.push(validationError("module", `Module "${mod.title || mod.id}" is empty.`, {
+          moduleId: mod.id,
+          moduleTitle: mod.title,
+          sectionTitle: mod._sectionTitle,
+        }));
       }
       blocks.forEach((block, bIdx) => {
         const bNum = bIdx + 1;
         if (block.block_type === "heading" && (!block.content || block.content.trim() === "")) {
-          errors.push({ type: "block", message: `Heading block #${bNum} in module "${mod.title}" is missing a title.` });
+          errors.push(validationError("block", `Heading block #${bNum} in module "${mod.title}" is missing a title.`, {
+            moduleId: mod.id,
+            moduleTitle: mod.title,
+            sectionTitle: mod._sectionTitle,
+            blockId: block.id,
+            blockType: block.block_type,
+          }));
         }
         if (["image", "video", "pdf"].includes(block.block_type)) {
           if (!(block.media_asset_id || block.settings?.asset_id || block.settings?.url)) {
-            errors.push({ type: "block", message: `${block.block_type.toUpperCase()} block #${bNum} in module "${mod.title}" is missing media.` });
+            errors.push(validationError("block", `${block.block_type.toUpperCase()} block #${bNum} in module "${mod.title}" is missing media.`, {
+              moduleId: mod.id,
+              moduleTitle: mod.title,
+              sectionTitle: mod._sectionTitle,
+              blockId: block.id,
+              blockType: block.block_type,
+            }));
           } else if (!(block.media_asset_id || block.settings?.asset_id)) {
-            warnings.push({ type: "block", message: `${block.block_type.toUpperCase()} block #${bNum} in module "${mod.title}" has an external/broken reference.` });
+            warnings.push(validationError("block", `${block.block_type.toUpperCase()} block #${bNum} in module "${mod.title}" has an external/broken reference.`, {
+              moduleId: mod.id,
+              moduleTitle: mod.title,
+              sectionTitle: mod._sectionTitle,
+              blockId: block.id,
+              blockType: block.block_type,
+            }));
           }
         }
         if (block.block_type === "quiz_reference" && !block.settings?.quiz_id) {
-          errors.push({ type: "block", message: `Quiz block #${bNum} in module "${mod.title}" has no selected quiz.` });
+          errors.push(validationError("block", `Quiz block #${bNum} in module "${mod.title}" has no selected quiz.`, {
+            moduleId: mod.id,
+            moduleTitle: mod.title,
+            sectionTitle: mod._sectionTitle,
+            blockId: block.id,
+            blockType: block.block_type,
+          }));
         }
       });
     }
 
   } catch (err) {
-    errors.push({
-      type: "system",
-      message: describeRequestError(err, "Failed to load course structure for validation."),
-    });
+    errors.push(validationError("system", describeRequestError(err, "Failed to load course structure for validation.")));
   }
 
   return {

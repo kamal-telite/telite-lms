@@ -1,12 +1,33 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Button, useToast, Badge } from "../../components/common/ui";
 import { api, getErrorMessage } from "../../services/client";
 import { validateCourseForPublishing } from "../../services/publishValidation";
 
-export function PublishToolbar({ courseId, courseStatus, onStatusChanged, validationStatus }) {
+function groupValidationErrors(errors) {
+  const groups = [];
+  const byKey = new Map();
+
+  errors.forEach((error) => {
+    const title = error.moduleTitle
+      ? `${error.sectionTitle || "Course"} / ${error.moduleTitle}`
+      : error.sectionTitle || error.type || "Course";
+    const key = `${title}-${error.moduleId || error.sectionId || error.type}`;
+
+    if (!byKey.has(key)) {
+      byKey.set(key, { key, title, moduleId: error.moduleId, items: [] });
+      groups.push(byKey.get(key));
+    }
+    byKey.get(key).items.push(error);
+  });
+
+  return groups;
+}
+
+export function PublishToolbar({ courseId, courseStatus, onStatusChanged, validationStatus, onSelectModule }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
+  const groupedErrors = useMemo(() => groupValidationErrors(validationErrors), [validationErrors]);
 
   const executeWorkflow = async (action) => {
     setLoading(true);
@@ -76,11 +97,26 @@ export function PublishToolbar({ courseId, courseStatus, onStatusChanged, valida
       {validationErrors.length > 0 && (
         <div style={{ marginTop: "12px", padding: "12px", border: "1px solid #fecaca", background: "#fef2f2", borderRadius: "8px", color: "#991b1b", fontSize: "13px" }}>
           <div style={{ fontWeight: 600, marginBottom: "8px" }}>Fix these before publishing:</div>
-          <ul style={{ margin: 0, paddingLeft: "18px" }}>
-            {validationErrors.slice(0, 8).map((error, index) => (
-              <li key={`${error.type}-${index}`}>{error.message}</li>
+          <div style={{ display: "grid", gap: "10px" }}>
+            {groupedErrors.slice(0, 6).map((group) => (
+              <div key={group.key} style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "6px" }}>
+                  <div style={{ fontWeight: 700 }}>{group.title}</div>
+                  {group.moduleId && onSelectModule ? (
+                    <Button tone="neutral" onClick={() => onSelectModule(group.moduleId)}>Fix</Button>
+                  ) : null}
+                </div>
+                <ul style={{ margin: 0, paddingLeft: "18px" }}>
+                  {group.items.slice(0, 3).map((error, index) => (
+                    <li key={`${error.type}-${error.blockId || error.moduleId || index}`}>{error.message}</li>
+                  ))}
+                </ul>
+                {group.items.length > 3 ? (
+                  <div style={{ marginTop: "6px", color: "#64748b" }}>{group.items.length - 3} more issue(s) here.</div>
+                ) : null}
+              </div>
             ))}
-          </ul>
+          </div>
           {validationErrors.length > 8 && (
             <div style={{ marginTop: "6px" }}>And {validationErrors.length - 8} more.</div>
           )}

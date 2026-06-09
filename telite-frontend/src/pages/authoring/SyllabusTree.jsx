@@ -19,7 +19,7 @@ import { IconButton } from "../../components/common/ui";
 import { api } from "../../services/client";
 
 // Sortable Module Item
-function SortableModule({ module, isActive, onClick }) {
+function SortableModule({ module, isActive, onClick, onRename, onDelete }) {
   const {
     attributes,
     listeners,
@@ -60,19 +60,39 @@ function SortableModule({ module, isActive, onClick }) {
       <div style={{ flex: 1, fontSize: "13px", color: isActive ? "#1e3a8a" : "#334155", fontWeight: isActive ? 500 : 400 }}>
         {module.title}
       </div>
+      <IconButton
+        icon="pencil"
+        label={`Rename ${module.title}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRename(module);
+        }}
+      />
+      <IconButton
+        icon="trash"
+        label={`Delete ${module.title}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete(module);
+        }}
+      />
     </div>
   );
 }
 
 // Section Container
-function SyllabusSection({ section, modules, activeModuleId, onSelectModule, onAddModule }) {
+function SyllabusSection({ section, modules, activeModuleId, onSelectModule, onAddModule, onRenameSection, onDeleteSection, onRenameModule, onDeleteModule }) {
   return (
     <div style={{ marginBottom: "24px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
         <div style={{ fontWeight: 600, fontSize: "14px", color: "#0f172a" }}>
           {section.title}
         </div>
-        <IconButton icon="plus" size="small" label={`Add module to ${section.title}`} onClick={() => onAddModule(section)} />
+        <div style={{ display: "flex", gap: "4px" }}>
+          <IconButton icon="pencil" size="small" label={`Rename ${section.title}`} onClick={() => onRenameSection(section)} />
+          <IconButton icon="trash" size="small" label={`Delete ${section.title}`} onClick={() => onDeleteSection(section)} />
+          <IconButton icon="plus" size="small" label={`Add module to ${section.title}`} onClick={() => onAddModule(section)} />
+        </div>
       </div>
       
       <SortableContext 
@@ -86,6 +106,8 @@ function SyllabusSection({ section, modules, activeModuleId, onSelectModule, onA
               module={module} 
               isActive={activeModuleId === module.id}
               onClick={onSelectModule}
+              onRename={onRenameModule}
+              onDelete={onDeleteModule}
             />
           ))}
           {modules.length === 0 && (
@@ -99,7 +121,18 @@ function SyllabusSection({ section, modules, activeModuleId, onSelectModule, onA
   );
 }
 
-export function SyllabusTree({ courseId, sections, setSections, activeModuleId, onSelectModule, onAddModule }) {
+export function SyllabusTree({
+  courseId,
+  sections,
+  setSections,
+  activeModuleId,
+  onSelectModule,
+  onAddModule,
+  onRenameSection,
+  onDeleteSection,
+  onRenameModule,
+  onDeleteModule,
+}) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -231,6 +264,10 @@ export function SyllabusTree({ courseId, sections, setSections, activeModuleId, 
           activeModuleId={activeModuleId}
           onSelectModule={onSelectModule}
           onAddModule={onAddModule}
+          onRenameSection={onRenameSection}
+          onDeleteSection={onDeleteSection}
+          onRenameModule={onRenameModule}
+          onDeleteModule={onDeleteModule}
         />
       ))}
       {sections.length === 0 && (

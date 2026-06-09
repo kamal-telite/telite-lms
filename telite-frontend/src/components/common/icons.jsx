@@ -99,6 +99,12 @@ const iconMap = {
       <path d="M5 12h14" />
     </>
   ),
+  copy: () => (
+    <>
+      <rect x="8" y="8" width="11" height="11" rx="2" />
+      <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+    </>
+  ),
   pencil: () => (
     <>
       <path d="M12 20h9" />

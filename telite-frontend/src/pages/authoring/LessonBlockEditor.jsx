@@ -22,7 +22,7 @@ import { validateBlocks } from "../../services/validationEngine";
 import { MediaLibrary } from "./MediaLibrary";
 
 // Sortable Block Component
-function SortableBlock({ block, onChange, onDelete, onOpenMedia }) {
+function SortableBlock({ block, onChange, onDelete, onDuplicate, onOpenMedia }) {
   const {
     attributes,
     listeners,
@@ -65,7 +65,10 @@ function SortableBlock({ block, onChange, onDelete, onOpenMedia }) {
           <span style={{ fontSize: "16px" }}>⋮⋮</span>
           <Badge tone="neutral">{block.block_type.toUpperCase()}</Badge>
         </div>
-        <IconButton icon="trash" size="small" onClick={() => onDelete(block.id || block._tempId)} />
+        <div style={{ display: "flex", gap: "6px" }}>
+          <IconButton icon="copy" size="small" label="Duplicate block" onClick={() => onDuplicate(block.id || block._tempId)} />
+          <IconButton icon="trash" size="small" label="Delete block" onClick={() => onDelete(block.id || block._tempId)} />
+        </div>
       </div>
 
       <div style={{ paddingLeft: "24px" }}>
@@ -245,6 +248,30 @@ export function LessonBlockEditor({ courseId, moduleId }) {
     setBlocks(blocks.map(b => (b.id === idOrTempId || b._tempId === idOrTempId) ? { ...b, is_deleted: true } : b));
   };
 
+  const duplicateBlock = (idOrTempId) => {
+    setBlocks((current) => {
+      const sourceIndex = current.findIndex((block) => block.id === idOrTempId || block._tempId === idOrTempId);
+      if (sourceIndex === -1) return current;
+
+      const source = current[sourceIndex];
+      const clone = {
+        ...source,
+        id: null,
+        _tempId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        settings: { ...(source.settings || {}) },
+        is_deleted: false,
+      };
+
+      const next = [
+        ...current.slice(0, sourceIndex + 1),
+        clone,
+        ...current.slice(sourceIndex + 1),
+      ];
+
+      return next.map((block, index) => ({ ...block, sort_order: index }));
+    });
+  };
+
   const handleOpenMedia = (blockId, filterType) => {
     setActiveMediaBlockId(blockId);
     setMediaFilterType(filterType === "pdf" ? "application/pdf" : filterType);
@@ -314,6 +341,7 @@ export function LessonBlockEditor({ courseId, moduleId }) {
               block={block} 
               onChange={updateBlock}
               onDelete={deleteBlock}
+              onDuplicate={duplicateBlock}
               onOpenMedia={handleOpenMedia}
             />
           ))}

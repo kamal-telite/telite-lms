@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Button, IconButton, Badge, Modal, useToast } from "../../components/common/ui";
 import { LessonBlockEditor } from "./LessonBlockEditor";
 import { PublishToolbar } from "./PublishToolbar";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { CoursePreviewModal } from "./CoursePreviewModal";
 import { SyllabusTree } from "./SyllabusTree";
+import { BuilderInspectorPanel } from "./BuilderInspectorPanel";
 import { ProfileDropdown } from "../../layouts/DashboardLayout";
 import { getInitials } from "../../utils/formatters";
 import { api, getErrorMessage } from "../../services/client";
@@ -28,6 +29,19 @@ export function CourseBuilderLayout({
   const [moduleTitle, setModuleTitle] = useState("");
   const [moduleDuration, setModuleDuration] = useState("30 mins");
   const [isCreatingStructure, setIsCreatingStructure] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const activeContext = useMemo(() => {
+    for (const section of sections || []) {
+      const module = (section.modules || []).find((item) => item.id === activeModuleId);
+      if (module) {
+        return { section, module };
+      }
+    }
+    return { section: null, module: null };
+  }, [sections, activeModuleId]);
 
   const openSectionModal = () => {
     if (!course?.id) return;
@@ -88,6 +102,99 @@ export function CourseBuilderLayout({
       showToast("Module added.", "success");
     } catch (err) {
       showToast(getErrorMessage(err, "Failed to add module."), "error");
+    } finally {
+      setIsCreatingStructure(false);
+    }
+  };
+
+  const openRenameSection = (section) => {
+    if (section.id === 0) {
+      showToast("The unassigned module group cannot be renamed.", "warning");
+      return;
+    }
+    setRenameTarget({ type: "section", item: section });
+    setRenameTitle(section.title || "");
+  };
+
+  const openRenameModule = (module) => {
+    setRenameTarget({ type: "module", item: module });
+    setRenameTitle(module.title || "");
+  };
+
+  const handleRename = async (event) => {
+    event.preventDefault();
+    if (!renameTarget || !renameTitle.trim()) return;
+
+    setIsCreatingStructure(true);
+    try {
+      if (renameTarget.type === "section") {
+        const { data } = await api.patch(`/authoring/courses/${course.id}/sections/${renameTarget.item.id}`, {
+          title: renameTitle.trim(),
+        });
+        setSections((current) =>
+          current.map((section) => (section.id === data.id ? { ...section, title: data.title } : section))
+        );
+        showToast("Section renamed.", "success");
+      } else {
+        const { data } = await api.put(`/authoring/modules/${renameTarget.item.id}`, {
+          title: renameTitle.trim(),
+        });
+        const updatedModule = data.module;
+        setSections((current) =>
+          current.map((section) => ({
+            ...section,
+            modules: (section.modules || []).map((module) =>
+              module.id === updatedModule.id ? { ...module, title: updatedModule.title } : module
+            ),
+          }))
+        );
+        showToast("Module renamed.", "success");
+      }
+      setRenameTarget(null);
+    } catch (err) {
+      showToast(getErrorMessage(err, "Rename failed."), "error");
+    } finally {
+      setIsCreatingStructure(false);
+    }
+  };
+
+  const openDeleteSection = (section) => {
+    if (section.id === 0) {
+      showToast("The unassigned module group cannot be deleted.", "warning");
+      return;
+    }
+    setDeleteTarget({ type: "section", item: section });
+  };
+
+  const openDeleteModule = (module) => {
+    setDeleteTarget({ type: "module", item: module });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+
+    setIsCreatingStructure(true);
+    try {
+      if (deleteTarget.type === "section") {
+        await api.delete(`/authoring/courses/${course.id}/sections/${deleteTarget.item.id}`);
+        setSections((current) => current.filter((section) => section.id !== deleteTarget.item.id));
+        showToast("Section deleted.", "warning");
+      } else {
+        await api.delete(`/authoring/modules/${deleteTarget.item.id}`);
+        setSections((current) =>
+          current.map((section) => ({
+            ...section,
+            modules: (section.modules || []).filter((module) => module.id !== deleteTarget.item.id),
+          }))
+        );
+        if (activeModuleId === deleteTarget.item.id) {
+          setActiveModuleId(null);
+        }
+        showToast("Module deleted.", "warning");
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      showToast(getErrorMessage(err, "Delete failed."), "error");
     } finally {
       setIsCreatingStructure(false);
     }
@@ -162,6 +269,7 @@ export function CourseBuilderLayout({
         courseStatus={courseStatus} 
         onStatusChanged={setCourseStatus} 
         validationStatus={validationStatus} 
+        onSelectModule={setActiveModuleId}
       />
       
       {/* 3-Pane Body */}
@@ -186,6 +294,10 @@ export function CourseBuilderLayout({
               activeModuleId={activeModuleId}
               onSelectModule={setActiveModuleId}
               onAddModule={openModuleModal}
+              onRenameSection={openRenameSection}
+              onDeleteSection={openDeleteSection}
+              onRenameModule={openRenameModule}
+              onDeleteModule={openDeleteModule}
             />
           </div>
           <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0' }}>
@@ -207,14 +319,26 @@ export function CourseBuilderLayout({
             </div>
           )}
         </div>
-        {/* Right Pane: Settings / Version History */}
-        {showVersionHistory && (
+        {/* Right Pane: Inspector / Version History */}
+        {showVersionHistory ? (
           <div style={{ width: '320px', background: '#fff', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 700, color: "#0f172a" }}>History</div>
+              <Button tone="neutral" onClick={() => setShowVersionHistory(false)}>Inspector</Button>
+            </div>
             <VersionHistoryPanel 
               courseId={course?.id} 
               currentVersion={{ id: 1, version_number: 1 }} // dummy 
             />
           </div>
+        ) : (
+          <BuilderInspectorPanel
+            course={course}
+            activeSection={activeContext.section}
+            activeModule={activeContext.module}
+            validationStatus={validationStatus}
+            onOpenHistory={() => setShowVersionHistory(true)}
+          />
         )}
         
       </div>
@@ -286,6 +410,54 @@ export function CourseBuilderLayout({
             />
           </label>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(renameTarget)}
+        onClose={() => setRenameTarget(null)}
+        title={renameTarget?.type === "section" ? "Rename Section" : "Rename Module"}
+        width={440}
+        footer={
+          <>
+            <Button tone="neutral" onClick={() => setRenameTarget(null)}>Cancel</Button>
+            <Button tone="primary" type="submit" form="rename-structure-form" disabled={!renameTitle.trim() || isCreatingStructure}>
+              {isCreatingStructure ? "Saving..." : "Save Name"}
+            </Button>
+          </>
+        }
+      >
+        <form id="rename-structure-form" onSubmit={handleRename}>
+          <label className="field">
+            <span className="field__label">Name *</span>
+            <input
+              className="field__input"
+              value={renameTitle}
+              onChange={(event) => setRenameTitle(event.target.value)}
+              autoFocus
+            />
+          </label>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        title={deleteTarget?.type === "section" ? "Delete Section" : "Delete Module"}
+        width={440}
+        footer={
+          <>
+            <Button tone="neutral" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button tone="danger" onClick={handleDelete} disabled={isCreatingStructure}>
+              {isCreatingStructure ? "Deleting..." : "Delete"}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
+          {deleteTarget?.type === "section"
+            ? "Delete this section only if it has no modules. Move or delete its modules first."
+            : "Delete this module from the builder. Its lesson blocks will no longer appear in the syllabus."}
+        </p>
       </Modal>
     </div>
   );

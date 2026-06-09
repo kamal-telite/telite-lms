@@ -24,7 +24,11 @@ class BuilderRepository(BaseRepository):
     def get_sections(self, course_id: str, org_id: int) -> Sequence[CourseSection]:
         stmt = (
             select(CourseSection)
-            .where(CourseSection.course_id == course_id, CourseSection.org_id == org_id)
+            .where(
+                CourseSection.course_id == course_id,
+                CourseSection.org_id == org_id,
+                CourseSection.deleted_at.is_(None),
+            )
             .order_by(CourseSection.sort_order)
         )
         return self.session.execute(stmt).scalars().all()
@@ -32,7 +36,11 @@ class BuilderRepository(BaseRepository):
     def get_modules(self, course_id: str, org_id: int) -> Sequence[CourseModule]:
         stmt = (
             select(CourseModule)
-            .where(CourseModule.course_id == course_id, CourseModule.org_id == org_id)
+            .where(
+                CourseModule.course_id == course_id,
+                CourseModule.org_id == org_id,
+                CourseModule.deleted_at.is_(None),
+            )
             .order_by(CourseModule.sort_order)
         )
         return self.session.execute(stmt).scalars().all()
@@ -79,7 +87,11 @@ class BuilderRepository(BaseRepository):
     def get_blocks(self, module_id: int, org_id: int) -> Sequence[LessonBlock]:
         stmt = (
             select(LessonBlock)
-            .where(LessonBlock.module_id == module_id, LessonBlock.org_id == org_id)
+            .where(
+                LessonBlock.module_id == module_id,
+                LessonBlock.org_id == org_id,
+                LessonBlock.deleted_at.is_(None),
+            )
             .order_by(LessonBlock.sort_order)
         )
         return self.session.execute(stmt).scalars().all()
@@ -96,4 +108,3 @@ class BuilderRepository(BaseRepository):
     def delete_block(self, block: LessonBlock) -> None:
         self.session.delete(block)
         self.session.flush()
-

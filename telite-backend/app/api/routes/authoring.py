@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -88,6 +88,9 @@ class CreateSectionRequest(BaseModel):
     title: str
     sort_order: int
 
+class UpdateSectionRequest(BaseModel):
+    title: str
+
 @authoring_router.post("/courses/{course_id}/sections", dependencies=[Depends(require_admin)])
 def create_section(
     course_id: str,
@@ -109,6 +112,61 @@ def create_section(
     db.commit()
     db.refresh(section)
     return section.to_dict()
+
+@authoring_router.patch("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
+def update_section(
+    course_id: str,
+    section_id: int,
+    request: UpdateSectionRequest,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    section = db.query(CourseSection).filter(
+        CourseSection.id == section_id,
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).first()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Section title is required")
+
+    section.title = title
+    db.commit()
+    db.refresh(section)
+    return section.to_dict()
+
+@authoring_router.delete("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
+def delete_section(
+    course_id: str,
+    section_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    section = db.query(CourseSection).filter(
+        CourseSection.id == section_id,
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).first()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    module_count = db.query(CourseModule).filter(
+        CourseModule.section_id == section_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
+    ).count()
+    if module_count:
+        raise HTTPException(status_code=400, detail="Move or delete modules before deleting this section")
+
+    section.deleted_at = datetime.now(timezone.utc)
+    section.deleted_by = current_user.id
+    db.commit()
+    return {"success": True}
 
 class ModuleStructureUpdate(BaseModel):
     module_id: int
@@ -418,6 +476,25 @@ def update_module(
     db.refresh(module)
     
     return {"success": True, "module": module.to_dict()}
+
+@authoring_router.delete("/modules/{module_id}", dependencies=[Depends(require_admin)])
+def delete_module(
+    module_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    module = db.query(CourseModule).filter(
+        CourseModule.id == module_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
+    ).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    module.deleted_at = datetime.now(timezone.utc)
+    module.deleted_by = current_user.id
+    db.commit()
+    return {"success": True}
 
 class QuizQuestionRequest(BaseModel):
     module_id: int
