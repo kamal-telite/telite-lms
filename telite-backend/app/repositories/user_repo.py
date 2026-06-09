@@ -18,8 +18,21 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.membership import Membership
 from app.repositories.base_repo import BaseRepository
-from app.services.store import hash_password, initials, role_gradients, slugify
+from app.core.utils import slugify, initials
+from app.core.password_utils import hash_password
 
+def role_gradients(role: str | None) -> tuple[str, str]:
+    if role == "super_admin":
+        return ("from-violet-600 to-indigo-600", "text-white")
+    if role == "category_admin":
+        return ("from-blue-600 to-cyan-600", "text-white")
+    if role == "instructor":
+        return ("from-emerald-600 to-teal-600", "text-white")
+    if role == "reviewer":
+        return ("from-amber-500 to-orange-500", "text-white")
+    if role in ("learner", "student"):
+        return ("from-slate-100 to-slate-200", "text-slate-800")
+    return ("from-slate-100 to-slate-200", "text-slate-800")
 
 class UserRepository(BaseRepository[User]):
     model = User
@@ -158,10 +171,7 @@ class UserRepository(BaseRepository[User]):
         self.session.flush()
         return user
 
-    def update_moodle_id(self, user_id: str, moodle_id: int) -> None:
-        self.session.execute(
-            update(User).where(User.id == user_id).values(moodle_id=moodle_id)
-        )
+
 
     def update_last_login(self, user_id: str, timestamp: str) -> None:
         self.session.execute(
@@ -223,3 +233,8 @@ class UserRepository(BaseRepository[User]):
             username = f"{base}{counter}"
             counter += 1
         return username
+
+def fetch_user_by_id(user_id: str) -> User | None:
+    from app.db.engine import get_db_session
+    with get_db_session() as session:
+        return UserRepository(session).get_by_id(user_id)

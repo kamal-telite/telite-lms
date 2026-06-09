@@ -9,12 +9,18 @@ const BrandingContext = createContext({
   tenantSlug: null,
 });
 
-export function BrandingProvider({ session, children }) {
-  const [branding, setBranding] = useState(null);
+export function BrandingProvider({ session, children, preloadedConfig }) {
+  const [branding, setBranding] = useState(preloadedConfig || null);
   const [loading, setLoading] = useState(false);
   const tenantSlug = getTenantSlugFromUrl(session?.user);
 
   useEffect(() => {
+    if (preloadedConfig) {
+      setBranding(preloadedConfig);
+      ThemeEngine.applyBrandingStyles(preloadedConfig);
+      return undefined;
+    }
+
     if (!tenantSlug) {
       setBranding(null);
       ThemeEngine.resetBrandingStyles();

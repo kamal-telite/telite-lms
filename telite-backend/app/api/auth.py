@@ -34,20 +34,11 @@ from app.core.security import (
 )
 from app.core.rate_limiter import clear_attempts, is_limited, record_attempt
 from app.services.email import send_password_reset_email
-from app.services.store import (
-    create_session,
-    create_password_reset_token,
-    fetch_user_by_id,
-    fetch_user_by_identifier,
-    get_session_by_token,
-    is_admin_role,
-    is_tenant_super_admin_role,
-    record_password_reset_delivery,
-    reset_password_with_token,
-    revoke_session,
-    update_last_login,
-    verify_password,
-)
+from app.core.password_utils import verify_password
+from sqlalchemy.orm import Session
+from app.db.engine import db_session
+from app.repositories.user_repo import UserRepository, fetch_user_by_id
+from app.repositories.auth_repo import AuthRepository
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -231,15 +222,16 @@ class ResetPasswordRequest(BaseModel):
 
 # ── Core auth functions ───────────────────────────────────────────────────────
 
-def authenticate_user(identifier: str, password: str) -> dict[str, Any]:
-    user = fetch_user_by_identifier(identifier, include_secret=True)
-    if not user or not user["is_active"]:
+def authenticate_user(db: Session, identifier: str, password: str):
+    repo = UserRepository(db)
+    user = repo.get_by_identifier(identifier, include_hash=True)
+    if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not verify_password(password, user["password_hash"]):
+    if not verify_password(password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -252,6 +244,7 @@ def get_current_user(
     request: Request,
     bearer_token: str | None = Depends(oauth2_scheme),
     cookie_token: str | None = Cookie(default=None, alias="telite_access_token"),
+    db: Session = Depends(db_session),
 ) -> TokenData:
     """
     Resolve the current user from either:
@@ -269,18 +262,19 @@ def get_current_user(
         )
 
     payload = decode_token(token, token_type="access")
-    user = fetch_user_by_id(payload["sub"])
-    if not user or not user["is_active"]:
+    repo = UserRepository(db)
+    user = repo.get_by_id(payload["sub"])
+    if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User is inactive or not found")
 
     return TokenData(
-        id=user["id"],
-        email=payload.get("email") or user["email"],
-        role=payload.get("role") or user["role"],
-        full_name=payload.get("name") or user["full_name"],
-        category_scope=payload.get("category_scope", user["category_scope"]),
-        org_id=payload.get("org_id", user.get("org_id")),
-        is_platform_admin=bool(payload.get("is_platform_admin", user.get("is_platform_admin"))),
+        id=user.id,
+        email=payload.get("email") or user.email,
+        role=payload.get("role") or user.role,
+        full_name=payload.get("name") or user.full_name,
+        category_scope=user.category_scope,
+        org_id=payload.get("org_id", user.org_id),
+        is_platform_admin=bool(payload.get("is_platform_admin", user.is_platform_admin)),
         permissions=payload.get("permissions", []),
     )
 
@@ -315,7 +309,15 @@ def validate_csrf(
         )
 
 
+
 # ── Role guards ───────────────────────────────────────────────────────────────
+
+def is_admin_role(role: str) -> bool:
+    return role in ("super_admin", "category_admin", "platform_admin")
+
+def is_tenant_super_admin_role(role: str) -> bool:
+    return role == "super_admin"
+
 
 def require_admin(current_user: TokenData = Depends(get_current_user)) -> TokenData:
     if not current_user.is_platform_admin and not is_admin_role(current_user.role):
@@ -378,26 +380,39 @@ def _build_token_response(user: dict[str, Any], refresh_token: str) -> TokenResp
 
 
 def issue_login_response(
-    user: dict[str, Any],
+    db: Session,
+    user,
     response: Response,
     request: Request | None = None,
 ) -> TokenResponse:
     """Issue tokens, persist session, set cookies, return response body."""
-    refresh_token = create_refresh_token(create_refresh_payload(user))
+    user_dict = {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role,
+        "full_name": user.full_name,
+        "category_scope": user.category_scope,
+        "org_id": user.org_id,
+        "is_platform_admin": user.is_platform_admin,
+    }
+    refresh_token = create_refresh_token(create_refresh_payload(user_dict))
     expires_at = (
         datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS)
-    ).strftime("%Y-%m-%d %H:%M")
-    create_session(
-        user["id"],
-        refresh_token,
-        expires_at,
-        org_id=user.get("org_id") or user.get("organization_id"),
-        user_agent=_client_user_agent(request) if request else None,
-        ip_address=_client_ip(request) if request else None,
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    
+    auth_repo = AuthRepository(db)
+    auth_repo.create_session(
+        user_id=user.id,
+        org_id=user.org_id,
+        refresh_token=refresh_token,
+        expires_at=expires_at,
     )
-    update_last_login(user["id"])
+    
+    user_repo = UserRepository(db)
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    user_repo.update_last_login(user.id, now_str)
 
-    token_response = _build_token_response(user, refresh_token)
+    token_response = _build_token_response(user_dict, refresh_token)
     csrf_token = generate_csrf_token()
 
     # Set HttpOnly cookies
@@ -406,7 +421,7 @@ def issue_login_response(
         token_response.access_token,
         refresh_token,
         csrf_token,
-        account_user_id=user["id"],
+        account_user_id=user.id,
     )
 
     return token_response
@@ -422,6 +437,7 @@ def login(
     request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(db_session),
 ) -> TokenResponse:
     client_ip = _client_ip(request)
     ip_key = _rate_key("auth-login-ip", client_ip)
@@ -433,7 +449,7 @@ def login(
             _raise_rate_limit(retry_after)
 
     try:
-        user = authenticate_user(form_data.username, form_data.password)
+        user = authenticate_user(db, form_data.username, form_data.password)
     except HTTPException:
         record_attempt(ip_key, window_seconds=LOGIN_FAILURE_WINDOW_SECONDS)
         record_attempt(identifier_key, window_seconds=LOGIN_FAILURE_WINDOW_SECONDS)
@@ -441,7 +457,7 @@ def login(
 
     clear_attempts(ip_key)
     clear_attempts(identifier_key)
-    return issue_login_response(user, response, request)
+    return issue_login_response(db, user, response, request)
 
 
 @auth_router.post("/refresh", response_model=TokenResponse)
@@ -558,14 +574,14 @@ def get_me(current_user: TokenData = Depends(get_current_user)) -> dict[str, Any
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {
-        "user_id": user["id"],
-        "username": user["username"],
-        "email": user["email"],
-        "name": user["full_name"],
-        "role": user["role"],
-        "category_scope": user["category_scope"],
-        "org_id": user.get("org_id"),
-        "is_platform_admin": bool(user.get("is_platform_admin")),
-        "is_active": user["is_active"],
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "name": user.full_name,
+        "role": user.role,
+        "category_scope": user.category_scope,
+        "org_id": user.org_id,
+        "is_platform_admin": bool(user.is_platform_admin),
+        "is_active": user.is_active,
         "permissions": current_user.permissions,
     }

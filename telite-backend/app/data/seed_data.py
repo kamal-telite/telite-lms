@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,12 +12,17 @@ from typing import Any
 
 def _seed_admin_password() -> str:
     """Return the seed admin password from env or a safe dev default."""
-    return os.getenv("TELITE_SEED_ADMIN_PASSWORD", "Dev-Admin-2024!")
+    return os.getenv("TELITE_SEED_ADMIN_PASSWORD") or _generated_seed_value("admin")
 
 
 def _seed_learner_password() -> str:
     """Return the seed learner password from env or a safe dev default."""
-    return os.getenv("TELITE_SEED_LEARNER_PASSWORD", "Dev-Learner-2024!")
+    return os.getenv("TELITE_SEED_LEARNER_PASSWORD") or _generated_seed_value("learner")
+
+
+def _generated_seed_value(label: str) -> str:
+    digest = hashlib.sha256(f"telite-seed-{label}".encode("utf-8")).hexdigest()
+    return f"TeliteDev{digest[:12]}9"
 
 
 def _initials(full_name: str) -> str:

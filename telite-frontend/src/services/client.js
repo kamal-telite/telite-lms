@@ -202,6 +202,26 @@ export async function updateOrganizationBranding(orgId, payload) {
   return unwrap(await api.patch(`/api/admin/organizations/${orgId}/branding`, payload));
 }
 
+export async function fetchDraftBranding(orgId) {
+  return unwrap(await api.get(`/api/admin/organizations/${orgId}/branding/draft`));
+}
+
+export async function saveDraftBranding(orgId, payload) {
+  return unwrap(await api.post(`/api/admin/organizations/${orgId}/branding/draft`, payload));
+}
+
+export async function publishBranding(orgId) {
+  return unwrap(await api.post(`/api/admin/organizations/${orgId}/branding/publish`));
+}
+
+export async function rollbackBranding(orgId, versionId) {
+  return unwrap(await api.post(`/api/admin/organizations/${orgId}/branding/rollback/${versionId}`));
+}
+
+export async function fetchBrandingHistory(orgId) {
+  return unwrap(await api.get(`/api/admin/organizations/${orgId}/branding/history`));
+}
+
 export async function uploadOrganizationAsset(orgId, assetType, file) {
   const formData = new FormData();
   formData.append("file", file);
@@ -256,6 +276,10 @@ export async function fetchAdmins() {
 
 export async function createAdmin(payload) {
   return unwrap(await api.post("/admins", payload));
+}
+
+export async function inviteAdmin(payload) {
+  return unwrap(await api.post("/admins/invite", payload));
 }
 
 export async function updateAdmin(userId, payload) {
@@ -382,6 +406,14 @@ export async function fetchNotifications() {
 
 export async function fetchSettings() {
   return unwrap(await api.get("/settings/system"));
+}
+
+export async function addAllowedDomain(payload) {
+  return unwrap(await api.post("/settings/domains", payload));
+}
+
+export async function removeAllowedDomain(domain) {
+  return unwrap(await api.delete(`/settings/domains/${encodeURIComponent(domain)}`));
 }
 
 // ── Signup & Verification ─────────────────────────────────────────────────────

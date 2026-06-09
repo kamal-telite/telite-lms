@@ -1,147 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button, useToast, Panel, Field, Input, Select } from "../common/ui";
-import { fetchBranding, updateOrganizationBranding, uploadOrganizationAsset, getErrorMessage } from "../../services/client";
+import { fetchDraftBranding, saveDraftBranding, publishBranding, rollbackBranding, fetchBrandingHistory, uploadOrganizationAsset, getErrorMessage } from "../../services/client";
 
-/* ── Inline Live Preview ─────────────────────────────────────── */
-function LivePreview({ branding, orgName }) {
-  const pc = branding.primary_color || "#2563EB";
-  const sc = branding.secondary_color || "#111827";
-  const font = branding.font_family || "Inter";
-  const theme = branding.theme_mode || "light";
-  const isDark = theme === "dark";
-
-  const bg = isDark ? "#0f172a" : "#ffffff";
-  const textColor = isDark ? "#e2e8f0" : "#1e293b";
-  const mutedColor = isDark ? "#94a3b8" : "#64748b";
-  const surfaceColor = isDark ? "#1e293b" : "#f8fafc";
-  const borderColor = isDark ? "#334155" : "#e2e8f0";
-
-  return (
-    <div style={{
-      fontFamily: `'${font}', 'Inter', sans-serif`,
-      background: bg,
-      color: textColor,
-      height: "100%",
-      display: "flex",
-      flexDirection: "column",
-      overflow: "hidden",
-      borderRadius: 8,
-    }}>
-      {/* ── Navbar ── */}
-      <div style={{
-        background: pc,
-        color: "#fff",
-        padding: "10px 16px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {branding.logo ? (
-            <img src={branding.logo} alt="Logo" style={{ height: 28, width: "auto", borderRadius: 4, objectFit: "contain", background: "rgba(255,255,255,.15)" }} />
-          ) : (
-            <div style={{ width: 28, height: 28, borderRadius: 4, background: "rgba(255,255,255,.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>
-              {(orgName || "T").charAt(0).toUpperCase()}
-            </div>
-          )}
-          <span style={{ fontWeight: 700, fontSize: 13 }}>{orgName || "Organization LMS"}</span>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <div style={{ padding: "4px 10px", borderRadius: 4, background: "rgba(255,255,255,.2)", fontSize: 10, fontWeight: 600 }}>Dashboard</div>
-          <div style={{ padding: "4px 10px", borderRadius: 4, fontSize: 10, fontWeight: 500, opacity: 0.7 }}>Courses</div>
-          <div style={{ padding: "4px 10px", borderRadius: 4, fontSize: 10, fontWeight: 500, opacity: 0.7 }}>Profile</div>
-        </div>
-      </div>
-
-      {/* ── Content area ── */}
-      <div style={{ flex: 1, padding: 16, overflow: "auto" }}>
-        {/* Banner */}
-        {branding.banner && (
-          <div style={{ marginBottom: 14, borderRadius: 8, overflow: "hidden", border: `1px solid ${borderColor}` }}>
-            <img src={branding.banner} alt="Banner" style={{ width: "100%", height: 80, objectFit: "cover" }} />
-          </div>
-        )}
-
-        {/* Hero section */}
-        <div style={{ textAlign: "center", marginBottom: 18, padding: "16px 0" }}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: textColor }}>Welcome to {orgName || "Your LMS"}</h2>
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: mutedColor }}>Continue your learning journey</p>
-        </div>
-
-        {/* Stat cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
-          {[
-            { label: "Enrolled", value: "3" },
-            { label: "Completed", value: "1" },
-            { label: "In Progress", value: "2" },
-          ].map((s) => (
-            <div key={s.label} style={{
-              background: surfaceColor,
-              border: `1px solid ${borderColor}`,
-              borderRadius: 8,
-              padding: "10px 12px",
-              textAlign: "center",
-            }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: pc }}>{s.value}</div>
-              <div style={{ fontSize: 9, color: mutedColor, marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Course cards */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {["Introduction to Data Science", "Advanced React Patterns"].map((title, i) => (
-            <div key={title} style={{
-              background: surfaceColor,
-              border: `1px solid ${borderColor}`,
-              borderRadius: 8,
-              padding: 12,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 11, color: textColor }}>{title}</div>
-                <div style={{ fontSize: 9, color: mutedColor, marginTop: 2 }}>{i === 0 ? "75% complete" : "30% complete"}</div>
-                {/* Progress bar */}
-                <div style={{ marginTop: 6, width: 120, height: 4, borderRadius: 2, background: borderColor }}>
-                  <div style={{ width: i === 0 ? "75%" : "30%", height: "100%", borderRadius: 2, background: pc }} />
-                </div>
-              </div>
-              <div style={{
-                padding: "4px 10px",
-                borderRadius: 4,
-                background: pc,
-                color: "#fff",
-                fontSize: 9,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}>Continue</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Footer ── */}
-      <div style={{
-        borderTop: `1px solid ${borderColor}`,
-        padding: "8px 16px",
-        fontSize: 9,
-        color: mutedColor,
-        textAlign: "center",
-        background: surfaceColor,
-        flexShrink: 0,
-      }}>
-        Powered by {orgName || "Telite LMS"} • {font} font • {isDark ? "Dark" : "Light"} theme
-      </div>
-    </div>
-  );
-}
-
-/* ── Main Tab ────────────────────────────────────────────────── */
-export function BrandingSettingsTab({ dashboard, organizations = [], session }) {
+export function BrandingSettingsTab({ organizations = [], session }) {
   const { showToast } = useToast();
 
   const isSuperAdmin = session?.user?.role === "super_admin";
@@ -149,9 +10,7 @@ export function BrandingSettingsTab({ dashboard, organizations = [], session }) 
   const isFixedOrg = isSuperAdmin && userOrgId;
 
   const [selectedOrgId, setSelectedOrgId] = useState(isFixedOrg ? userOrgId : "");
-
   const selectedOrg = organizations.find(o => String(o.id) === String(selectedOrgId));
-  const orgSlug = selectedOrg?.slug;
   const orgId = selectedOrg?.id;
 
   const [branding, setBranding] = useState({
@@ -163,31 +22,50 @@ export function BrandingSettingsTab({ dashboard, organizations = [], session }) 
     logo: null,
     favicon: null,
     banner: null,
+    terminology: {
+      course: "Course",
+      category: "Category",
+      learner: "Learner"
+    },
+    email_template_id: "",
+    certificate_template_url: ""
   });
 
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [sslStatus, setSslStatus] = useState("pending");
+  const [publishing, setPublishing] = useState(false);
+  const [activeTab, setActiveTab] = useState("visual"); // visual, terminology, emails, history
+  const [previewRole, setPreviewRole] = useState("learner"); // learner, category_admin, super_admin, public
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      if (!orgSlug) return;
+      if (!orgId) return;
       setLoading(true);
       try {
-        const data = await fetchBranding(orgSlug);
+        const data = await fetchDraftBranding(orgId);
         if (cancelled) return;
+        
+        const b = data.branding || {};
         setBranding({
-          primary_color: data.primary_color || "#2563EB",
-          secondary_color: data.secondary_color || "#111827",
-          font_family: data.font || "Inter",
-          theme_mode: data.theme || "light",
-          custom_domain: data.custom_domain || "",
-          logo: data.logo || null,
-          favicon: data.favicon || null,
-          banner: data.banner || null,
+          primary_color: b.primary_color || "#2563EB",
+          secondary_color: b.secondary_color || "#111827",
+          font_family: b.font || b.font_family || "Inter",
+          theme_mode: b.theme || b.theme_mode || "light",
+          custom_domain: b.custom_domain || "",
+          logo: b.logo || b.logo_url || null,
+          favicon: b.favicon || b.favicon_url || null,
+          banner: b.banner || b.login_banner_url || null,
+          terminology: b.terminology || { course: "Course", category: "Category", learner: "Learner" },
+          email_template_id: b.email_template_id || "",
+          certificate_template_url: b.certificate_template_url || ""
         });
-        if (data.custom_domain) setSslStatus("active");
+
+        // Load history in background
+        const histData = await fetchBrandingHistory(orgId);
+        if (!cancelled) setHistory(histData.history || []);
+
       } catch (err) {
         if (!cancelled) showToast("Failed to load branding settings: " + getErrorMessage(err), "error");
       } finally {
@@ -196,39 +74,72 @@ export function BrandingSettingsTab({ dashboard, organizations = [], session }) 
     }
     load();
     return () => { cancelled = true; };
-  }, [orgSlug]);
+  }, [orgId]);
 
   const handleUpdate = useCallback((field, value) => {
     setBranding(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  const handleDomainUpdate = (e) => {
-    const val = e.target.value;
-    handleUpdate("custom_domain", val);
-    if (val) {
-      setSslStatus("pending");
-      setTimeout(() => setSslStatus("active"), 3000);
-    } else {
-      setSslStatus("pending");
-    }
+  const handleTerminologyUpdate = (key, value) => {
+    setBranding(prev => ({
+      ...prev,
+      terminology: { ...prev.terminology, [key]: value }
+    }));
   };
 
-  const handleSave = async () => {
+  const handleSaveDraft = async () => {
     if (!orgId) return;
     setSaving(true);
     try {
-      await updateOrganizationBranding(orgId, {
-        primary_color: branding.primary_color,
-        secondary_color: branding.secondary_color,
-        font_family: branding.font_family,
-        theme_mode: branding.theme_mode,
-        custom_domain: branding.custom_domain,
-      });
-      showToast("Branding settings saved successfully!", "success");
+      await saveDraftBranding(orgId, branding);
+      showToast("Draft saved successfully!", "success");
     } catch (err) {
-      showToast(getErrorMessage(err, "Failed to save branding"), "error");
+      showToast(getErrorMessage(err, "Failed to save draft"), "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!orgId) return;
+    setPublishing(true);
+    try {
+      await publishBranding(orgId);
+      showToast("Branding published live to all users!", "success");
+      // Refresh history
+      const histData = await fetchBrandingHistory(orgId);
+      setHistory(histData.history || []);
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to publish branding"), "error");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleRollback = async (versionId) => {
+    if (!orgId || !window.confirm("Are you sure you want to rollback to this version? This will immediately overwrite the live site.")) return;
+    try {
+      await rollbackBranding(orgId, versionId);
+      showToast("Rolled back successfully!", "success");
+      
+      // Reload draft
+      const data = await fetchDraftBranding(orgId);
+      const b = data.branding || {};
+      setBranding({
+        primary_color: b.primary_color || "#2563EB",
+        secondary_color: b.secondary_color || "#111827",
+        font_family: b.font || b.font_family || "Inter",
+        theme_mode: b.theme || b.theme_mode || "light",
+        custom_domain: b.custom_domain || "",
+        logo: b.logo || b.logo_url || null,
+        favicon: b.favicon || b.favicon_url || null,
+        banner: b.banner || b.login_banner_url || null,
+        terminology: b.terminology || { course: "Course", category: "Category", learner: "Learner" },
+        email_template_id: b.email_template_id || "",
+        certificate_template_url: b.certificate_template_url || ""
+      });
+    } catch (err) {
+      showToast(getErrorMessage(err, "Rollback failed"), "error");
     }
   };
 
@@ -239,17 +150,16 @@ export function BrandingSettingsTab({ dashboard, organizations = [], session }) 
     try {
       const res = await uploadOrganizationAsset(orgId, type, file);
       showToast(`${type} uploaded successfully!`, "success");
-      const key = type === "login_banner" ? "banner" : type;
+      const key = type === "login_banner" ? "banner" : type === "certificate" ? "certificate_template_url" : type;
       setBranding(prev => ({ ...prev, [key]: res.url }));
     } catch (err) {
       showToast(getErrorMessage(err, `Failed to upload ${type}`), "error");
     }
   };
 
-  /* ── Early return: no org selected ── */
   if (!isFixedOrg && !selectedOrgId) {
     return (
-      <Panel title="Organization Branding" subtitle="Select an organization to manage its custom branding and domain settings.">
+      <Panel title="White-Label Engine" subtitle="Select a tenant to manage its complete enterprise identity.">
         <div style={{ padding: "24px 0" }}>
           <Field label="Select Organization">
             <Select
@@ -266,176 +176,214 @@ export function BrandingSettingsTab({ dashboard, organizations = [], session }) 
     );
   }
 
-  /* ── Main layout ── */
   return (
-    <div className="grid-2">
-      {/* ── Left column: Settings ── */}
-      <div className="dashboard-stack">
-        {!isFixedOrg && (
-          <Panel title="Select Organization">
-            <Field label="Target Organization">
-              <Select
-                value={selectedOrgId}
-                onChange={(e) => setSelectedOrgId(e.target.value)}
-                options={[
-                  { value: "", label: "Choose an organization..." },
-                  ...organizations.map(o => ({ value: o.id, label: `${o.name} (${o.domain})` }))
-                ]}
-              />
-            </Field>
-          </Panel>
-        )}
-
-        {loading ? (
-          <div style={{ padding: 40, textAlign: "center" }}>Loading branding settings...</div>
-        ) : (
-          <>
-            {/* Colors & Theme */}
-            <Panel title="Appearance & Colors" subtitle={`Customize visual identity for ${selectedOrg?.name || "this organization"}.`}>
-              <div className="grid-2">
-                <Field label="Primary Color">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <input
-                      type="color"
-                      id="primaryColor"
-                      value={branding.primary_color}
-                      onChange={(e) => handleUpdate("primary_color", e.target.value)}
-                      style={{ width: 48, height: 36, border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", padding: 2 }}
-                    />
-                    <span style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: "monospace" }}>{branding.primary_color}</span>
-                  </div>
-                </Field>
-                <Field label="Secondary Color">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <input
-                      type="color"
-                      id="secondaryColor"
-                      value={branding.secondary_color}
-                      onChange={(e) => handleUpdate("secondary_color", e.target.value)}
-                      style={{ width: 48, height: 36, border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", padding: 2 }}
-                    />
-                    <span style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: "monospace" }}>{branding.secondary_color}</span>
-                  </div>
-                </Field>
-              </div>
-
-              <Field label="Typography (Font Family)" helpText="Select a primary font for your portal." style={{ marginTop: 16 }}>
-                <Select
-                  id="fontFamily"
-                  value={branding.font_family}
-                  onChange={(e) => handleUpdate("font_family", e.target.value)}
-                  options={[
-                    { value: "Inter", label: "Inter (Default)" },
-                    { value: "Roboto", label: "Roboto" },
-                    { value: "Outfit", label: "Outfit" },
-                    { value: "Open Sans", label: "Open Sans" },
-                    { value: "Montserrat", label: "Montserrat" },
-                    { value: "Poppins", label: "Poppins" },
-                  ]}
-                />
-              </Field>
-
-              <Field label="Default Theme Mode" style={{ marginTop: 12 }}>
-                <Select
-                  id="themeMode"
-                  value={branding.theme_mode}
-                  onChange={(e) => handleUpdate("theme_mode", e.target.value)}
-                  options={[
-                    { value: "light", label: "Light Mode" },
-                    { value: "dark", label: "Dark Mode" },
-                  ]}
-                />
-              </Field>
-
-              <div style={{ borderTop: "1px solid var(--border)", marginTop: 24, paddingTop: 16, textAlign: "right" }}>
-                <Button tone="primary" loading={saving} onClick={handleSave}>Save Settings</Button>
-              </div>
-            </Panel>
-
-            {/* Domain & SSL */}
-            <Panel title="Domain & SSL" subtitle="Configure a custom domain for your learning portal.">
-              <Field label="Custom Domain (Optional)" helpText="e.g., learn.yourcompany.com. Requires CNAME record pointing to domains.telitelms.com">
-                <Input
-                  id="customDomain"
-                  placeholder="e.g. lms.yourcompany.com"
-                  value={branding.custom_domain}
-                  onChange={handleDomainUpdate}
-                />
-              </Field>
-
-              {branding.custom_domain && (
-                <div style={{ marginTop: 16, padding: 16, borderRadius: 6, background: "var(--surface-sunken)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{
-                    width: 12, height: 12, borderRadius: "50%",
-                    background: sslStatus === "active" ? "#10b981" : "#f59e0b",
-                  }} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>SSL Certificate {sslStatus === "active" ? "Active" : "Provisioning"}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                      {sslStatus === "active" ? "Your domain is secure and ready to use." : "Provisioning a certificate..."}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Panel>
-
-            {/* Brand Assets */}
-            <Panel title="Brand Assets" subtitle="Upload logos, favicons, and banners for your tenant.">
-              <div className="dashboard-stack">
-                <Field label="Tenant Logo (Header)">
-                  {branding.logo && (
-                    <div style={{ marginBottom: 8, padding: 8, background: "var(--surface-sunken)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                      <img src={branding.logo} alt="Logo" style={{ maxHeight: 48, width: "auto", objectFit: "contain" }} />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    id="uploadLogo"
-                    accept="image/png,image/jpeg,image/svg+xml"
-                    onChange={(e) => handleUpload(e, "logo")}
-                  />
-                </Field>
-
-                <Field label="Favicon">
-                  {branding.favicon && (
-                    <div style={{ marginBottom: 8, padding: 8, background: "var(--surface-sunken)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                      <img src={branding.favicon} alt="Favicon" style={{ maxHeight: 32, width: "auto", objectFit: "contain" }} />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    id="uploadFavicon"
-                    accept="image/png,image/x-icon,image/svg+xml"
-                    onChange={(e) => handleUpload(e, "favicon")}
-                  />
-                </Field>
-
-                <Field label="Login Banner">
-                  {branding.banner && (
-                    <div style={{ marginBottom: 8, padding: 8, background: "var(--surface-sunken)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                      <img src={branding.banner} alt="Banner" style={{ maxHeight: 80, width: "100%", objectFit: "cover", borderRadius: 4 }} />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    id="uploadBanner"
-                    accept="image/png,image/jpeg"
-                    onChange={(e) => handleUpload(e, "login_banner")}
-                  />
-                </Field>
-              </div>
-            </Panel>
-          </>
-        )}
+    <div className="dashboard-stack">
+      {/* Action Header */}
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "16px 20px",
+        display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16
+      }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18 }}>Enterprise Identity Editor</h2>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+            Tenant: <strong>{selectedOrg?.name}</strong> • Status: <span style={{ color: "var(--warning)" }}>Draft Mode</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Button tone="neutral" loading={saving} onClick={handleSaveDraft}>Save Draft</Button>
+          <Button tone="primary" loading={publishing} onClick={handlePublish}>Publish to Live</Button>
+        </div>
       </div>
 
-      {/* ── Right column: Live Preview ── */}
-      <div className="dashboard-stack">
-        <Panel title="Live Preview" subtitle="Real-time preview of your learners' interface.">
-          <div style={{ height: 560, width: "100%", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden", marginTop: 12 }}>
-            <LivePreview branding={branding} orgName={selectedOrg?.name} />
+      <div className="grid-2">
+        {/* Left Column: Settings Tabs */}
+        <div className="dashboard-stack">
+          {/* Tabs Navigation */}
+          <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+            <Button tone={activeTab === "visual" ? "primary" : "neutral"} onClick={() => setActiveTab("visual")}>Visual & Assets</Button>
+            <Button tone={activeTab === "terminology" ? "primary" : "neutral"} onClick={() => setActiveTab("terminology")}>Terminology</Button>
+            <Button tone={activeTab === "emails" ? "primary" : "neutral"} onClick={() => setActiveTab("emails")}>Emails & Certs</Button>
+            <Button tone={activeTab === "history" ? "primary" : "neutral"} onClick={() => setActiveTab("history")}>Audit</Button>
           </div>
-        </Panel>
+
+          {loading ? (
+            <div style={{ padding: 40, textAlign: "center" }}>Loading branding state...</div>
+          ) : (
+            <>
+              {activeTab === "visual" && (
+                <>
+                  <Panel title="Color System">
+                    <div className="grid-2">
+                      <Field label="Primary Brand Color">
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <input
+                            type="color"
+                            value={branding.primary_color}
+                            onChange={(e) => handleUpdate("primary_color", e.target.value)}
+                            style={{ width: 48, height: 36, border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", padding: 2 }}
+                          />
+                          <span style={{ fontSize: 13, fontFamily: "monospace" }}>{branding.primary_color}</span>
+                        </div>
+                      </Field>
+                      <Field label="Secondary Color">
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <input
+                            type="color"
+                            value={branding.secondary_color}
+                            onChange={(e) => handleUpdate("secondary_color", e.target.value)}
+                            style={{ width: 48, height: 36, border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", padding: 2 }}
+                          />
+                          <span style={{ fontSize: 13, fontFamily: "monospace" }}>{branding.secondary_color}</span>
+                        </div>
+                      </Field>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Typography & Theme">
+                    <Field label="Font Family">
+                      <Select
+                        value={branding.font_family}
+                        onChange={(e) => handleUpdate("font_family", e.target.value)}
+                        options={[
+                          { value: "Inter", label: "Inter (Default)" },
+                          { value: "Roboto", label: "Roboto" },
+                          { value: "Outfit", label: "Outfit" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="Theme Mode" style={{ marginTop: 12 }}>
+                      <Select
+                        value={branding.theme_mode}
+                        onChange={(e) => handleUpdate("theme_mode", e.target.value)}
+                        options={[
+                          { value: "light", label: "Light Mode" },
+                          { value: "dark", label: "Dark Mode" },
+                        ]}
+                      />
+                    </Field>
+                  </Panel>
+
+                  <Panel title="Brand Assets">
+                    <div className="dashboard-stack">
+                      <Field label="Tenant Logo (Header)">
+                        {branding.logo && <img src={branding.logo} alt="Logo" style={{ maxHeight: 48, marginBottom: 8, padding: 8, background: "var(--surface-sunken)", border: "1px solid var(--border)", borderRadius: 6 }} />}
+                        <input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(e) => handleUpload(e, "logo")} />
+                      </Field>
+                      <Field label="Favicon">
+                        {branding.favicon && <img src={branding.favicon} alt="Favicon" style={{ maxHeight: 32, marginBottom: 8, padding: 8, background: "var(--surface-sunken)", border: "1px solid var(--border)", borderRadius: 6 }} />}
+                        <input type="file" accept="image/png,image/x-icon,image/svg+xml" onChange={(e) => handleUpload(e, "favicon")} />
+                      </Field>
+                      <Field label="Login Banner">
+                        {branding.banner && <img src={branding.banner} alt="Banner" style={{ maxHeight: 80, width: "100%", objectFit: "cover", marginBottom: 8, border: "1px solid var(--border)", borderRadius: 4 }} />}
+                        <input type="file" accept="image/png,image/jpeg" onChange={(e) => handleUpload(e, "login_banner")} />
+                      </Field>
+                    </div>
+                  </Panel>
+                </>
+              )}
+
+              {activeTab === "terminology" && (
+                <Panel title="Terminology Engine" subtitle="Override system defaults to match organizational terminology.">
+                  <div className="dashboard-stack">
+                    <Field label="Course (e.g., Program, Module)">
+                      <Input
+                        value={branding.terminology.course || "Course"}
+                        onChange={(e) => handleTerminologyUpdate("course", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Category (e.g., Department, Faculty)">
+                      <Input
+                        value={branding.terminology.category || "Category"}
+                        onChange={(e) => handleTerminologyUpdate("category", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Learner (e.g., Employee, Student)">
+                      <Input
+                        value={branding.terminology.learner || "Learner"}
+                        onChange={(e) => handleTerminologyUpdate("learner", e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </Panel>
+              )}
+
+              {activeTab === "emails" && (
+                <Panel title="Email & Certificate Templates" subtitle="Configure automated communications and completion certificates.">
+                  <div className="dashboard-stack">
+                    <Field label="Email Template ID (e.g., SendGrid/Postmark Template)">
+                      <Input
+                        value={branding.email_template_id || ""}
+                        onChange={(e) => handleUpdate("email_template_id", e.target.value)}
+                        placeholder="d-1234567890abcdef"
+                      />
+                    </Field>
+                    <Field label="Certificate Template">
+                      {branding.certificate_template_url && (
+                        <div style={{ marginBottom: 8, padding: 8, background: "var(--surface-sunken)", border: "1px solid var(--border)", borderRadius: 6 }}>
+                          <a href={branding.certificate_template_url} target="_blank" rel="noreferrer">View Current Template</a>
+                        </div>
+                      )}
+                      <input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => handleUpload(e, "certificate")} />
+                    </Field>
+                  </div>
+                </Panel>
+              )}
+
+              {activeTab === "history" && (
+                <Panel title="Version History & Rollback" subtitle="Audit trail of published branding versions.">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {history.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "var(--text-secondary)", textAlign: "center", padding: 20 }}>No published history yet.</div>
+                    ) : (
+                      history.map((v) => (
+                        <div key={v.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12, border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-sunken)" }}>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>Version {v.version_number}</div>
+                            <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Published at {new Date(v.created_at).toLocaleString()}</div>
+                          </div>
+                          <Button tone="danger" onClick={() => handleRollback(v.id)}>Rollback to this</Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Panel>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Right Column: Runtime Live Preview */}
+        <div className="dashboard-stack">
+          <Panel title="Runtime Live Preview" subtitle="Render actual application layouts with draft context.">
+            
+            {/* Role Context Switcher */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <Button tone={previewRole === "public" ? "primary" : "neutral"} onClick={() => setPreviewRole("public")}>Login View</Button>
+              <Button tone={previewRole === "learner" ? "primary" : "neutral"} onClick={() => setPreviewRole("learner")}>Learner View</Button>
+              <Button tone={previewRole === "category_admin" ? "primary" : "neutral"} onClick={() => setPreviewRole("category_admin")}>Admin View</Button>
+            </div>
+
+            <div style={{ 
+              height: 600, 
+              width: "100%", 
+              borderRadius: 8, 
+              border: "2px dashed var(--border)", 
+              background: "var(--surface-sunken)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              color: "var(--text-muted)",
+              position: "relative"
+            }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🚀</div>
+              <h3 style={{ margin: 0, marginBottom: 8 }}>Live Preview Coming Soon</h3>
+              <p style={{ margin: 0, maxWidth: 300, textAlign: "center" }}>
+                The runtime preview shell is currently disabled while we stabilize the rendering engine.
+              </p>
+            </div>
+          </Panel>
+        </div>
       </div>
     </div>
   );

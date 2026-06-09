@@ -640,7 +640,8 @@ function CategoryAdminPageContent({ session, onLogout }) {
                             </td>
                             <td>
                               <div className="split-actions">
-                                <IconButton label="Edit course" icon="pencil" onClick={() => setCourseModal({ open: true, item: course })} />
+                                <Button tone="primary" size="small" onClick={() => navigate(`/categories/${slug}/builder/${course.id}`)}>Edit in Builder</Button>
+                                <IconButton label="Edit course metadata" icon="pencil" onClick={() => setCourseModal({ open: true, item: course })} />
                                 <IconButton label="Delete course" icon="trash" onClick={() => setDeleteCourseId((value) => (value === course.id ? null : course.id))} />
                               </div>
                               {deleteCourseId === course.id ? (
@@ -828,6 +829,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                           expanded={expandedCourseId === course.id}
                           onToggle={() => setExpandedCourseId((value) => (value === course.id ? null : course.id))}
                           onEdit={() => setCourseModal({ open: true, item: course })}
+                          onEditBuilder={() => navigate(`/categories/${slug}/builder/${course.id}`)}
                           onDelete={() => setDeleteCourseId((value) => (value === course.id ? null : course.id))}
                           deleteOpen={deleteCourseId === course.id}
                           onConfirmDelete={() => handleDeleteCourse(course.id)}
@@ -1288,6 +1290,7 @@ function FragmentCourseRow({
   expanded,
   onToggle,
   onEdit,
+  onEditBuilder,
   onDelete,
   deleteOpen,
   onConfirmDelete,
@@ -1309,7 +1312,8 @@ function FragmentCourseRow({
         <td><Badge tone={course.status === "active" ? "success" : "warn"}>{titleize(course.status)}</Badge></td>
         <td>
           <div className="split-actions">
-            <IconButton label="Edit course" icon="pencil" onClick={onEdit} />
+            <Button tone="primary" size="small" onClick={onEditBuilder}>Edit in Builder</Button>
+            <IconButton label="Edit course metadata" icon="pencil" onClick={onEdit} />
             <IconButton label="Delete course" icon="trash" onClick={onDelete} />
           </div>
           {deleteOpen ? (
@@ -1447,6 +1451,23 @@ function CourseEditorModal({ open, item, onClose, onSubmit }) {
         </div>
         <label className="field">
           <span className="field__label">Modules</span>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "12px", color: "var(--text-muted)", alignSelf: "center", marginRight: "4px" }}>Add Native Block:</span>
+            {["Flashcards", "Accordion", "Timeline", "Knowledge Check", "Hotspot", "Interactive Video"].map(block => (
+              <Button 
+                key={block} 
+                size="small" 
+                tone="ghost" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateField("modules", form.modules ? `${form.modules}\n[Native] ${block}` : `[Native] ${block}`);
+                  updateField("module_count", (Number(form.module_count) || 0) + 1);
+                }}
+              >
+                + {block}
+              </Button>
+            ))}
+          </div>
           <textarea className="field__textarea" value={form.modules} onChange={(event) => updateField("modules", event.target.value)} />
         </label>
       </form>

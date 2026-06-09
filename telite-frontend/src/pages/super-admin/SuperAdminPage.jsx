@@ -8,11 +8,14 @@ import {
   approveVerification,
   bulkUploadVerifications,
   createAdmin,
+  inviteAdmin,
   createCategory,
   createTask,
   deleteCategory,
   deleteUser,
   fetchSettings,
+  addAllowedDomain,
+  removeAllowedDomain,
   fetchSuperAdminDashboard,
   fetchOrganizations,
   fetchUsers,
@@ -75,7 +78,7 @@ const ADMIN_INITIAL = {
   full_name: "",
   email: "",
   role: "category_admin",
-  category_scope: "ats",
+  category_scope: "",
   password: "",
   username: "",
 };
@@ -350,31 +353,42 @@ export default function SuperAdminPage({ session, onLogout }) {
     }
   }
 
-  function handleAddDomain() {
+  async function handleAddDomain() {
     if (!newDomain.trim() || !newDomainLabel.trim()) {
       showToast("Both domain and label are required.", "warning");
       return;
     }
     const domainToAdd = newDomain.startsWith("@") ? newDomain : `@${newDomain}`;
-    useSuperAdminStore.setState((prev) => ({
-      settings: {
-        ...prev.settings,
-        allowed_domains: [...(prev.settings?.allowed_domains || []), { domain: domainToAdd, label: newDomainLabel }]
-      }
-    }));
-    setNewDomain("");
-    setNewDomainLabel("");
-    showToast("Domain added.", "success");
+    
+    try {
+      const added = await addAllowedDomain({ domain: domainToAdd, label: newDomainLabel });
+      useSuperAdminStore.setState((prev) => ({
+        settings: {
+          ...prev.settings,
+          allowed_domains: [...(prev.settings?.allowed_domains || []), added]
+        }
+      }));
+      setNewDomain("");
+      setNewDomainLabel("");
+      showToast("Domain added successfully.", "success");
+    } catch (err) {
+      showToast(getErrorMessage(err) || "Failed to add domain.", "error");
+    }
   }
 
-  function handleDeleteDomain(domainToRemove) {
-    useSuperAdminStore.setState((prev) => ({
-      settings: {
-        ...prev.settings,
-        allowed_domains: (prev.settings?.allowed_domains || []).filter(d => d.domain !== domainToRemove)
-      }
-    }));
-    showToast("Domain removed.", "success");
+  async function handleDeleteDomain(domainToRemove) {
+    try {
+      await removeAllowedDomain(domainToRemove);
+      useSuperAdminStore.setState((prev) => ({
+        settings: {
+          ...prev.settings,
+          allowed_domains: (prev.settings?.allowed_domains || []).filter(d => d.domain !== domainToRemove)
+        }
+      }));
+      showToast("Domain removed successfully.", "success");
+    } catch (err) {
+      showToast(getErrorMessage(err) || "Failed to remove domain.", "error");
+    }
   }
 
   async function handleDeleteCategory(categoryId) {
@@ -771,9 +785,11 @@ export default function SuperAdminPage({ session, onLogout }) {
                 ) : (
                   <>
                     <Badge tone="neutral">all-time</Badge>
-                    <button className="panel-link" type="button" onClick={() => navigate("/categories/ats/stats")}>
-                      Full report
-                    </button>
+                    {dashboard.categories && dashboard.categories.length > 0 && (
+                      <button className="panel-link" type="button" onClick={() => navigate(`/categories/${dashboard.categories[0].slug}/stats`)}>
+                        Full report
+                      </button>
+                    )}
                   </>
                 )
               }
@@ -873,11 +889,9 @@ export default function SuperAdminPage({ session, onLogout }) {
                   : "Assigned category administrators"
               }
               action={
-                !isMoodleSource ? (
-                  <button className="panel-link" type="button" onClick={() => setAdminModal({ open: true, item: null })}>
-                    + Add admin
-                  </button>
-                ) : null
+                <button className="panel-link" type="button" onClick={() => setAdminModal({ open: true, item: null })}>
+                  + Invite admin
+                </button>
               }
             >
               <div id="section-admin">
@@ -892,13 +906,11 @@ export default function SuperAdminPage({ session, onLogout }) {
                       <Badge tone={admin.role === "super_admin" ? "accent" : "brand"}>
                         {getRoleLabel(admin)}
                       </Badge>
-                      {!isMoodleSource ? (
-                        <IconButton
-                          label="Edit admin"
-                          icon="pencil"
-                          onClick={() => setAdminModal({ open: true, item: admin })}
-                        />
-                      ) : null}
+                      <IconButton
+                        label="Edit admin"
+                        icon="pencil"
+                        onClick={() => setAdminModal({ open: true, item: admin })}
+                      />
                     </div>
                   ))
                 ) : (
@@ -1604,6 +1616,7 @@ export default function SuperAdminPage({ session, onLogout }) {
         open={adminModal.open}
         item={adminModal.item}
         categories={dashboard.categories}
+        allowedDomains={dashboard?.settings?.system?.allowed_domains || []}
         onClose={() => setAdminModal({ open: false, item: null })}
         onSubmit={async (payload, isEdit) => {
           try {
@@ -1611,8 +1624,8 @@ export default function SuperAdminPage({ session, onLogout }) {
               await updateAdmin(adminModal.item.id, payload);
               showToast("Admin updated.", "success");
             } else {
-              await createAdmin(payload);
-              showToast("Admin added.", "success");
+              await inviteAdmin(payload);
+              showToast("Admin invited.", "success");
             }
             setAdminModal({ open: false, item: null });
             await load();
@@ -1860,7 +1873,7 @@ function CategoryEditorModal({ open, item, admins, organizations = [], onClose, 
   );
 }
 
-function AdminEditorModal({ open, item, categories = [], onClose, onSubmit }) {
+function AdminEditorModal({ open, item, categories = [], allowedDomains = [], onClose, onSubmit }) {
   const isEdit = Boolean(item);
   const [form, setForm] = useState(ADMIN_INITIAL);
   const [errors, setErrors] = useState({});
@@ -1892,13 +1905,13 @@ function AdminEditorModal({ open, item, categories = [], onClose, onSubmit }) {
     if (!form.full_name.trim()) {
       nextErrors.full_name = "Full name is required.";
     }
-    if (!form.email.trim() || !form.email.endsWith("@telite.io")) {
-      nextErrors.email = "Email must use the @telite.io domain.";
+    
+    const emailDomain = form.email.split('@')[1] ? ('@' + form.email.split('@')[1]) : "";
+    if (!form.email.trim() || (allowedDomains.length > 0 && !allowedDomains.map(d => d.domain.toLowerCase()).includes(emailDomain.toLowerCase()))) {
+      nextErrors.email = allowedDomains.length > 0 ? `Email must use an allowed domain for your organization: ${allowedDomains.map(d => d.domain).join(", ")}` : "Invalid email address.";
     }
-    if (!isEdit && !form.password.trim()) {
-      nextErrors.password = "Temporary password is required.";
-    }
-    if (!form.username.trim()) {
+    
+    if (isEdit && !form.username.trim()) {
       nextErrors.username = "Username is required.";
     }
     if (form.role === "category_admin" && !form.category_scope) {
@@ -1922,15 +1935,15 @@ function AdminEditorModal({ open, item, categories = [], onClose, onSubmit }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? "Edit Admin" : "Add Admin"}
-      description="Super admins can create and update internal admin access."
+      title={isEdit ? "Edit Admin" : "Invite Admin"}
+      description="Super admins can invite internal admins and assign them to specific categories (e.g. IoT)."
       footer={
         <>
           <Button tone="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button tone="primary" onClick={handleSubmit}>
-            {isEdit ? "Save changes" : "Add Admin"}
+            {isEdit ? "Save changes" : "Send Invite"}
           </Button>
         </>
       }
@@ -1956,28 +1969,19 @@ function AdminEditorModal({ open, item, categories = [], onClose, onSubmit }) {
             />
             {errors.email ? <span className="field__error">{errors.email}</span> : null}
           </label>
-          <label className="field">
-            <span className="field__label">Username</span>
-            <input
-              className={`field__input ${errors.username ? "is-invalid" : ""}`}
-              value={form.username}
-              onChange={(event) => updateField("username", event.target.value)}
-            />
-            {errors.username ? <span className="field__error">{errors.username}</span> : null}
-          </label>
+          {isEdit ? (
+            <label className="field">
+              <span className="field__label">Username</span>
+              <input
+                className={`field__input ${errors.username ? "is-invalid" : ""}`}
+                value={form.username}
+                onChange={(event) => updateField("username", event.target.value)}
+              />
+              {errors.username ? <span className="field__error">{errors.username}</span> : null}
+            </label>
+          ) : null}
         </div>
-        {!isEdit ? (
-          <label className="field">
-            <span className="field__label">Temporary password</span>
-            <input
-              className={`field__input ${errors.password ? "is-invalid" : ""}`}
-              value={form.password}
-              onChange={(event) => updateField("password", event.target.value)}
-              type="password"
-            />
-            {errors.password ? <span className="field__error">{errors.password}</span> : null}
-          </label>
-        ) : null}
+
         <div className="field">
           <span className="field__label">Role</span>
           <div className="radio-row">
@@ -2005,6 +2009,9 @@ function AdminEditorModal({ open, item, categories = [], onClose, onSubmit }) {
               value={form.category_scope}
               onChange={(event) => updateField("category_scope", event.target.value)}
             >
+              <option value="" disabled>
+                Choose category...
+              </option>
               {categories.map((cat) => (
                 <option key={cat.slug} value={cat.slug}>
                   {cat.name}

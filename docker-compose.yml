@@ -25,8 +25,8 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: redis-server --appendonly yes --requirepass $${REDIS_PASSWORD}
     volumes:
       - redisdata:/data
     healthcheck:
@@ -36,7 +36,7 @@ services:
       retries: 5
 
   moodle:
-    image: ghcr.io/${GHCR_USERNAME}/telite-lms-moodle:latest
+    image: telite-lms-moodle:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -48,8 +48,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      MOODLE_DB_HOST: ${MOODLE_DB_HOST:-postgres}
-      MOODLE_DB_PORT: ${MOODLE_DB_PORT:-5432}
+      MOODLE_DB_HOST: postgres
+      MOODLE_DB_PORT: 5432
       MOODLE_DB_NAME: ${MOODLE_DB_NAME}
       MOODLE_DB_USER: ${MOODLE_DB_USER}
       MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD}
@@ -68,21 +68,25 @@ services:
         required: false
     environment:
       TELITE_DB_BACKEND: ${TELITE_DB_BACKEND:-postgres}
-      TELITE_POSTGRES_HOST: ${TELITE_POSTGRES_HOST:-postgres}
-      TELITE_POSTGRES_PORT: ${TELITE_POSTGRES_PORT:-5432}
+      TELITE_POSTGRES_HOST: postgres
+      TELITE_POSTGRES_PORT: 5432
       TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
       TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
       TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      TELITE_DATABASE_URL: ""
+      TELITE_SQLITE_SOURCE_PATH: ""
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
-      MOODLE_INTERNAL_URL: ${MOODLE_INTERNAL_URL:-http://moodle}
+      MOODLE_INTERNAL_URL: http://moodle
       MOODLE_URL: ${MOODLE_URL:-http://localhost:8082}
       MOODLE_WWWROOT: ${MOODLE_WWWROOT:-http://localhost:8082}
       MOODLE_MODE: ${MOODLE_MODE:-mock}
     ports:
       - "${BACKEND_PORT:-8001}:8001"
+    volumes:
+      - telite-lms_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/liveness', timeout=5)"]
       interval: 15s
@@ -110,15 +114,17 @@ services:
         required: false
     environment:
       TELITE_DB_BACKEND: ${TELITE_DB_BACKEND:-postgres}
-      TELITE_POSTGRES_HOST: ${TELITE_POSTGRES_HOST:-postgres}
-      TELITE_POSTGRES_PORT: ${TELITE_POSTGRES_PORT:-5432}
+      TELITE_POSTGRES_HOST: postgres
+      TELITE_POSTGRES_PORT: 5432
       TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
       TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
       TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      MOODLE_INTERNAL_URL: ${MOODLE_INTERNAL_URL:-http://moodle}
+      TELITE_DATABASE_URL: ""
+      TELITE_SQLITE_SOURCE_PATH: ""
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MOODLE_INTERNAL_URL: http://moodle
       MOODLE_URL: ${MOODLE_URL:-http://localhost:8082}
       MOODLE_MODE: ${MOODLE_MODE:-mock}
     depends_on:
@@ -139,9 +145,9 @@ services:
       - path: .env
         required: false
     environment:
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
       redis:
         condition: service_healthy
@@ -161,10 +167,10 @@ services:
 
 volumes:
   pgdata:
-    external: true
     name: telite-lms_pgdata
   moodledata:
-    external: true
     name: telite-lms_moodledata
   redisdata:
     name: telite-lms_redisdata
+  telite-lms_uploads:
+    name: telite-lms_uploads

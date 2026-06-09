@@ -381,3 +381,70 @@ body.login-active {
 .auth-page-wrap.center-only .auth-hero-left {
   display: none;
 }
+
+/* ── FORGOT PASSWORD ADDITIONS ─────────────────────────────────────────────── */
+
+/* Label row: label left, "Forgot password?" link right */
+.auth-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+.auth-field-label-row .auth-field-label {
+  margin-bottom: 0;
+}
+
+/* "Forgot password?" button-as-link next to the password label */
+.auth-forgot-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary-lt);
+  cursor: none;
+  transition: color 0.2s;
+  text-decoration: none;
+}
+.auth-forgot-link:hover { color: #fff; }
+
+/* Back button at the top of the forgot-password view */
+.auth-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.38);
+  cursor: none;
+  transition: color 0.2s;
+  margin-bottom: 4px;
+}
+.auth-back-btn:hover { color: rgba(255,255,255,0.75); }
+.auth-back-btn svg { flex-shrink: 0; }
+
+/* Confirmation checkmark icon */
+.auth-sent-icon {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+/* Inline text-button (e.g. "try again") */
+.auth-inline-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--primary-lt);
+  font-weight: 600;
+  cursor: none;
+  transition: color 0.2s;
+  text-decoration: none;
+  display: inline;
+}
+.auth-inline-link:hover { color: #fff; }

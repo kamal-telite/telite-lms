@@ -132,7 +132,7 @@ def migrate_pal_to_postgres(
                         enrollment_number=row["enrollment_number"],
                         topic=row["topic"],
                         avg_score=float(row["avg_score"]) if row["avg_score"] else None,
-                        attempts=int(row["attempts"] or 1),
+                        attempts=int(row["attempts"]),
                         last_updated=row["last_updated"],
                     )
                     pg_session.add(topic)

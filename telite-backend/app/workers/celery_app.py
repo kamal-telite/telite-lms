@@ -1,19 +1,9 @@
 """
 Celery application configuration for Telite LMS.
 
-PHASE 5: Async event-driven Moodle sync.
-
-Architecture:
-  FastAPI publishes events → Redis queue → Celery workers → Moodle API
-
-This decouples FastAPI from Moodle latency. FastAPI returns immediately
-after writing to PostgreSQL and publishing an event. Celery workers
-process the event asynchronously with retry logic.
-
 Queues:
-  moodle_sync   — Moodle API calls (user/course/enrollment sync)
   notifications — Email and in-app notifications
-  reconcile     — Nightly drift detection jobs
+  reconcile     — Nightly jobs (e.g. data consistency checks)
 """
 
 from __future__ import annotations
@@ -45,21 +35,21 @@ celery_app = Celery(
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
     include=[
-        "app.workers.moodle_tasks",
         "app.workers.reconciliation",
+        "app.workers.notification_tasks",
     ],
 )
 
 # ── Queue definitions ─────────────────────────────────────────────────────────
 
 default_exchange = Exchange("default", type="direct")
-moodle_exchange = Exchange("moodle", type="direct")
 reconcile_exchange = Exchange("reconcile", type="direct")
+notifications_exchange = Exchange("notifications", type="direct")
 
 celery_app.conf.task_queues = (
     Queue("default", default_exchange, routing_key="default"),
-    Queue("moodle_sync", moodle_exchange, routing_key="moodle"),
     Queue("reconcile", reconcile_exchange, routing_key="reconcile"),
+    Queue("notifications", notifications_exchange, routing_key="notifications"),
 )
 
 celery_app.conf.task_default_queue = "default"
@@ -67,8 +57,8 @@ celery_app.conf.task_default_exchange = "default"
 celery_app.conf.task_default_routing_key = "default"
 
 celery_app.conf.task_routes = {
-    "app.workers.moodle_tasks.*": {"queue": "moodle_sync"},
     "app.workers.reconciliation.*": {"queue": "reconcile"},
+    "app.workers.notification_tasks.*": {"queue": "notifications"},
 }
 
 # ── Retry / reliability settings ──────────────────────────────────────────────
@@ -99,8 +89,8 @@ celery_app.conf.update(
 # ── Beat schedule (periodic tasks) ───────────────────────────────────────────
 
 celery_app.conf.beat_schedule = {
-    # Nightly reconciliation — detect Telite/Moodle drift
-    "moodle-reconcile-nightly": {
+    # Nightly reconciliation
+    "reconcile-nightly": {
         "task": "app.workers.reconciliation.reconcile_all_orgs",
         "schedule": 86400,  # every 24 hours
         "options": {"queue": "reconcile"},
@@ -110,5 +100,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.reconciliation.retry_dead_letter_events",
         "schedule": 3600,  # every hour
         "options": {"queue": "reconcile"},
+    },
+    # Every 5 minutes: flush pending email notifications
+    "dispatch-pending-notifications": {
+        "task": "app.workers.notification_tasks.dispatch_pending_notifications",
+        "schedule": 300,  # every 5 minutes
+        "options": {"queue": "notifications"},
     },
 }

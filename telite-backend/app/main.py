@@ -6,7 +6,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +15,6 @@ from app.api.auth import auth_router
 from app.api.routes.dashboard import dashboard_router
 from app.api.routes.enrolments import enrol_router
 from app.api.routes.management import management_router
-from app.integrations.moodle_bridge import moodle_health_check, moodle_health_detail, moodle_mode
 from app.api.routes.pal import pal_router
 from app.api.routes.payments import payment_router
 from app.api.routes.platform import invitation_router, platform_router
@@ -24,23 +23,20 @@ from app.api.routes.tasks import task_router
 from app.api.routes.branding import branding_router
 from app.api.routes.admin_branding import admin_branding_router
 from app.api.routes.sessions import sessions_router
-from app.api.routes.moodle_sync import moodle_sync_router  # Phase 5: async Moodle sync observability
+from app.api.routes.builder import builder_router
+from app.api.routes.publishing import publishing_router
+from app.api.routes.media import media_router
+from app.api.routes.learning_paths import learning_paths_router
 from app.core.request_context import reset_request_id, set_request_id
 from app.core.domain_context import resolve_domain_context
 from app.core.rate_limiter import close_redis_connection
-from app.services.store import (
-    close_postgres_pool,
-    count_active_learners,
-    count_pending_approvals,
-    count_pending_signups,
-    init_db,
-    list_admins,
-    list_categories,
-    verify_database_connection,
-)
+from app.db.engine import dispose_engine, db_session
+from sqlalchemy.orm import Session
+from app.repositories.course_repo import CategoryRepository
+from app.repositories.user_repo import UserRepository
+from app.repositories.org_repo import OrgRepository
+from app.repositories.invite_repo import InviteRepository
 from app.db.init_db import run_phase3_init
-from app.db.engine import dispose_engine
-
 
 # ── Structured logging ───────────────────────────────────────────────────────
 
@@ -58,14 +54,9 @@ logger = logging.getLogger("telite.api")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("Initialising database …")
-    # Phase 1-2: legacy store.py init (raw SQL, existing tables)
-    init_db()
-    verify_database_connection()
-    # Phase 3: SQLAlchemy ORM tables + RLS
     run_phase3_init()
-    logger.info("Database ready. Moodle mode: %s", moodle_mode())
+    logger.info("Database ready.")
     yield
-    close_postgres_pool()
     dispose_engine()
     close_redis_connection()
     logger.info("Shutting down.")
@@ -79,10 +70,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS — env-configurable with sensible defaults ────────────────────
-    # allow_credentials=True is required for HttpOnly cookie auth.
-    # Wildcard origins ("*") are NOT allowed when allow_credentials=True —
-    # origins must be explicitly listed.
     _default_origins = [
         "http://localhost:3000",
         "http://localhost:5173",
@@ -105,13 +92,11 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,          # required for HttpOnly cookie auth
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["X-Request-ID"], # let frontend read trace IDs
+        expose_headers=["X-Request-ID"],
     )
-
-    # ── Request tracing + logging middleware ─────────────────────────────────
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
@@ -161,9 +146,13 @@ def create_app() -> FastAPI:
         )
         return response
 
-    # ── Routers ──────────────────────────────────────────────────────────
-
+    from app.api.routes.learner import learner_router
+    from app.api.routes.player_api import player_router
+    from app.api.routes.authoring import authoring_router
     app.include_router(auth_router)
+    app.include_router(learner_router, prefix="/api/v1")
+    app.include_router(player_router, prefix="/api/v1")
+    app.include_router(authoring_router)
     app.include_router(dashboard_router)
     app.include_router(management_router)
     app.include_router(enrol_router)
@@ -173,17 +162,17 @@ def create_app() -> FastAPI:
     app.include_router(signup_router)
     app.include_router(platform_router)
     app.include_router(invitation_router)
-    app.include_router(branding_router)   # Phase 3: public branding endpoint
-    app.include_router(admin_branding_router) # Phase 7: admin branding configuration
-    app.include_router(sessions_router)   # Phase 4: session revocation/device tracking
-    app.include_router(moodle_sync_router)  # Phase 5: async Moodle sync observability
+    app.include_router(branding_router)
+    app.include_router(admin_branding_router)
+    app.include_router(sessions_router)
+    app.include_router(builder_router)
+    app.include_router(publishing_router)
+    app.include_router(media_router)
+    app.include_router(learning_paths_router)
 
-    # ── Static Files (Phase 7: Branding Uploads) ─────────────────────────
     uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
     os.makedirs(uploads_dir, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
-
-    # ── Root ─────────────────────────────────────────────────────────────
 
     @app.get("/")
     def root():
@@ -193,58 +182,27 @@ def create_app() -> FastAPI:
             "version": "5.1.0",
             "docs": "/docs",
             "health": "/health",
-            "moodle_health": "/moodle/health",
         }
 
-    # ── Health ───────────────────────────────────────────────────────────
-
     @app.get("/health")
-    def health():
-        mode = moodle_mode()
-        moodle_ok = moodle_health_check()
+    def health(db: Session = Depends(db_session)):
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
         return {
             "status": "ok",
             "api": "running",
             "version": "5.1.0",
             "database": "ok",
-            "moodle_mode": mode,
-            "moodle_connection": (
-                "mock mode enabled for local development"
-                if mode == "mock"
-                else ("ok" if moodle_ok else "failed")
-            ),
-            "categories_loaded": len(list_categories(include_archived=True)),
-            "students_loaded": count_active_learners(),
-            "faculty_loaded": len(list_admins()),
-            "pending_enrollment_requests": count_pending_approvals(),
-            "pending_signups": count_pending_signups(),
+            "architecture": "pure_native",
         }
-
-    # ── Liveness (lightweight — no Moodle call) ──────────────────────────
 
     @app.get("/health/liveness")
     def liveness():
-        """Lightweight liveness probe that skips Moodle connectivity.
-
-        Use this for Kubernetes/load-balancer liveness checks.
-        Use /health for full readiness checks.
-        """
         return {
             "status": "ok",
             "api": "running",
             "version": "5.1.0",
         }
-
-    # ── Moodle health (detailed) ─────────────────────────────────────────
-
-    @app.get("/moodle/health")
-    def moodle_health():
-        """Detailed Moodle connectivity check.
-
-        Returns connection status, token validity, site name,
-        available function count, and response time.
-        """
-        return moodle_health_detail()
 
     return app
 

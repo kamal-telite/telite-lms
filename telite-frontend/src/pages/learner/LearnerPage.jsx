@@ -15,6 +15,7 @@ import {
   titleize
 } from "../../utils/formatters";
 import { useLearnerStore } from "../../store/learnerStore";
+import { LearnerPlayer } from "../../components/player/LearnerPlayer";
 
 function PalRing({ score, size = 120 }) {
   const radius = 50;
@@ -97,6 +98,7 @@ export default function LearnerPage({ session, onLogout }) {
   const { data, loading, error, fetchData: load } = useLearnerStore();
   const [submittingTaskId, setSubmittingTaskId] = useState(null);
   const [launchingId, setLaunchingId] = useState(null);
+  const [activeModuleId, setActiveModuleId] = useState(null);
 
   // Tabs for sub-pages
   const [courseFilter, setCourseFilter] = useState("all");
@@ -158,16 +160,11 @@ export default function LearnerPage({ session, onLogout }) {
       showToast("No active course selected yet.", "warning");
       return;
     }
-    setLaunchingId(courseId);
-    try {
-      const payload = await launchCourse(courseId);
-      window.open(payload.launch_url, "_blank", "noopener,noreferrer");
-      showToast(`Launching ${payload.course_name}...`, "info");
-    } catch (requestError) {
-      showToast("Unable to launch Moodle course.", "error");
-    } finally {
-      setLaunchingId(null);
-    }
+    
+    // Instead of launching Moodle URL, we look up the first module cmid or use courseId logic
+    // For Phase E, we assume courseId translates to a cmid or we fetch the module list.
+    // Setting activeModuleId triggers the NativePlayer overlay
+    setActiveModuleId(courseId);
   }
 
   async function handleSubmitTask(taskId) {
@@ -260,6 +257,13 @@ export default function LearnerPage({ session, onLogout }) {
       scrollRef={scrollRef}
     >
       <NotificationDrawer open={showNotifications} onClose={() => setShowNotifications(false)} notifications={data.notifications} />
+      
+      {activeModuleId && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: "#fff" }}>
+          <LearnerPlayer courseId={activeModuleId} onExit={() => { setActiveModuleId(null); load(); }} />
+        </div>
+      )}
+
       <div className="dashboard-stack">
         
         {/* DASHBOARD PAGE */}
@@ -531,8 +535,26 @@ export default function LearnerPage({ session, onLogout }) {
         {/* CERTIFICATES PAGE */}
         {activeNav === "section-certificates" && (
           <section id="section-certificates">
-            <Panel title="Certificates" subtitle="Unlock certificates upon track completion">
-              <EmptyState title="Track incomplete" body="Complete all assigned courses to unlock your certificate." />
+            <Panel title="Certificates" subtitle="Earned credentials">
+              <div className="grid-3">
+                {data.courses.filter(c => c.status === "completed").map(course => (
+                  <div className="soft-card" key={course.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ background: "var(--brand-gradient, linear-gradient(135deg, #0ea5e9, #6366f1))", height: 100, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold" }}>
+                      Certificate
+                    </div>
+                    <div>
+                      <div className="row-title">{course.name}</div>
+                      <div className="row-subtitle">Completed {formatPercent(course.completion_pct)}</div>
+                    </div>
+                    <Button tone="primary" onClick={() => window.open(`/api/certificates/${course.id}`, '_blank')}>
+                      Download PDF
+                    </Button>
+                  </div>
+                ))}
+                {data.courses.filter(c => c.status === "completed").length === 0 && (
+                  <EmptyState title="No certificates yet" body="Complete your first course to earn a certificate." style={{ gridColumn: "1 / -1" }} />
+                )}
+              </div>
             </Panel>
           </section>
         )}

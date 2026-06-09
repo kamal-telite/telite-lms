@@ -90,3 +90,31 @@ class AuthRepository(BaseRepository[AuthSession]):
             self.session.delete(s)
         self.session.flush()
         return count
+
+    # ── Password Resets ───────────────────────────────────────────────────────
+
+    def create_password_reset_token(self, user_id: str) -> Any:
+        from app.models.password_reset_token import PasswordResetToken
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S")
+        record = PasswordResetToken(
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+        )
+        self.session.add(record)
+        self.session.flush()
+        return record
+
+    def get_password_reset_token(self, token: str) -> Any | None:
+        from app.models.password_reset_token import PasswordResetToken
+        stmt = select(PasswordResetToken).where(PasswordResetToken.token == token)
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def mark_password_reset_token_used(self, token_id: int) -> None:
+        from app.models.password_reset_token import PasswordResetToken
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        self.session.execute(
+            update(PasswordResetToken).where(PasswordResetToken.id == token_id).values(used_at=now)
+        )
+        self.session.flush()

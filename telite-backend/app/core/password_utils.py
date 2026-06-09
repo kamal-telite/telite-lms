@@ -137,3 +137,27 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 def generate_reset_token() -> str:
     """Generate a secure password reset token."""
     return secrets.token_urlsafe(32)
+
+
+def hash_password(password: str) -> str:
+    import hashlib
+    salt = os.getenv("TELITE_PASSWORD_SALT", "telite-dev-salt").encode("utf-8")
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120_000).hex()
+
+
+def verify_password(password: str, hashed_value: str) -> bool:
+    if hash_password(password) == hashed_value:
+        return True
+
+    legacy_salt = "telite-dev-salt"
+    if os.getenv("TELITE_PASSWORD_SALT", legacy_salt) == legacy_salt:
+        return False
+
+    import hashlib
+    legacy_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        legacy_salt.encode("utf-8"),
+        120_000,
+    ).hex()
+    return legacy_hash == hashed_value

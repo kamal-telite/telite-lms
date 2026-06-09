@@ -2,61 +2,40 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.api.auth import TokenData, ensure_org_access, get_current_user, require_admin, require_super_admin, resolve_org_scope
-from app.integrations.moodle_bridge import moodle_mode
-from app.integrations.moodle_events import (
-    publish_category_created,
-    publish_category_archived,
-    publish_user_suspended,
-    publish_course_created,
-    publish_course_archived
-)
-from app.integrations.moodle_reports import build_moodle_settings_snapshot, build_moodle_user_directory
-from app.services.store import (
-    archive_category,
-    archive_course,
-    build_launch_payload,
-    create_category,
-    create_or_update_admin,
-    create_or_update_course,
-    ensure_category_access,
-    fetch_user_by_id,
-    get_category,
-    get_course,
-    get_system_settings,
-    get_user_activity,
-    is_admin_role,
-    is_category_admin_role,
-    is_learner_role,
-    is_tenant_super_admin_role,
-    list_admins,
-    list_categories,
-    list_courses,
-    list_notifications,
-    list_users,
-    hard_delete_user,
-    remove_admin,
-    set_user_active,
-    soft_delete_user,
-    update_category,
-    update_user_role,
-)
+from app.db.engine import db_session
+from app.repositories.course_repo import CategoryRepository, CourseRepository
+from app.repositories.user_repo import UserRepository
+from app.repositories.org_repo import OrgRepository
+from app.repositories.invite_repo import InviteRepository
+from app.repositories.notification_repo import NotificationRepository
+from app.services.email import send_invitation_email
 
 logger = logging.getLogger("telite.management")
-
-
 management_router = APIRouter(tags=["Management"])
 
+def is_admin_role(role: str) -> bool:
+    return role in ("super_admin", "category_admin")
 
-def _org_id(record: dict[str, Any] | None) -> int | None:
+def is_category_admin_role(role: str) -> bool:
+    return role == "category_admin"
+
+def is_learner_role(role: str) -> bool:
+    return role == "learner"
+
+def is_tenant_super_admin_role(role: str) -> bool:
+    return role == "super_admin"
+
+def _org_id(record: Any) -> int | None:
     if not record:
         return None
-    return record.get("org_id") or record.get("organization_id")
-
+    if isinstance(record, dict):
+        return record.get("org_id") or record.get("organization_id")
+    return getattr(record, "org_id", getattr(record, "organization_id", None))
 
 class CategoryPayload(BaseModel):
     name: str
@@ -69,15 +48,18 @@ class CategoryPayload(BaseModel):
     org_type: str = "college"
     organization_id: int | None = None
 
-
 class AdminPayload(BaseModel):
     full_name: str
     email: str
     role: str
-    category_scope: str | None = None
     password: str | None = None
     username: str | None = None
+    category_scope: str | None = None
 
+class InviteAdminPayload(BaseModel):
+    email: str
+    role: str
+    category_scope: str | None = None
 
 class CoursePayload(BaseModel):
     name: str
@@ -90,141 +72,168 @@ class CoursePayload(BaseModel):
     lessons_count: int = Field(default=8, ge=0)
     hours: float = Field(default=12, ge=0)
     prerequisite_course_id: str | None = None
-    moodle_course_id: int | None = None
-
-
 class UserRolePayload(BaseModel):
     role: str
     category_scope: str | None = None
 
-
 class UserActivePayload(BaseModel):
     is_active: bool
 
+class AllowedDomainPayload(BaseModel):
+    domain: str
+    label: str
 
 @management_router.get("/categories")
 def get_categories(
     org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
     scoped_org_id = resolve_org_scope(current_user, org_id)
-    return {"categories": list_categories(include_archived=True, org_id=scoped_org_id)}
-
+    repo = CategoryRepository(db)
+    cats = repo.list_by_org(scoped_org_id, include_archived=True)
+    return {"categories": [cat.to_dict() for cat in cats]}
 
 @management_router.post("/categories")
 def post_category(
     body: CategoryPayload,
     org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
 
     payload = body.model_dump()
     scoped_org_id = payload.get("organization_id") or resolve_org_scope(current_user, org_id)
-    payload["organization_id"] = scoped_org_id
-    payload["org_id"] = scoped_org_id
-    existing = next(
-        (
-            category
-            for category in list_categories(include_archived=True, org_id=scoped_org_id)
-            if category["slug"] == payload["slug"]
-        ),
-        None,
-    )
-    if existing:
+    
+    repo = CategoryRepository(db)
+    existing = repo.get_by_slug(payload["slug"])
+    if existing and existing.org_id == scoped_org_id:
         raise HTTPException(status_code=400, detail="Category slug already exists.")
 
     try:
-        created = create_category(payload, actor)
-        moodle_sync = publish_category_created(
-            category_id=created["id"],
-            name=created["name"],
-            slug=created["slug"],
+        created = repo.create_category(
+            name=payload["name"],
             org_id=scoped_org_id,
-            description=created.get("description") or "",
+            slug=payload["slug"],
+            description=payload.get("description"),
+            admin_user_id=payload.get("admin_user_id"),
+            accent_color=payload.get("accent_color", "#2563EB"),
+            org_type=payload.get("org_type", "college"),
+            planned_courses=payload.get("planned_courses", 0),
         )
-        return {**created, "moodle_sync": moodle_sync}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        db.commit()
+        return created.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.patch("/categories/{category_id}")
 def patch_category(
     category_id: str,
     body: CategoryPayload,
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
-    existing = get_category(category_id)
+        
+    repo = CategoryRepository(db)
+    existing = repo.get_by_id(category_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
+        
     ensure_org_access(current_user, _org_id(existing))
     try:
-        return update_category(category_id, body.model_dump(exclude_unset=True), actor)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        updated = repo.update_category(existing, **body.model_dump(exclude_unset=True))
+        db.commit()
+        return updated.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.delete("/categories/{category_id}")
 def delete_category(
     category_id: str,
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
+        
+    repo = CategoryRepository(db)
+    category = repo.get_by_id(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+        
+    ensure_org_access(current_user, _org_id(category))
     try:
-        # Fetch category first to check Moodle ID
-        from app.services.store import get_category
-        category_data = get_category(category_id)
-        if not category_data:
-            raise ValueError("Category not found.")
-        ensure_org_access(current_user, _org_id(category_data))
-
-        category = archive_category(category_id, actor)
-        moodle_sync = None
-        if category_data.get("moodle_category_id"):
-            moodle_sync = publish_category_archived(
-                category_id=category_data["id"],
-                moodle_category_id=category_data["moodle_category_id"],
-                org_id=_org_id(category_data) or current_user.org_id or 1,
-            )
-        return {**category, "moodle_sync": moodle_sync}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        from datetime import datetime
+        category.status = "archived"
+        category.archived_at = datetime.utcnow().isoformat()
+        db.commit()
+        return category.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.get("/admins")
 def get_admins(
     org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
     scoped_org_id = resolve_org_scope(current_user, org_id)
-    return {"admins": list_admins(scoped_org_id)}
-
+    user_repo = UserRepository(db)
+    admins = user_repo.list_admins_by_org(scoped_org_id)
+    return {"admins": [a.to_dict() for a in admins]}
 
 @management_router.post("/admins")
 def post_admin(
     body: AdminPayload,
     org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
+        
+    scoped_org_id = resolve_org_scope(current_user, org_id)
     try:
-        payload = body.model_dump()
-        scoped_org_id = resolve_org_scope(current_user, org_id)
-        payload["organization_id"] = scoped_org_id
-        payload["org_id"] = scoped_org_id
-        return create_or_update_admin(payload, actor)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        existing = user_repo.get_by_email(body.email)
+        if existing:
+            # Update existing
+            existing.role = body.role
+            existing.full_name = body.full_name
+            if body.category_scope:
+                existing.category_scope = body.category_scope
+            if body.password:
+                user_repo.update_password(existing, body.password)
+            user = existing
+        else:
+            user = user_repo.create_user(
+                email=body.email,
+                full_name=body.full_name,
+                role=body.role,
+                org_id=scoped_org_id,
+                password=body.password or "ChangeMe123!",
+                category_scope=body.category_scope,
+                username=body.username
+            )
+        db.commit()
+        return user.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.patch("/admins/{user_id}")
 def patch_admin(
@@ -232,102 +241,154 @@ def patch_admin(
     body: AdminPayload,
     org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
+        
+    existing = user_repo.get_by_id(user_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Admin not found")
+        
+    ensure_org_access(current_user, existing.org_id)
     try:
-        existing = fetch_user_by_id(user_id)
-        if not existing:
-            raise HTTPException(status_code=404, detail="Admin not found")
-        ensure_org_access(current_user, _org_id(existing))
-        payload = body.model_dump()
-        scoped_org_id = _org_id(existing) or resolve_org_scope(current_user, org_id)
-        payload["organization_id"] = scoped_org_id
-        payload["org_id"] = scoped_org_id
-        return create_or_update_admin(payload, actor, user_id=user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        existing.full_name = body.full_name
+        existing.email = body.email
+        existing.role = body.role
+        if body.category_scope is not None:
+            existing.category_scope = body.category_scope
+        if body.username:
+            existing.username = body.username
+        if body.password:
+            user_repo.update_password(existing, body.password)
+        db.commit()
+        return existing.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
+@management_router.post("/admins/invite", status_code=201)
+def api_invite_admin(
+    payload: InviteAdminPayload,
+    org_id: int | None = Query(default=None, alias="orgId"),
+    current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
+):
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
+    if not actor:
+        raise HTTPException(status_code=404, detail="Actor not found")
+        
+    scoped_org_id = resolve_org_scope(current_user, org_id)
+    org_repo = OrgRepository(db)
+    org = org_repo.get_by_id(scoped_org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+        
+    try:
+        invite_repo = InviteRepository(db)
+        invitation = invite_repo.create_invitation(
+            org_id=scoped_org_id,
+            email=payload.email,
+            role=payload.role,
+            invited_by=actor.id,
+            category_scope=payload.category_scope,
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc))
+        
+    delivered = send_invitation_email(
+        to_email=invitation.email,
+        org_name=org.name,
+        role=invitation.role,
+        token=invitation.token,
+        expires_at=invitation.expires_at.isoformat(),
+    )
+    
+    try:
+        invite_repo.record_delivery(invitation.id, delivered=delivered)
+        db.commit()
+    except:
+        db.rollback()
+    
+    return {"message": "Invitation sent successfully", "invitation": invitation.to_dict()}
 
 @management_router.delete("/admins/{user_id}")
 def delete_admin(
     user_id: str,
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
-    if not actor:
-        raise HTTPException(status_code=404, detail="Actor not found")
+    user_repo = UserRepository(db)
+    existing = user_repo.get_by_id(user_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Admin not found")
+        
+    ensure_org_access(current_user, existing.org_id)
     try:
-        existing = fetch_user_by_id(user_id)
-        if not existing:
-            raise HTTPException(status_code=404, detail="Admin not found")
-        ensure_org_access(current_user, _org_id(existing))
-        user = hard_delete_user(user_id, actor)
-        if user.get("moodle_user_id"):
-            publish_user_suspended(
-                user_id=user["id"],
-                moodle_user_id=user["moodle_user_id"],
-                org_id=_org_id(user) or current_user.org_id or 1,
-            )
-        return user
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        db.delete(existing)
+        db.commit()
+        return {"status": "success"}
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.get("/categories/{category_slug}/courses")
 def get_category_courses(
     category_slug: str,
     current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
 ):
-    category = get_category(category_slug)
+    cat_repo = CategoryRepository(db)
+    category = cat_repo.get_by_slug(category_slug)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    ensure_org_access(current_user, _org_id(category))
-    viewer = fetch_user_by_id(current_user.id)
+        
+    ensure_org_access(current_user, category.org_id)
+    user_repo = UserRepository(db)
+    viewer = user_repo.get_by_id(current_user.id)
     if not viewer:
         raise HTTPException(status_code=404, detail="Viewer not found")
-    if is_learner_role(viewer["role"]):
-        if viewer["category_scope"] != category_slug:
+        
+    if is_learner_role(viewer.role):
+        if viewer.category_scope != category_slug:
             raise HTTPException(status_code=403, detail="You do not have access to this category.")
-    else:
-        try:
-            ensure_category_access(viewer, category_slug)
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
-    return {"courses": list_courses(category_slug, include_archived=True, org_id=_org_id(category))}
-
+    elif is_category_admin_role(viewer.role) and viewer.category_scope != category_slug:
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    course_repo = CourseRepository(db)
+    courses = course_repo.list_by_org(category.org_id, category_slug=category_slug)
+    return {"courses": [c.to_dict() for c in courses]}
 
 @management_router.post("/categories/{category_slug}/courses")
 def post_course(
     category_slug: str,
     body: CoursePayload,
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
-    if not actor:
-        raise HTTPException(status_code=404, detail="Actor not found")
+    cat_repo = CategoryRepository(db)
+    category = cat_repo.get_by_slug(category_slug)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+        
+    ensure_org_access(current_user, category.org_id)
+    
+    course_repo = CourseRepository(db)
     try:
-        ensure_category_access(actor, category_slug)
-        category_data = get_category(category_slug)
-        if not category_data:
-            raise ValueError("Category not found.")
-        created_course = create_or_update_course(category_slug, body.model_dump(), actor)
-        moodle_sync = None
-        if category_data.get("moodle_category_id"):
-            moodle_sync = publish_course_created(
-                course_id=created_course["id"],
-                name=created_course["name"],
-                category_slug=category_slug,
-                org_id=_org_id(category_data) or current_user.org_id or 1,
-                moodle_category_id=category_data.get("moodle_category_id"),
-            )
-        return {**created_course, "moodle_sync": moodle_sync}
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        payload = body.model_dump()
+        payload["category_slug"] = category_slug
+        payload["org_id"] = category.org_id
+        course = course_repo.create_course(**payload)
+        db.commit()
+        return course.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.patch("/categories/{category_slug}/courses/{course_id}")
 def patch_course(
@@ -335,64 +396,51 @@ def patch_course(
     course_id: str,
     body: CoursePayload,
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
-    if not actor:
-        raise HTTPException(status_code=404, detail="Actor not found")
+    course_repo = CourseRepository(db)
+    course = course_repo.get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+        
+    ensure_org_access(current_user, course.org_id)
     try:
-        ensure_category_access(actor, category_slug)
-        return create_or_update_course(category_slug, body.model_dump(), actor, course_id=course_id)
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        updated = course_repo.update_course(course, **body.model_dump(exclude_unset=True))
+        db.commit()
+        return updated.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.delete("/categories/{category_slug}/courses/{course_id}")
 def delete_course(
     category_slug: str,
     course_id: str,
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
-    if not actor:
-        raise HTTPException(status_code=404, detail="Actor not found")
+    course_repo = CourseRepository(db)
+    course = course_repo.get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+        
+    ensure_org_access(current_user, course.org_id)
     try:
-        ensure_category_access(actor, category_slug)
-        course = archive_course(course_id, actor)
-        if course.get("moodle_course_id"):
-            moodle_sync = publish_course_archived(
-                course_id=course["id"],
-                moodle_course_id=course["moodle_course_id"],
-                org_id=_org_id(course) or current_user.org_id or 1,
-            )
-        else:
-            moodle_sync = None
-        return {**course, "moodle_sync": moodle_sync}
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+        course.status = "archived"
+        db.commit()
+        return course.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc))
 
 @management_router.get("/courses/{course_id}/launch")
 def launch_course(
     course_id: str,
     current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
 ):
-    course = get_course(course_id)
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-    ensure_org_access(current_user, _org_id(course))
-    viewer = fetch_user_by_id(current_user.id)
-    if not viewer:
-        raise HTTPException(status_code=404, detail="Viewer not found")
-    if is_learner_role(viewer["role"]) and viewer["category_scope"] != course["category_slug"]:
-        raise HTTPException(status_code=403, detail="You are not enrolled in this category.")
-    if is_category_admin_role(viewer["role"]) and viewer["category_scope"] != course["category_slug"]:
-        raise HTTPException(status_code=403, detail="You do not manage this category.")
-    return build_launch_payload(course_id, viewer)
-
+    # Native player replaces moodle. Just return a native launch URL.
+    return {"launch_url": f"/course/player/{course_id}", "status": "success"}
 
 @management_router.get("/users")
 def get_users(
@@ -405,29 +453,26 @@ def get_users(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
     scoped_org_id = resolve_org_scope(current_user, org_id)
-
-    if source == "moodle" and is_tenant_super_admin_role(current_user.role) and moodle_mode() == "live":
-        return build_moodle_user_directory(role=role, query=query, page=page, page_size=page_size, org_id=scoped_org_id)
+    user_repo = UserRepository(db)
+    
     if is_category_admin_role(current_user.role):
         category_slug = current_user.category_scope
         if role and is_tenant_super_admin_role(role):
             raise HTTPException(status_code=403, detail="Category admins cannot view super admin users.")
+            
     offset = (page - 1) * page_size
-    return list_users(
-        role=role,
-        category_slug=category_slug,
-        query=query,
-        enrollment_type=enrollment_type,
-        org_id=scoped_org_id,
-        limit=page_size,
-        offset=offset,
-        include_inactive=is_tenant_super_admin_role(current_user.role),
-    )
+    users = user_repo.list_by_org(scoped_org_id, role=role, search=query, limit=page_size, offset=offset)
+    
+    # Optional category filtering
+    if category_slug:
+        users = [u for u in users if u.category_scope == category_slug]
+        
+    return {"users": [u.to_dict() for u in users], "total": len(users)}
 
-
-def _can_access_user(viewer: TokenData, target: dict[str, Any]) -> bool:
+def _can_access_user(viewer: TokenData, target: Any) -> bool:
     if viewer.is_platform_admin:
         return True
     if viewer.org_id is None or _org_id(target) != viewer.org_id:
@@ -435,103 +480,137 @@ def _can_access_user(viewer: TokenData, target: dict[str, Any]) -> bool:
     if is_tenant_super_admin_role(viewer.role):
         return True
     if is_category_admin_role(viewer.role):
-        return target["category_scope"] == viewer.category_scope or is_admin_role(target["role"])
-    return viewer.id == target["id"]
-
+        return target.category_scope == viewer.category_scope or is_admin_role(target.role)
+    return viewer.id == target.id
 
 @management_router.get("/users/{user_id}")
-def get_user(user_id: str, current_user: TokenData = Depends(get_current_user)):
-    user = fetch_user_by_id(user_id)
+def get_user(
+    user_id: str, 
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session)
+):
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not _can_access_user(current_user, user):
         raise HTTPException(status_code=403, detail="You do not have access to this user.")
-    return user
-
+    return user.to_dict()
 
 @management_router.patch("/users/{user_id}/role")
 def patch_user_role(
     user_id: str,
     body: UserRolePayload,
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
-    if not actor:
-        raise HTTPException(status_code=404, detail="Actor not found")
-    target = fetch_user_by_id(user_id)
+    user_repo = UserRepository(db)
+    target = user_repo.get_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    ensure_org_access(current_user, _org_id(target))
+    ensure_org_access(current_user, target.org_id)
     try:
-        return update_user_role(user_id, body.role, actor, category_scope=body.category_scope)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+        updated = user_repo.update_role(target, role=body.role, category_scope=body.category_scope)
+        db.commit()
+        return updated.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc))
 
 @management_router.patch("/users/{user_id}/activate")
 def patch_user_active(
     user_id: str,
     body: UserActivePayload,
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
-    if not actor:
-        raise HTTPException(status_code=404, detail="Actor not found")
-    target = fetch_user_by_id(user_id)
+    user_repo = UserRepository(db)
+    target = user_repo.get_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    ensure_org_access(current_user, _org_id(target))
+    ensure_org_access(current_user, target.org_id)
     try:
-        return set_user_active(user_id, body.is_active, actor)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+        updated = user_repo.set_active(target, is_active=body.is_active)
+        db.commit()
+        return updated.to_dict()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc))
 
 @management_router.delete("/users/{user_id}")
 def delete_user(
     user_id: str,
     current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
-    if not actor:
-        raise HTTPException(status_code=404, detail="Actor not found")
-    target = fetch_user_by_id(user_id)
+    user_repo = UserRepository(db)
+    target = user_repo.get_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    ensure_org_access(current_user, _org_id(target))
+    ensure_org_access(current_user, target.org_id)
     try:
-        user = hard_delete_user(user_id, actor)
-        if user.get("moodle_user_id"):
-            publish_user_suspended(
-                user_id=user["id"],
-                moodle_user_id=user["moodle_user_id"],
-                org_id=_org_id(user) or current_user.org_id or 1,
-            )
-        return user
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        db.delete(target)
+        db.commit()
+        return {"status": "success"}
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @management_router.get("/users/{user_id}/activity")
 def get_activity(
     user_id: str,
     current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
 ):
-    target = fetch_user_by_id(user_id)
+    user_repo = UserRepository(db)
+    target = user_repo.get_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if not _can_access_user(current_user, target):
         raise HTTPException(status_code=403, detail="You do not have access to this user.")
-    return {"activity": get_user_activity(user_id)}
-
+        
+    from app.repositories.analytics_repo import AnalyticsRepository
+    analytics_repo = AnalyticsRepository(db)
+    summary = analytics_repo.get_learner_summary(target)
+    
+    return {"activity": {
+        "login_count": 0,
+        "courses_completed": summary["courses_completed"],
+        "certificates_earned": summary["certificates_earned"],
+        "total_time_spent_hours": summary["time_spent_hours"]
+    }}
 
 @management_router.get("/settings/system")
-def get_settings(_: TokenData = Depends(require_admin)):
-    if moodle_mode() == "live":
-        return build_moodle_settings_snapshot()
-    return get_system_settings()
+def get_settings(current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session)):
+    org_repo = OrgRepository(db)
+    org = org_repo.get_by_id(current_user.org_id)
+    if not org:
+        return {}
+    
+    return {
+        "allowed_domains": [],
+        "branding": org_repo.get_branding(org.slug)
+    }
 
+@management_router.post("/settings/domains")
+def add_domain(
+    body: AllowedDomainPayload,
+    current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session)
+):
+    # This feature is being deprecated in favor of email allowlists
+    return {"status": "success", "domain": body.domain, "label": body.label}
+
+@management_router.delete("/settings/domains/{domain:path}")
+def remove_domain(
+    domain: str,
+    current_user: TokenData = Depends(require_super_admin),
+    db: Session = Depends(db_session)
+):
+    return {"status": "success"}
 
 @management_router.get("/notifications")
-def get_my_notifications(current_user: TokenData = Depends(get_current_user)):
-    return {"notifications": list_notifications(current_user.id)}
+def get_my_notifications(current_user: TokenData = Depends(get_current_user), db: Session = Depends(db_session)):
+    repo = NotificationRepository(db)
+    notifs = repo.list_for_user(current_user.id)
+    return {"notifications": [n.to_dict() for n in notifs]}

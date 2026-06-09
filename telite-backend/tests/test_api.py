@@ -1,4 +1,5 @@
 import importlib
+import hashlib
 import os
 import sys
 import tempfile
@@ -13,18 +14,29 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-# ── Test credentials — set via env so no hardcoded passwords in source ────────
-# These are only used in the test environment (TELITE_DB_BACKEND=sqlite).
-TEST_ADMIN_PASSWORD = os.getenv("TELITE_SEED_ADMIN_PASSWORD", "Dev-Admin-2024!")
-TEST_LEARNER_PASSWORD = os.getenv("TELITE_SEED_LEARNER_PASSWORD", "Dev-Learner-2024!")
+def _test_secret(label: str) -> str:
+    digest = hashlib.sha256(f"telite-test-{label}".encode("utf-8")).hexdigest()
+    return f"TeliteTest{digest[:12]}9"
+
+
+# Test credentials are generated unless explicitly supplied by env.
+TEST_ADMIN_PASSWORD = os.getenv("TELITE_SEED_ADMIN_PASSWORD") or _test_secret("admin")
+TEST_LEARNER_PASSWORD = os.getenv("TELITE_SEED_LEARNER_PASSWORD") or _test_secret("learner")
+TEST_INVITE_PASSWORD = _test_secret("invite")
+TEST_RESET_PASSWORD = _test_secret("reset")
+TEST_STUDENT_PASSWORD = _test_secret("student")
+TEST_WRONG_PASSWORD = _test_secret("wrong")
 
 
 class TeliteApiTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
-        os.environ["TELITE_DB_BACKEND"] = "sqlite"
-        os.environ["TELITE_DB_PATH"] = os.path.join(self.tempdir.name, "test_telite_lms.db")
-        os.environ.pop("TELITE_DATABASE_URL", None)
+        os.environ["TELITE_DB_BACKEND"] = "postgres"
+        # Use a distinct test database on the local postgres container
+        os.environ["TELITE_DATABASE_URL"] = os.getenv(
+            "TELITE_TEST_DATABASE_URL",
+            "postgresql+psycopg://postgres@localhost:55432/test_telite_backend",
+        )
         os.environ.pop("TELITE_SQLITE_SOURCE_PATH", None)
         os.environ["MOODLE_MODE"] = "mock"
         os.environ["SMTP_USER"] = ""
@@ -36,10 +48,20 @@ class TeliteApiTests(unittest.TestCase):
         os.environ["REDIS_ENABLED"] = "false"
         main = importlib.import_module("main")
         importlib.reload(main)
-        self.store = importlib.import_module("telite_store")
-        importlib.reload(self.store)
+
         from app.core import rate_limiter
         rate_limiter.clear_all_attempts()
+
+        # Reload db engine with new URL
+        from app.db import engine
+        from app.models.base import Base
+        import app.models  # Ensure all models are registered
+        importlib.reload(engine)
+
+        # Ensure all tables are created
+        eng = engine.get_engine()
+        Base.metadata.create_all(eng)
+
         self.client = TestClient(main.create_app())
         self.client.__enter__()
 
@@ -316,7 +338,7 @@ class TeliteApiTests(unittest.TestCase):
         titles = {item["title"] for item in task_list.json()["tasks"]}
         self.assertIn("API schema review", titles)
 
-    def test_learner_dashboard_and_launch(self):
+    def test_learner_dashboard(self):
         headers = self.auth_headers("rahul", TEST_LEARNER_PASSWORD)
         dashboard = self.client.get("/dashboard/learner", headers=headers)
         self.assertEqual(dashboard.status_code, 200)
@@ -324,10 +346,6 @@ class TeliteApiTests(unittest.TestCase):
         self.assertEqual(body["profile"]["full_name"], "Rahul Singh")
         self.assertEqual(body["hero"]["pal_score"], 94.0)
         self.assertEqual(body["stats"]["courses_completed"], 5)
-
-        launch = self.client.get("/courses/course-advanced-postgresql/launch", headers=headers)
-        self.assertEqual(launch.status_code, 200)
-        self.assertIn("/course/view.php?id=12", launch.json()["launch_url"])
 
     def test_platform_admin_can_override_org_scope(self):
         self.seed_org2_fixtures()
@@ -705,7 +723,7 @@ class TeliteApiTests(unittest.TestCase):
             json={
                 "token": invitation["token"],
                 "full_name": "New Org Two Admin",
-                "password": "Invite@1234",
+                "password": TEST_INVITE_PASSWORD,
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -1468,7 +1486,7 @@ class TeliteApiTests(unittest.TestCase):
 
         reset = self.client.post(
             "/auth/reset-password",
-            json={"token": token, "password": "SuperReset@1234"},
+            json={"token": token, "password": TEST_RESET_PASSWORD},
         )
         self.assertEqual(reset.status_code, 200)
         self.assertEqual(reset.json()["status"], "password_updated")
@@ -1482,7 +1500,7 @@ class TeliteApiTests(unittest.TestCase):
 
         new_login = self.client.post(
             "/auth/login",
-            data={"username": "superadmin", "password": "SuperReset@1234"},
+            data={"username": "superadmin", "password": TEST_RESET_PASSWORD},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         self.assertEqual(new_login.status_code, 200)
@@ -1567,14 +1585,14 @@ class TeliteApiTests(unittest.TestCase):
         for _ in range(5):
             failed = self.client.post(
                 "/auth/login",
-                data={"username": "superadmin", "password": "wrong-password"},
+                data={"username": "superadmin", "password": TEST_WRONG_PASSWORD},
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             self.assertEqual(failed.status_code, 401)
 
         limited = self.client.post(
             "/auth/login",
-            data={"username": "superadmin", "password": "wrong-password"},
+            data={"username": "superadmin", "password": TEST_WRONG_PASSWORD},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         self.assertEqual(limited.status_code, 429)
@@ -1699,7 +1717,7 @@ class TeliteApiTests(unittest.TestCase):
                 "role_name": "student",
                 "email": "student.one@telite.edu",
                 "full_name": "Student One",
-                "password": "Student@1234",
+                "password": TEST_STUDENT_PASSWORD,
                 "organization_name": "Telite University",
                 "phone": "9999999999",
                 "id_number": "STU-001",
@@ -1731,7 +1749,7 @@ class TeliteApiTests(unittest.TestCase):
         self.assertEqual(dashboard.status_code, 200)
         self.assertEqual(dashboard.json()["kpis"]["total_learners"], 43)
 
-        student_login = self.login("student.one@telite.edu", "Student@1234")
+        student_login = self.login("student.one@telite.edu", TEST_STUDENT_PASSWORD)
         self.assertEqual(student_login["role"], "learner")
 
     def test_signup_admin_review_writes_approve_and_reject_audits(self):
@@ -1744,7 +1762,7 @@ class TeliteApiTests(unittest.TestCase):
                 "role_name": "student",
                 "email": "audit.approve@telite.edu",
                 "full_name": "Audit Approve",
-                "password": "Student@1234",
+                "password": TEST_STUDENT_PASSWORD,
                 "organization_name": "Telite University",
                 "phone": "9999999999",
                 "id_number": "STU-101",
@@ -1763,7 +1781,7 @@ class TeliteApiTests(unittest.TestCase):
                 "role_name": "student",
                 "email": "audit.reject@telite.edu",
                 "full_name": "Audit Reject",
-                "password": "Student@1234",
+                "password": TEST_STUDENT_PASSWORD,
                 "organization_name": "Telite University",
                 "phone": "9999999998",
                 "id_number": "STU-102",
@@ -1825,7 +1843,7 @@ class TeliteApiTests(unittest.TestCase):
                 "role_name": "student",
                 "email": "bulk.keep@telite.edu",
                 "full_name": "Bulk Keep",
-                "password": "Student@1234",
+                "password": TEST_STUDENT_PASSWORD,
                 "organization_name": "Telite University",
                 "phone": "9999999997",
                 "id_number": "STU-201",
@@ -1843,7 +1861,7 @@ class TeliteApiTests(unittest.TestCase):
                 "role_name": "student",
                 "email": "bulk.reject@telite.edu",
                 "full_name": "Bulk Reject",
-                "password": "Student@1234",
+                "password": TEST_STUDENT_PASSWORD,
                 "organization_name": "Telite University",
                 "phone": "9999999996",
                 "id_number": "STU-202",

@@ -12,8 +12,8 @@ export default defineConfig({
       clientPort: 3000,
     },
     proxy: {
-      "^/(api|auth|categories|users|dashboard|enrol|tasks|pal|notifications|settings|admin|signup|courses|health|moodle)": {
-        target: "http://127.0.0.1:8001",
+      "^/(api|auth|authoring|categories|users|dashboard|enrol|tasks|pal|notifications|settings|admin|signup|courses|health|moodle)": {
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
         bypass: (req, res, options) => {
           if (req.headers.accept && req.headers.accept.includes("text/html")) {

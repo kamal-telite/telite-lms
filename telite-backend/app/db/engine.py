@@ -34,8 +34,8 @@ def _build_dsn() -> str:
             url = url.replace("postgres://", "postgresql+psycopg://", 1)
         return url
 
-    # SQLite fallback for local dev
-    backend = os.getenv("TELITE_DB_BACKEND", "sqlite").lower()
+    # Fallback to SQLite ONLY if explicitly configured
+    backend = os.getenv("TELITE_DB_BACKEND", "").lower()
     if backend == "sqlite":
         db_path = os.getenv("TELITE_DB_PATH", "data/telite_lms.db")
         return f"sqlite:///{db_path}"
@@ -50,7 +50,8 @@ def _build_dsn() -> str:
     if not all([db, user, pw]):
         raise RuntimeError(
             "PostgreSQL credentials incomplete. "
-            "Set TELITE_DATABASE_URL or TELITE_POSTGRES_* variables."
+            "Set TELITE_DATABASE_URL or TELITE_POSTGRES_* variables. "
+            "To use SQLite for local development, explicitly set TELITE_DB_BACKEND=sqlite."
         )
 
     from urllib.parse import quote_plus
@@ -96,7 +97,7 @@ def _create_engine():
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
-    logger.info("SQLAlchemy engine created: %s", dsn.split("@")[-1] if "@" in dsn else dsn)
+    logger.info(f"Active Database URL: {engine.url}")
     return engine
 
 

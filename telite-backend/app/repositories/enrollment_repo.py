@@ -143,3 +143,39 @@ class EnrollmentRepository(BaseRepository[EnrollmentRequest]):
             "failed": failed,
             "total": len(request_ids),
         }
+
+    def has_access(self, user_id: str, course_id: str, org_id: int) -> bool:
+        from app.models.user import User
+        from app.models.course import Course
+        
+        course = self.session.execute(
+            select(Course).where(Course.id == course_id, Course.org_id == org_id)
+        ).scalar_one_or_none()
+        
+        if not course:
+            return False
+
+        user = self.session.execute(
+            select(User).where(User.id == user_id, User.org_id == org_id)
+        ).scalar_one_or_none()
+        
+        if not user:
+            return False
+
+        if user.role in ("super_admin", "category_admin"):
+            return True
+
+        if user.category_scope and user.category_scope == course.category_slug:
+            return True
+
+        if course.tier == 'free':
+            return True
+
+        # Check explicit approved enrollment for this user/email and course category
+        stmt = select(EnrollmentRequest).where(
+            EnrollmentRequest.email == user.email,
+            EnrollmentRequest.category_slug == course.category_slug,
+            EnrollmentRequest.org_id == org_id,
+            EnrollmentRequest.status == "approved"
+        )
+        return self.session.execute(stmt).scalar_one_or_none() is not None

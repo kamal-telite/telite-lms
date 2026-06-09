@@ -5,17 +5,12 @@ from pydantic import BaseModel, Field
 
 from app.api.auth import TokenData, get_current_user, require_admin, resolve_org_scope
 from app.core.rbac import validate_task_access
-from app.services.store import (
-    create_or_update_task,
-    delete_task,
-    ensure_category_access,
-    fetch_task_by_id,
-    fetch_user_by_id,
-    is_category_admin_role,
-    is_learner_role,
-    list_tasks,
-    submit_task,
-)
+from sqlalchemy.orm import Session
+from app.db.engine import db_session
+from app.repositories.task_repo import TaskRepository
+from app.repositories.user_repo import UserRepository
+from app.repositories.audit_repo import AuditRepository
+from app.core.rbac import ROLE_PERMISSIONS, Permission
 
 
 task_router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -39,27 +34,59 @@ def get_tasks(
     category_slug: str | None = Query(default=None),
     org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
 ):
-    viewer = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    viewer = user_repo.get_by_id(current_user.id)
     if not viewer:
         raise HTTPException(status_code=404, detail="Viewer not found")
-    if is_category_admin_role(current_user.role):
+    if current_user.role == "category_admin" or Permission.CAT_MANAGE_TASKS in ROLE_PERMISSIONS.get(current_user.role, set()):
         category_slug = current_user.category_scope
     scoped_org_id = resolve_org_scope(current_user, org_id)
-    return {"tasks": list_tasks(category_slug=category_slug, viewer=viewer, org_id=scoped_org_id)}
+    
+    task_repo = TaskRepository(db)
+    # The viewer filter logic for list_tasks:
+    # If learner, show assigned to them or 'all'.
+    # Otherwise just show all in category/org.
+    assigned_to = viewer.id if viewer.role in ["learner", "student", "employee", "intern"] else None
+    
+    tasks = task_repo.list_by_org(
+        org_id=scoped_org_id, 
+        category_slug=category_slug,
+        assigned_to=assigned_to
+    )
+    return {"tasks": tasks}
 
 
 @task_router.post("")
 def post_task(
     body: TaskPayload,
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
     try:
-        ensure_category_access(actor, body.category_slug)
-        return create_or_update_task(body.model_dump(), actor)
+        validate_task_access(current_user, actor.org_id, body.category_slug)
+        task_repo = TaskRepository(db)
+        task = task_repo.create_task(
+            org_id=actor.org_id,
+            assigned_by=actor.id,
+            **body.model_dump()
+        )
+        AuditRepository(db).log_action(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            action="task.create",
+            target_type="task",
+            target_id=task.id,
+            org_id=actor.org_id,
+            message=f"Created task: {task.title}",
+        )
+        db.commit()
+        return task
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -71,13 +98,30 @@ def patch_task(
     task_id: str,
     body: TaskPayload,
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
     try:
-        ensure_category_access(actor, body.category_slug)
-        return create_or_update_task(body.model_dump(), actor, task_id=task_id)
+        validate_task_access(current_user, actor.org_id, body.category_slug)
+        task_repo = TaskRepository(db)
+        task = task_repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("Task not found")
+        task = task_repo.update_task(task, **body.model_dump())
+        AuditRepository(db).log_action(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            action="task.update",
+            target_type="task",
+            target_id=task.id,
+            org_id=actor.org_id,
+            message=f"Updated task: {task.title}",
+        )
+        db.commit()
+        return task
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -88,20 +132,34 @@ def patch_task(
 def remove_task(
     task_id: str,
     current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
 
-    # Validate org access before deletion
-    task = fetch_task_by_id(task_id)
+    task_repo = TaskRepository(db)
+    task = task_repo.get_by_id(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    task_org_id = task.get("org_id") or actor.get("org_id") or 1
-    validate_task_access(current_user, task_org_id, task.get("category_slug"))
+        
+    task_org_id = task.org_id or actor.org_id
+    validate_task_access(current_user, task_org_id, task.category_slug)
 
     try:
-        return delete_task(task_id, actor)
+        task_repo.delete_task(task)
+        AuditRepository(db).log_action(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            action="task.delete",
+            target_type="task",
+            target_id=task_id,
+            org_id=task_org_id,
+            message=f"Deleted task: {task.title}",
+        )
+        db.commit()
+        return {"status": "success", "message": "Task deleted successfully."}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -110,13 +168,30 @@ def remove_task(
 def mark_task_submitted(
     task_id: str,
     current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
-    if not is_learner_role(actor.get("role")) or not actor.get("is_active"):
+    if actor.role not in ["learner", "student", "employee", "intern"] or not actor.is_active:
         raise HTTPException(status_code=403, detail="Active learner session required")
     try:
-        return submit_task(task_id, actor)
+        task_repo = TaskRepository(db)
+        task = task_repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("Task not found")
+        task = task_repo.submit_task(task)
+        AuditRepository(db).log_action(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            action="task.submit",
+            target_type="task",
+            target_id=task_id,
+            org_id=actor.org_id,
+            message=f"Submitted task: {task.title}",
+        )
+        db.commit()
+        return task
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

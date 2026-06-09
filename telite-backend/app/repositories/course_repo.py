@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.category import Category
 from app.models.course import Course
 from app.repositories.base_repo import BaseRepository
-from app.services.store import slugify
+from app.core.utils import slugify
 
 
 class CategoryRepository(BaseRepository[Category]):
@@ -155,9 +155,3 @@ class CourseRepository(BaseRepository[Course]):
         self.session.flush()
         return course
 
-    def update_moodle_id(self, course_id: str, moodle_id: int) -> None:
-        self.session.execute(
-            update(Course)
-            .where(Course.id == course_id)
-            .values(moodle_course_id=moodle_id)
-        )

@@ -4,7 +4,7 @@ from typing import Set
 from fastapi import UploadFile, HTTPException, status
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "uploads", "branding")
-ALLOWED_EXTENSIONS: Set[str] = {"png", "jpeg", "jpg", "svg", "ico"}
+ALLOWED_EXTENSIONS: Set[str] = {"png", "jpeg", "jpg", "svg", "ico", "pdf"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 def get_file_extension(filename: str) -> str:

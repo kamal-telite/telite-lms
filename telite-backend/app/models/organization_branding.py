@@ -25,8 +25,12 @@ class OrganizationBranding(Base, TimestampMixin):
     theme_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="light")
     
     certificate_template_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    certificate_primary_color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    certificate_signature_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    certificate_qr_layout: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="bottom_left, bottom_right, hidden")
     email_template_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     landing_page_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    terminology_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     
     seo_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     seo_description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -49,8 +53,12 @@ class OrganizationBranding(Base, TimestampMixin):
             "font_family": self.font_family,
             "theme_mode": self.theme_mode,
             "certificate_template_url": self.certificate_template_url,
+            "certificate_primary_color": self.certificate_primary_color,
+            "certificate_signature_url": self.certificate_signature_url,
+            "certificate_qr_layout": self.certificate_qr_layout,
             "email_template_id": self.email_template_id,
             "landing_page_config": self.landing_page_config,
+            "terminology_json": self.terminology_json,
             "seo_title": self.seo_title,
             "seo_description": self.seo_description,
             "custom_domain": self.custom_domain,

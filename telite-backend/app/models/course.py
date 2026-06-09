@@ -8,6 +8,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TenantMixin, TimestampMixin
 
 
+def _serialize_datetime(value) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
 class Course(Base, TenantMixin, TimestampMixin):
     __tablename__ = "courses"
 
@@ -65,5 +73,5 @@ class Course(Base, TenantMixin, TimestampMixin):
             "avg_quiz_score": self.avg_quiz_score,
             "price_paise": self.price_paise,
             "org_id": self.org_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _serialize_datetime(self.created_at),
         }

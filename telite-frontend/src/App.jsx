@@ -99,6 +99,7 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
           element={<OrgRouter session={session} onLogout={onLogout} />}
         />
         
+        {/* Catch-all */}       
         <Route
           path="/learner/*"
           element={<LearnerRouter session={session} onLogout={onLogout} />}

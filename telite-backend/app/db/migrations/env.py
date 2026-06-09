@@ -13,6 +13,9 @@ from sqlalchemy import engine_from_config, pool
 # Add backend root to path so models can be imported
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.db.engine import _build_dsn
 from app.models.base import Base
 
@@ -40,6 +43,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         compare_server_default=True,
+        render_as_batch=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -58,6 +62,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
+            render_as_batch=True,
         )
         with context.begin_transaction():
             context.run_migrations()

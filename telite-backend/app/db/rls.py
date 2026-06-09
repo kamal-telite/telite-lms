@@ -35,9 +35,6 @@ TENANT_SCOPED_TABLES = [
     "password_reset_tokens",
     "org_feature_flags",
     "org_invitations",
-    "moodle_tenants",
-    "moodle_sync_logs",
-    "alert_rules",
     "pal_quiz_scores",
     "pal_recommendations",
     "pal_topic_performance",
@@ -57,9 +54,6 @@ TABLE_ORG_COLUMN = {
     "password_reset_tokens": "org_id",
     "org_feature_flags": "org_id",
     "org_invitations": "org_id",
-    "moodle_tenants": "org_id",
-    "moodle_sync_logs": "org_id",
-    "alert_rules": "org_id",
     "pal_quiz_scores": "org_id",
     "pal_recommendations": "org_id",
     "pal_topic_performance": "org_id",
@@ -71,42 +65,66 @@ def apply_rls_policies(session: Session) -> None:
     Create PostgreSQL RLS policies on all tenant-scoped tables.
 
     Called once during database initialisation (init_db).
-    Safe to call multiple times — uses CREATE POLICY IF NOT EXISTS pattern.
+    Safe to call multiple times — idempotent via DROP/CREATE.
+    Skips tables that don't exist yet (future migrations).
+    Each table is processed independently so one failure never blocks others.
     """
+    applied = 0
+    skipped = 0
+
     for table in TENANT_SCOPED_TABLES:
+        # Skip tables that haven't been created yet
+        exists = session.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = current_schema() AND table_name = :t"
+            ),
+            {"t": table},
+        ).fetchone()
+        if not exists:
+            logger.debug("Skipping RLS for non-existent table: %s", table)
+            skipped += 1
+            continue
+
         org_col = TABLE_ORG_COLUMN.get(table, "org_id")
         policy_name = f"telite_tenant_isolation_{table}"
 
-        # Enable RLS on the table
-        session.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
+        try:
+            # Enable RLS on the table
+            session.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
 
-        # Force RLS even for table owner (prevents accidental bypass)
-        session.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
+            # Force RLS even for table owner (prevents accidental bypass)
+            session.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
 
-        # Drop existing policy if present (idempotent)
-        session.execute(
-            text(f"DROP POLICY IF EXISTS {policy_name} ON {table}")
-        )
+            # Drop existing policy if present (idempotent)
+            session.execute(text(f"DROP POLICY IF EXISTS {policy_name} ON {table}"))
 
-        # Create the tenant isolation policy
-        # Rows are visible when:
-        #   1. app.current_org_id matches the row's org column, OR
-        #   2. app.bypass_rls is set to 'on' (platform admin)
-        session.execute(
-            text(
-                f"""
-                CREATE POLICY {policy_name} ON {table}
-                USING (
-                    {org_col} = current_setting('app.current_org_id', true)::INTEGER
-                    OR current_setting('app.bypass_rls', true) = 'on'
+            # Create the tenant isolation policy:
+            #   1. app.current_org_id matches the row's org column, OR
+            #   2. app.bypass_rls is 'on' (platform admin)
+            session.execute(
+                text(
+                    f"""
+                    CREATE POLICY {policy_name} ON {table}
+                    USING (
+                        {org_col} = current_setting('app.current_org_id', true)::INTEGER
+                        OR current_setting('app.bypass_rls', true) = 'on'
+                    )
+                    """
                 )
-                """
             )
-        )
+            applied += 1
+            logger.debug("RLS policy applied to table: %s", table)
 
-        logger.debug("RLS policy applied to table: %s", table)
+        except Exception as exc:
+            logger.warning("RLS skipped for table %s: %s", table, exc)
+            skipped += 1
 
-    logger.info("PostgreSQL RLS policies applied to %d tables.", len(TENANT_SCOPED_TABLES))
+    logger.info(
+        "PostgreSQL RLS complete — %d policies applied, %d skipped.",
+        applied,
+        skipped,
+    )
 
 
 def set_rls_context(session: Session, org_id: int) -> None:

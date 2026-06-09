@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./icons";
+export { Icon };
 
 const ToastContext = createContext({ showToast: () => {} });
 

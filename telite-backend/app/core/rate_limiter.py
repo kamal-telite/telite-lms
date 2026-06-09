@@ -45,7 +45,7 @@ _redis_client: Optional[redis.Redis] = None
 
 def _get_redis_client() -> Optional[redis.Redis]:
     """Get or create Redis client with connection pooling."""
-    global _redis_pool, _redis_client
+    global _redis_pool, _redis_client, REDIS_ENABLED
     
     if not REDIS_ENABLED:
         return None
@@ -67,8 +67,8 @@ def _get_redis_client() -> Optional[redis.Redis]:
                 db=REDIS_DB,
                 decode_responses=True,
                 max_connections=20,
-                socket_connect_timeout=5,
-                socket_timeout=5,
+                socket_connect_timeout=0.25,
+                socket_timeout=0.25,
             )
             _redis_client = redis.Redis(connection_pool=_redis_pool)
             # Test connection
@@ -81,6 +81,7 @@ def _get_redis_client() -> Optional[redis.Redis]:
             )
             _redis_client = None
             _redis_pool = None
+            REDIS_ENABLED = False
     
     return _redis_client
 
