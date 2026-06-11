@@ -126,9 +126,19 @@ const iconMap = {
       <path d="m6 6 12 12" />
     </>
   ),
+  close: () => (
+    <>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </>
+  ),
   check: () => <path d="m5 13 4 4L19 7" />,
   chevronDown: () => <path d="m6 9 6 6 6-6" />,
+  "chevron-down": () => <path d="m6 9 6 6 6-6" />,
   chevronRight: () => <path d="m9 6 6 6-6 6" />,
+  "chevron-right": () => <path d="m9 6 6 6-6 6" />,
+  chevronLeft: () => <path d="m15 6-6 6 6 6" />,
+  "chevron-left": () => <path d="m15 6-6 6 6 6" />,
   search: () => (
     <>
       <circle cx="11" cy="11" r="7" />

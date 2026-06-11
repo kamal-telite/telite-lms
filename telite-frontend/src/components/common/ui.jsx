@@ -42,35 +42,58 @@ export function Button({
   children,
   tone = "ghost",
   icon,
+  size = "md",
   className = "",
   type = "button",
   ...props
 }) {
+  const normalizedSize = size === "small" ? "sm" : size;
+  const iconSize = normalizedSize === "sm" ? 14 : normalizedSize === "lg" ? 17 : 15;
+
   return (
-    <button className={`btn btn--${tone} ${className}`.trim()} type={type} {...props}>
-      {icon ? <Icon name={icon} size={15} /> : null}
+    <button
+      className={`btn btn--${tone} btn--${normalizedSize} ${className}`.trim()}
+      type={type}
+      {...props}
+    >
+      {icon ? <Icon name={icon} size={iconSize} /> : null}
       <span>{children}</span>
     </button>
   );
 }
 
-export function IconButton({ label, icon, className = "", ...props }) {
+export function IconButton({ label, icon, size = "md", className = "", ...props }) {
+  const normalizedSize = size === "small" ? "sm" : size;
+  const iconSize = normalizedSize === "sm" ? 14 : normalizedSize === "lg" ? 17 : 15;
+
   return (
-    <button className={`icon-btn ${className}`.trim()} type="button" aria-label={label} {...props}>
-      <Icon name={icon} size={15} />
+    <button
+      className={`icon-btn icon-btn--${normalizedSize} ${className}`.trim()}
+      type="button"
+      aria-label={label}
+      title={label}
+      {...props}
+    >
+      <Icon name={icon} size={iconSize} />
     </button>
   );
 }
 
-export function Badge({ children, tone = "neutral", className = "" }) {
-  return <span className={`badge badge--${tone} ${className}`.trim()}>{children}</span>;
+export function Badge({ children, tone = "neutral", size = "md", className = "", ...props }) {
+  const normalizedSize = size === "small" ? "sm" : size;
+
+  return (
+    <span className={`badge badge--${tone} badge--${normalizedSize} ${className}`.trim()} {...props}>
+      {children}
+    </span>
+  );
 }
 
-export function Avatar({ initials, gradient = ["#2563EB", "#7C3AED"], size = 30 }) {
+export function Avatar({ initials, gradient = ["#2563EB", "#7C3AED"], size = 30, className = "" }) {
   const background = `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`;
   return (
     <span
-      className="avatar"
+      className={`avatar ${className}`.trim()}
       style={{ width: size, height: size, background, fontSize: Math.max(10, size * 0.34) }}
     >
       {initials}
@@ -78,9 +101,9 @@ export function Avatar({ initials, gradient = ["#2563EB", "#7C3AED"], size = 30 
   );
 }
 
-export function Panel({ title, subtitle, action, children, footer, className = "" }) {
+export function Panel({ title, subtitle, action, children, footer, className = "", ...props }) {
   return (
-    <section className={`panel ${className}`.trim()}>
+    <section className={`panel ${className}`.trim()} {...props}>
       {(title || action) && (
         <header className="panel__header">
           <div>
@@ -96,9 +119,9 @@ export function Panel({ title, subtitle, action, children, footer, className = "
   );
 }
 
-export function StatCard({ accent, label, value, meta, pulse = false, suffix }) {
+export function StatCard({ accent, label, value, meta, pulse = false, suffix, className = "" }) {
   return (
-    <article className={`stat-card ${pulse ? "is-pulse" : ""}`}>
+    <article className={`stat-card ${pulse ? "is-pulse" : ""} ${className}`.trim()}>
       <span className="stat-card__accent" style={{ background: accent }} />
       <div className="stat-card__label">{label}</div>
       <div className="stat-card__value">

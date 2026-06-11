@@ -34,6 +34,7 @@ telite-backend/data/
 .idea/
 .vscode/
 .claude/
+context.md
 *.swp
 *.swo
 *~
