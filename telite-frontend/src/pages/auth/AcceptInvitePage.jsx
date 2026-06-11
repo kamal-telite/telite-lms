@@ -127,7 +127,7 @@ export default function AcceptInvitePage({ onAuthenticated }) {
         <section className="login-card">
           <div className="login-card__header">
             <h2>Complete signup</h2>
-            <p>We’ll verify the invitation token and create your account.</p>
+            <p>We'll verify the invitation token and create your account.</p>
           </div>
 
           {loadingInvite ? <div className="spinner" /> : null}
@@ -137,8 +137,10 @@ export default function AcceptInvitePage({ onAuthenticated }) {
 
           {!loadingInvite && invitation ? (
             <>
-              <div className="form-alert" style={{ marginBottom: 12 }}>
-                <strong>{invitation.org_name}</strong> · {invitation.role} · {invitation.email}
+              <div className="form-alert form-alert--info invite-summary">
+                <strong>{invitation.org_name}</strong>
+                <span>{invitation.role}</span>
+                <span>{invitation.email}</span>
               </div>
 
               <form className="form-stack" onSubmit={handleSubmit}>
@@ -192,4 +194,3 @@ export default function AcceptInvitePage({ onAuthenticated }) {
     </div>
   );
 }
-

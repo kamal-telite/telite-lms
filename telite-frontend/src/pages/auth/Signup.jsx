@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchSignupRoles, submitSignupRequest, getErrorMessage, fetchOrganizations } from "../../services/client";
+import { Icon } from "../../components/common/icons";
 
 const DOMAIN_CARDS = [
   {
     value: "college",
     label: "College",
-    emoji: "🎓",
+    icon: "course",
     description: "Student, Teacher, or College Admin registration",
     gradient: "linear-gradient(135deg, #7c3aed, #2563eb)",
   },
   {
     value: "company",
     label: "Company",
-    emoji: "🏢",
+    icon: "category",
     description: "Intern, Employee, or Company Admin registration",
     gradient: "linear-gradient(135deg, #0891b2, #059669)",
   },
@@ -116,7 +117,7 @@ function StepIndicator({ current, total }) {
           key={i}
           className={`signup-steps__dot ${i < current ? "is-done" : ""} ${i === current ? "is-active" : ""}`}
         >
-          {i < current ? "✓" : i + 1}
+          {i < current ? <Icon name="check" size={15} /> : i + 1}
         </div>
       ))}
     </div>
@@ -134,7 +135,7 @@ function DomainStep({ onSelect }) {
           type="button"
         >
           <div className="signup-domain-card__icon" style={{ background: card.gradient }}>
-            <span>{card.emoji}</span>
+            <Icon name={card.icon} size={30} />
           </div>
           <div className="signup-domain-card__label">{card.label}</div>
           <div className="signup-domain-card__desc">{card.description}</div>
@@ -184,7 +185,7 @@ function FormStep({
         <label key={field.name} className="field">
           <span className="field__label">
             {field.label}
-            {field.required && <span style={{ color: "var(--red)" }}> *</span>}
+            {field.required && <span className="field__required"> *</span>}
           </span>
           {field.type === "select" ? (
             <select
@@ -220,7 +221,7 @@ function FormStep({
       {/* CAPTCHA field — always shown at the end */}
       <label className="field signup-captcha-field">
         <span className="field__label">
-          Security Check <span style={{ color: "var(--red)" }}> *</span>
+          Security Check <span className="field__required"> *</span>
         </span>
         <div className="signup-captcha-row">
           <div className="signup-captcha-question">{captcha.question}</div>
@@ -243,7 +244,9 @@ function SuccessStep() {
   const navigate = useNavigate();
   return (
     <div className="signup-success">
-      <div className="signup-success__icon">✓</div>
+      <div className="signup-success__icon">
+        <Icon name="check" size={30} />
+      </div>
       <h2>Registration Submitted!</h2>
       <p>
         Your registration has been submitted successfully and is now pending admin approval.
@@ -537,7 +540,7 @@ export default function Signup() {
         <div className="signup-step-title">
           {step > 0 && step < 3 && (
             <button className="signup-back-btn" onClick={goBack} type="button">
-              ←
+              <Icon name="chevron-left" size={18} />
             </button>
           )}
           <h1>{stepTitles[step]}</h1>
@@ -582,17 +585,20 @@ export default function Signup() {
               {/* Breadcrumb */}
               <div className="signup-breadcrumb">
                 <span className="signup-breadcrumb__chip" style={{
-                  background: domainType === "college" ? "var(--violet-light)" : "var(--teal-light)",
-                  color: domainType === "college" ? "var(--violet)" : "var(--teal)",
-                  borderColor: domainType === "college" ? "var(--violet-mid)" : "var(--teal-mid)",
+                  background: domainType === "college" ? "var(--secondary-light)" : "var(--teal-light)",
+                  color: domainType === "college" ? "var(--secondary)" : "var(--teal)",
+                  borderColor: domainType === "college" ? "var(--secondary-mid)" : "var(--teal-mid)",
                 }}>
-                  {domainType === "college" ? "🎓" : "🏢"} {domainLabel}
+                  <Icon name={domainType === "college" ? "course" : "category"} size={13} />
+                  <span>{domainLabel}</span>
                 </span>
-                <span className="signup-breadcrumb__arrow">→</span>
+                <span className="signup-breadcrumb__arrow">
+                  <Icon name="chevron-right" size={13} />
+                </span>
                 <span className="signup-breadcrumb__chip" style={{
-                  background: "var(--brand-light)",
-                  color: "var(--brand)",
-                  borderColor: "var(--brand-mid)",
+                  background: "var(--primary-light)",
+                  color: "var(--primary)",
+                  borderColor: "var(--primary-mid)",
                 }}>
                   {currentRoleLabel}
                 </span>
