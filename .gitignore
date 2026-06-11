@@ -44,10 +44,8 @@ validation_output.txt
 
 # Environment files and credentials
 .env
-.env.*
 **/.env
 **/.env.*
-!.env.example
 !**/.env.example
 *.local
 *.secret
@@ -106,6 +104,7 @@ output/
 /.claude/
 /.cursor/
 /.agents/
+/.agents/skills
 /.jetro/
 *.swp
 *.swo
@@ -119,6 +118,7 @@ Desktop.ini
 
 # Local project notes and generated patches
 Project_docs/
+projects
 commit_*.txt
 context.md
 *.patch
