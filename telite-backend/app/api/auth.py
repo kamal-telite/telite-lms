@@ -475,28 +475,37 @@ def refresh(
         raise HTTPException(status_code=401, detail="Refresh token required")
 
     payload = decode_token(refresh_token, token_type="refresh")
-    session = get_session_by_token(refresh_token)
+    auth_repo = AuthRepository(db)
+    session = auth_repo.get_by_token(refresh_token)
     if not session:
         raise HTTPException(status_code=401, detail="Refresh token has been revoked")
 
     user = fetch_user_by_id(payload["sub"])
-    if not user or not user["is_active"]:
+    if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User is inactive")
 
-    session_org_id = session.get("org_id") or payload.get("org_id")
-    if session_org_id is not None:
-        user = dict(user)
-        user["org_id"] = session_org_id
-        user["organization_id"] = session_org_id
+    user_dict = {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role,
+        "full_name": user.full_name,
+        "category_scope": user.category_scope,
+        "org_id": user.org_id,
+        "is_platform_admin": user.is_platform_admin,
+    }
 
-    token_response = _build_token_response(user, refresh_token, db)
+    session_org_id = getattr(session, "org_id", None) or payload.get("org_id")
+    if session_org_id is not None:
+        user_dict["org_id"] = session_org_id
+
+    token_response = _build_token_response(user_dict, refresh_token, db)
     csrf_token = generate_csrf_token()
     _set_auth_cookies(
         response,
         token_response.access_token,
         refresh_token,
         csrf_token,
-        account_user_id=user["id"],
+        account_user_id=user.id,
     )
     return token_response
 
@@ -507,16 +516,22 @@ def logout(
     body: LogoutRequest | None = None,
     current_user: TokenData = Depends(get_current_user),
     cookie_refresh: str | None = Cookie(default=None, alias="telite_refresh_token"),
+    db: Session = Depends(db_session),
 ) -> dict[str, str]:
     refresh_token = cookie_refresh or (body.refresh_token if body else None)
     if refresh_token:
-        revoke_session(refresh_token)
+        auth_repo = AuthRepository(db)
+        auth_repo.revoke_session(refresh_token)
     _clear_auth_cookies(response)
     return {"status": "logged_out", "user_id": current_user.id}
 
 
 @auth_router.post("/forgot-password")
-def forgot_password(body: ForgotPasswordRequest, request: Request) -> dict[str, str]:
+def forgot_password(
+    body: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(db_session),
+) -> dict[str, str]:
     client_ip = _client_ip(request)
     ip_key = _rate_key("auth-forgot-password-ip", client_ip)
     email_key = _rate_key("auth-forgot-password-email", body.email)
@@ -529,20 +544,30 @@ def forgot_password(body: ForgotPasswordRequest, request: Request) -> dict[str, 
     record_attempt(ip_key, window_seconds=FORGOT_PASSWORD_WINDOW_SECONDS)
     record_attempt(email_key, window_seconds=FORGOT_PASSWORD_WINDOW_SECONDS)
 
-    reset_request = create_password_reset_token(body.email)
-    if reset_request:
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_email(body.email)
+    if user:
+        auth_repo = AuthRepository(db)
+        token_record = auth_repo.create_password_reset_token(user.id)
+        token_record.org_id = user.org_id or 1
+        db.flush()
+
         delivered = send_password_reset_email(
-            to_email=reset_request["email"],
-            name=reset_request["full_name"],
-            token=reset_request["token"],
-            expires_at=reset_request["expires_at"],
+            to_email=user.email,
+            name=user.full_name,
+            token=token_record.token,
+            expires_at=token_record.expires_at,
         )
-        if reset_request.get("id") is not None:
-            record_password_reset_delivery(
-                reset_request["id"],
-                delivered=delivered,
-                error=None if delivered else "SMTP not configured or delivery failed",
-            )
+
+        from datetime import datetime, timezone
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        token_record.delivery_attempted_at = now_str
+        if delivered:
+            token_record.delivery_status = "delivered"
+            token_record.delivered_at = now_str
+        else:
+            token_record.delivery_status = "failed"
+            token_record.delivery_error = "SMTP not configured or delivery failed"
 
     # Always return the same message to prevent email enumeration
     return {
@@ -552,7 +577,11 @@ def forgot_password(body: ForgotPasswordRequest, request: Request) -> dict[str, 
 
 
 @auth_router.post("/reset-password")
-def reset_password(body: ResetPasswordRequest, request: Request) -> dict[str, str]:
+def reset_password(
+    body: ResetPasswordRequest,
+    request: Request,
+    db: Session = Depends(db_session),
+) -> dict[str, str]:
     client_ip = _client_ip(request)
     ip_key = _rate_key("auth-reset-password-ip", client_ip)
 
@@ -562,13 +591,30 @@ def reset_password(body: ResetPasswordRequest, request: Request) -> dict[str, st
 
     record_attempt(ip_key, window_seconds=RESET_PASSWORD_WINDOW_SECONDS)
 
+    auth_repo = AuthRepository(db)
+    token_record = auth_repo.get_password_reset_token(body.token)
+    if not token_record:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    from datetime import datetime, timezone
     try:
-        user = reset_password_with_token(body.token, body.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        expires_at = datetime.strptime(token_record.expires_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        expires_at = datetime.now(timezone.utc)
+
+    if expires_at < datetime.now(timezone.utc) or token_record.used_at is not None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(token_record.user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    user_repo.update_password(user, body.password)
+    auth_repo.mark_password_reset_token_used(token_record.id)
 
     clear_attempts(ip_key)
-    return {"status": "password_updated", "user_id": user["id"]}
+    return {"status": "password_updated", "user_id": user.id}
 
 
 @auth_router.get("/me")

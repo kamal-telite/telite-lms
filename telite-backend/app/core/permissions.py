@@ -6,16 +6,72 @@ from typing import Callable
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, TokenData
 from app.db.engine import db_session
 from app.models.role_permission import RolePermission
 from app.services.audit_service import AuditService
+
+def resolve_permissions(
+    role: str,
+    is_platform_admin: bool,
+    category_scope: str | None,
+    org_id: int | None,
+    db: Session | None = None
+) -> list[str]:
+    from app.core.rbac import ROLE_PERMISSIONS
+    
+    if is_platform_admin:
+        return list(ROLE_PERMISSIONS.get("platform_admin", set()))
+        
+    active = set(ROLE_PERMISSIONS.get(role, set()))
+    
+    if db is not None and org_id is not None:
+        try:
+            overrides = db.query(RolePermission).filter(
+                RolePermission.org_id == org_id,
+                RolePermission.role == role
+            ).all()
+            for override in overrides:
+                if override.enabled:
+                    active.add(override.permission_key)
+                else:
+                    active.discard(override.permission_key)
+        except Exception:
+            pass
+            
+    return list(active)
+
+def build_jwt_claims(user: dict[str, Any]) -> dict[str, Any]:
+    from app.db.engine import get_db_session
+    
+    role = user.get("role") or "learner"
+    is_platform_admin = bool(user.get("is_platform_admin"))
+    category_scope = user.get("category_scope")
+    org_id = user.get("org_id") or user.get("organization_id")
+    
+    permissions = []
+    try:
+        with get_db_session() as db:
+            permissions = resolve_permissions(role, is_platform_admin, category_scope, org_id, db)
+    except Exception:
+        permissions = resolve_permissions(role, is_platform_admin, category_scope, org_id, None)
+        
+    return {
+        "sub": str(user.get("id")),
+        "email": user.get("email"),
+        "role": role,
+        "name": user.get("full_name"),
+        "org_id": org_id,
+        "is_platform_admin": is_platform_admin,
+        "permissions": permissions,
+    }
 
 def require_capability(permission_key: str) -> Callable:
     """
     Returns a FastAPI dependency that checks if the current user's role 
     has the specified capability in the active organization.
     """
+    from app.api.auth import get_current_user, TokenData
+
     def dependency(
         db: Session = Depends(db_session),
         current_user: TokenData = Depends(get_current_user)
@@ -53,7 +109,7 @@ def require_capability(permission_key: str) -> Callable:
 
     return dependency
 
-def check_capability(db: Session, current_user: TokenData, permission_key: str) -> bool:
+def check_capability(db: Session, current_user: "TokenData", permission_key: str) -> bool:
     """
     Synchronously check capability when the required permission depends on the request payload.
     Raises 403 Forbidden if the user lacks the capability.

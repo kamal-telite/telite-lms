@@ -38,15 +38,40 @@ from app.repositories.course_repo import CategoryRepository
 from app.repositories.user_repo import UserRepository
 from app.repositories.org_repo import OrgRepository
 from app.repositories.invite_repo import InviteRepository
-from app.db.init_db import run_phase3_init
 
 # ── Structured logging ───────────────────────────────────────────────────────
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+import json
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            "timestamp": self.formatTime(record, "%Y-%m-%d %H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            log_record["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_record)
+
+env_mode = os.getenv("ENVIRONMENT", "development").lower()
+
+if env_mode in ("production", "prod", "staging"):
+    # Set up root logger with JSON formatter for production
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(JSONFormatter())
+    root_logger.addHandler(handler)
+else:
+    # Development friendly plain-text formatting
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
 logger = logging.getLogger("telite.api")
 
 
@@ -55,9 +80,7 @@ logger = logging.getLogger("telite.api")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    logger.info("Initialising database …")
-    run_phase3_init()
-    logger.info("Database ready.")
+    logger.info("Starting up FastAPI application...")
     yield
     dispose_engine()
     close_redis_connection()

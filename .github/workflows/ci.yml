@@ -1,0 +1,124 @@
+name: Telite LMS CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  lint-and-static-analysis:
+    name: Lint & Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Linting Tools
+        run: |
+          pip install ruff bandit
+
+      - name: Run Ruff Linter
+        run: ruff check telite-backend/app
+
+      - name: Run Bandit Security Scan
+        run: bandit -r telite-backend/app -ll -ii
+
+  backend-tests:
+    name: Backend Pytest
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_DB: telite_backend_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r telite-backend/requirements.txt
+          pip install pytest httpx pytest-cov
+
+      - name: Run Pytest Coverage
+        env:
+          TELITE_DB_BACKEND: postgres
+          TELITE_POSTGRES_HOST: localhost
+          TELITE_POSTGRES_PORT: 5432
+          TELITE_POSTGRES_DB: telite_backend_test
+          TELITE_POSTGRES_USER: postgres
+          TELITE_POSTGRES_PASSWORD: testpassword
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_ENABLED: "true"
+          ENVIRONMENT: testing
+          TELITE_AUTH_SECRET: testing-secret-key-32-chars-long-or-more
+          TELITE_PASSWORD_SALT: testing-salt-key
+        run: |
+          cd telite-backend
+          python -m pytest tests/ --cov=app --cov-report=xml
+
+  docker-build-scan:
+    name: Docker Build & Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs: [lint-and-static-analysis, backend-tests]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./telite-backend
+          file: ./telite-backend/Dockerfile
+          push: false
+          tags: telite-backend:latest
+          outputs: type=docker,dest=/tmp/backend-image.tar
+
+      - name: Load Backend Image
+        run: docker load --input /tmp/backend-image.tar
+
+      - name: Run Trivy Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'telite-backend:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'

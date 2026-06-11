@@ -1,0 +1,62 @@
+name: Telite LMS CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Production Deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Example template step for logging in to AWS ECR or DockerHub
+      # - name: Login to Docker Hub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKER_USERNAME }}
+      #     password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./telite-backend
+          file: ./telite-backend/Dockerfile
+          push: false
+          tags: |
+            telite-backend:${{ github.sha }}
+            telite-backend:latest
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./telite-frontend
+          file: ./telite-frontend/Dockerfile
+          push: false
+          tags: |
+            telite-frontend:${{ github.sha }}
+            telite-frontend:latest
+
+      # Example deployment using Docker Compose via SSH:
+      # - name: Deploy to Remote Server
+      #   uses: appleboy/ssh-action@master
+      #   with:
+      #     host: ${{ secrets.PROD_SERVER_IP }}
+      #     username: ${{ secrets.PROD_SERVER_USER }}
+      #     key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+      #     script: |
+      #       cd /opt/telite-lms
+      #       git pull origin main
+      #       docker compose -f docker-compose.prod.yml pull
+      #       docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+      - name: Post-Deployment Health Check
+        run: |
+          echo "Executing production health check..."
+          # Real deployment healthcheck command:
+          # curl -f --retry 5 --retry-delay 5 https://lms.telite.io/health/readiness || (echo 'Health check failed! Rolling back...' && exit 1)

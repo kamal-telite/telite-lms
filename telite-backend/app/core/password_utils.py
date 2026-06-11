@@ -140,24 +140,32 @@ def generate_reset_token() -> str:
 
 
 def hash_password(password: str) -> str:
-    import hashlib
-    salt = os.getenv("TELITE_PASSWORD_SALT", "telite-dev-salt").encode("utf-8")
-    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120_000).hex()
+    import bcrypt
+    password_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
 
 def verify_password(password: str, hashed_value: str) -> bool:
-    if hash_password(password) == hashed_value:
+    if hashed_value.startswith(("$2a$", "$2b$", "$2y$")):
+        import bcrypt
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), hashed_value.encode("utf-8"))
+        except Exception:
+            return False
+
+    # Legacy PBKDF2 compatibility fallback
+    import hashlib
+    salt = os.getenv("TELITE_PASSWORD_SALT", "telite-dev-salt").encode("utf-8")
+    candidate_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120_000).hex()
+    if secrets.compare_digest(candidate_hash, hashed_value):
         return True
 
     legacy_salt = "telite-dev-salt"
-    if os.getenv("TELITE_PASSWORD_SALT", legacy_salt) == legacy_salt:
-        return False
-
-    import hashlib
     legacy_hash = hashlib.pbkdf2_hmac(
         "sha256",
         password.encode("utf-8"),
         legacy_salt.encode("utf-8"),
         120_000,
     ).hex()
-    return legacy_hash == hashed_value
+    return secrets.compare_digest(legacy_hash, hashed_value)

@@ -1,0 +1,189 @@
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: telite_db_prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - database_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: telite_redis_prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redisdata_prod:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cache_network
+
+  moodle:
+    image: telite-lms-moodle:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telite_moodle_prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MOODLE_DB_HOST: postgres
+      MOODLE_DB_PORT: 5432
+      MOODLE_DB_NAME: ${MOODLE_DB_NAME}
+      MOODLE_DB_USER: ${MOODLE_DB_USER}
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD}
+      MOODLE_WWWROOT: ${MOODLE_WWWROOT:-https://lms.telite.io/moodle}
+    volumes:
+      - moodledata_prod:/var/www/moodledata
+    networks:
+      - database_network
+      - backend_network
+
+  backend:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_backend_prod
+    restart: unless-stopped
+    command: sh -c "python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port 8001"
+    environment:
+      TELITE_DB_BACKEND: postgres
+      TELITE_POSTGRES_HOST: postgres
+      TELITE_POSTGRES_PORT: 5432
+      TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
+      TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
+      TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
+      TELITE_DATABASE_URL: ""
+      TELITE_SQLITE_SOURCE_PATH: ""
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_ENABLED: "true"
+      MOODLE_INTERNAL_URL: http://moodle
+      MOODLE_URL: ${MOODLE_URL:-https://lms.telite.io/moodle}
+      MOODLE_WWWROOT: ${MOODLE_WWWROOT:-https://lms.telite.io/moodle}
+      MOODLE_MODE: ${MOODLE_MODE:-mock}
+      ENVIRONMENT: production
+      COOKIE_SECURE: "true"
+      COOKIE_SAMESITE: "strict"
+    volumes:
+      - telite-lms_uploads_prod:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      moodle:
+        condition: service_started
+    networks:
+      - database_network
+      - cache_network
+      - backend_network
+
+  celery_worker:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_celery_worker_prod
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=moodle_sync,reconcile,notifications,reminders,default --concurrency=4
+    environment:
+      TELITE_DB_BACKEND: postgres
+      TELITE_POSTGRES_HOST: postgres
+      TELITE_POSTGRES_PORT: 5432
+      TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
+      TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
+      TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MOODLE_INTERNAL_URL: http://moodle
+      MOODLE_URL: ${MOODLE_URL:-https://lms.telite.io/moodle}
+      MOODLE_MODE: ${MOODLE_MODE:-mock}
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - database_network
+      - cache_network
+
+  celery_beat:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_celery_beat_prod
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - cache_network
+
+  frontend:
+    build:
+      context: ./telite-frontend
+      dockerfile: Dockerfile
+    container_name: telite_frontend_prod
+    restart: unless-stopped
+    networks:
+      - backend_network
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: telite_nginx_prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - backend_network
+
+networks:
+  backend_network:
+    name: telite_backend_network
+  database_network:
+    name: telite_database_network
+  cache_network:
+    name: telite_cache_network
+
+volumes:
+  pgdata_prod:
+    name: telite_pgdata_prod
+  moodledata_prod:
+    name: telite_moodledata_prod
+  redisdata_prod:
+    name: telite_redisdata_prod
+  telite-lms_uploads_prod:
+    name: telite_uploads_prod
