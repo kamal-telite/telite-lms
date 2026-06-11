@@ -12,6 +12,7 @@ class OrgInvitation(Base, TimestampMixin):
     org_id: Mapped[int] = mapped_column(Integer, nullable=False)
     email: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
+    category_scope: Mapped[str | None] = mapped_column(String, nullable=True)
     token: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     invited_by: Mapped[str | None] = mapped_column(String, nullable=True)
     expires_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -26,3 +27,9 @@ class OrgInvitation(Base, TimestampMixin):
     delivery_error: Mapped[str | None] = mapped_column(String, nullable=True)
     delivery_attempted_at: Mapped[str | None] = mapped_column(String, nullable=True)
     delivered_at: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    def is_expired(self) -> bool:
+        from datetime import datetime
+        if not self.expires_at:
+            return False
+        return datetime.utcnow().isoformat() > self.expires_at

@@ -45,6 +45,8 @@ class Permission:
     ORG_MANAGE_SETTINGS = "org.manage_settings"
     ORG_MANAGE_ENROLLMENTS = "org.manage_enrollments"
 
+    ORG_MANAGE_PERMISSIONS = "org.manage_permissions"
+
     # Category-level
     CAT_MANAGE_COURSES = "cat.manage_courses"
     CAT_MANAGE_LEARNERS = "cat.manage_learners"
@@ -55,6 +57,17 @@ class Permission:
     LEARNER_VIEW_COURSES = "learner.view_courses"
     LEARNER_ENROL = "learner.enrol"
     LEARNER_VIEW_PROGRESS = "learner.view_progress"
+
+    # Authoring-level
+    AUTHORING_MANAGE_BLOCKS = "authoring.manage_blocks"
+    AUTHORING_MANAGE_SECTIONS = "authoring.manage_sections"
+    AUTHORING_MANAGE_MODULES = "authoring.manage_modules"
+    AUTHORING_MANAGE_MEDIA = "authoring.manage_media"
+    AUTHORING_SUBMIT_REVIEW = "authoring.submit_review"
+    AUTHORING_APPROVE_REJECT = "authoring.approve_reject"
+    AUTHORING_PUBLISH = "authoring.publish"
+    AUTHORING_ROLLBACK = "authoring.rollback"
+    AUTHORING_VIEW_AUDIT_LOG = "authoring.view_audit_log"
 
 
 # ── Role → Permission matrix ──────────────────────────────────────────────────
@@ -77,6 +90,16 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,
+        Permission.AUTHORING_MANAGE_BLOCKS,
+        Permission.AUTHORING_MANAGE_SECTIONS,
+        Permission.AUTHORING_MANAGE_MODULES,
+        Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.AUTHORING_SUBMIT_REVIEW,
+        Permission.AUTHORING_APPROVE_REJECT,
+        Permission.AUTHORING_PUBLISH,
+        Permission.AUTHORING_ROLLBACK,
+        Permission.AUTHORING_VIEW_AUDIT_LOG,
+        Permission.ORG_MANAGE_PERMISSIONS,
     },
     "super_admin": {
         Permission.ORG_MANAGE_USERS,
@@ -92,12 +115,45 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,
+        Permission.AUTHORING_MANAGE_BLOCKS,
+        Permission.AUTHORING_MANAGE_SECTIONS,
+        Permission.AUTHORING_MANAGE_MODULES,
+        Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.AUTHORING_SUBMIT_REVIEW,
+        Permission.AUTHORING_APPROVE_REJECT,
+        Permission.AUTHORING_PUBLISH,
+        Permission.AUTHORING_ROLLBACK,
+        Permission.AUTHORING_VIEW_AUDIT_LOG,
+        Permission.ORG_MANAGE_PERMISSIONS,
     },
     "category_admin": {
         Permission.CAT_MANAGE_COURSES,
         Permission.CAT_MANAGE_LEARNERS,
         Permission.CAT_VIEW_ANALYTICS,
         Permission.CAT_MANAGE_TASKS,
+        Permission.LEARNER_VIEW_COURSES,
+        Permission.LEARNER_ENROL,
+        Permission.LEARNER_VIEW_PROGRESS,
+        Permission.AUTHORING_MANAGE_BLOCKS,
+        Permission.AUTHORING_MANAGE_SECTIONS,
+        Permission.AUTHORING_MANAGE_MODULES,
+        Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.AUTHORING_SUBMIT_REVIEW,
+        Permission.AUTHORING_VIEW_AUDIT_LOG,
+    },
+    "author": {
+        Permission.AUTHORING_MANAGE_BLOCKS,
+        Permission.AUTHORING_MANAGE_SECTIONS,
+        Permission.AUTHORING_MANAGE_MODULES,
+        Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.AUTHORING_SUBMIT_REVIEW,
+        Permission.LEARNER_VIEW_COURSES,
+        Permission.LEARNER_ENROL,
+        Permission.LEARNER_VIEW_PROGRESS,
+    },
+    "reviewer": {
+        Permission.AUTHORING_APPROVE_REJECT,
+        Permission.AUTHORING_VIEW_AUDIT_LOG,
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,

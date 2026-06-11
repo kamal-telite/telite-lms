@@ -37,7 +37,9 @@ export function validateBlocks(blocks) {
 
       case "image":
       case "video":
+      case "audio":
       case "pdf":
+      case "scorm":
         if (!(block.media_asset_id || block.settings?.asset_id || block.settings?.url)) {
           errors.push({
             blockId: block.id || `temp-${index}`,
@@ -47,6 +49,30 @@ export function validateBlocks(blocks) {
           warnings.push({
             blockId: block.id || `temp-${index}`,
             message: `${block.block_type.toUpperCase()} block #${blockNum} has an external or broken asset reference without a valid Media Library ID.`,
+          });
+        }
+        break;
+
+      case "embed":
+        if (!block.settings?.url || block.settings.url.trim() === "") {
+          errors.push({
+            blockId: block.id || `temp-${index}`,
+            message: `Embed block #${blockNum} is missing a URL.`,
+          });
+        }
+        break;
+
+      case "assignment":
+        if (!block.content || block.content.trim() === "") {
+          errors.push({
+            blockId: block.id || `temp-${index}`,
+            message: `Assignment block #${blockNum} is missing a title.`,
+          });
+        }
+        if (!block.settings?.instructions || block.settings.instructions.trim() === "") {
+          errors.push({
+            blockId: block.id || `temp-${index}`,
+            message: `Assignment block #${blockNum} is missing instructions.`,
           });
         }
         break;

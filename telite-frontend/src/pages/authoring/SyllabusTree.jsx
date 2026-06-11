@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -6,6 +6,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -15,11 +16,11 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { IconButton } from "../../components/common/ui";
-import { api } from "../../services/client";
+import { IconButton, useToast } from "../../components/common/ui";
+import { api, getErrorMessage } from "../../services/client";
 
 // Sortable Module Item
-function SortableModule({ module, isActive, onClick, onRename, onDelete }) {
+function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDelete, canEdit }) {
   const {
     attributes,
     listeners,
@@ -60,63 +61,128 @@ function SortableModule({ module, isActive, onClick, onRename, onDelete }) {
       <div style={{ flex: 1, fontSize: "13px", color: isActive ? "#1e3a8a" : "#334155", fontWeight: isActive ? 500 : 400 }}>
         {module.title}
       </div>
-      <IconButton
-        icon="pencil"
-        label={`Rename ${module.title}`}
-        onClick={(event) => {
-          event.stopPropagation();
-          onRename(module);
-        }}
-      />
-      <IconButton
-        icon="trash"
-        label={`Delete ${module.title}`}
-        onClick={(event) => {
-          event.stopPropagation();
-          onDelete(module);
-        }}
-      />
+      {canEdit && (
+        <>
+          <IconButton
+            icon="pencil"
+            label={`Rename ${module.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRename(module);
+            }}
+          />
+          <IconButton
+            icon="copy"
+            label={`Duplicate ${module.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDuplicate(module);
+            }}
+          />
+          <IconButton
+            icon="trash"
+            label={`Delete ${module.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(module);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
 
 // Section Container
-function SyllabusSection({ section, modules, activeModuleId, onSelectModule, onAddModule, onRenameSection, onDeleteSection, onRenameModule, onDeleteModule }) {
+function SyllabusSection({
+  section,
+  modules,
+  activeModuleId,
+  isCollapsed,
+  onToggleCollapsed,
+  onSelectModule,
+  onAddModule,
+  onRenameSection,
+  onDuplicateSection,
+  onDeleteSection,
+  onRenameModule,
+  onDuplicateModule,
+  onDeleteModule,
+  canEdit,
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `sec-${section.id}` });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    marginBottom: "24px",
+    borderRadius: "8px",
+    opacity: isDragging ? 0.5 : 1,
+    boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.1)" : "none",
+    position: "relative",
+    zIndex: isDragging ? 1 : 0,
+    background: "#fff",
+  };
+
   return (
-    <div style={{ marginBottom: "24px" }}>
+    <div ref={setNodeRef} style={style}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-        <div style={{ fontWeight: 600, fontSize: "14px", color: "#0f172a" }}>
-          {section.title}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+          <span {...attributes} {...listeners} style={{ cursor: "grab", color: "#94a3b8", padding: "4px" }}>⋮⋮</span>
+          <IconButton
+            icon={isCollapsed ? "chevronRight" : "chevronDown"}
+            label={isCollapsed ? `Expand ${section.title}` : `Collapse ${section.title}`}
+            onClick={() => onToggleCollapsed(section.id)}
+          />
+          <div style={{ fontWeight: 600, fontSize: "14px", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {section.title}
+          </div>
         </div>
         <div style={{ display: "flex", gap: "4px" }}>
-          <IconButton icon="pencil" size="small" label={`Rename ${section.title}`} onClick={() => onRenameSection(section)} />
-          <IconButton icon="trash" size="small" label={`Delete ${section.title}`} onClick={() => onDeleteSection(section)} />
-          <IconButton icon="plus" size="small" label={`Add module to ${section.title}`} onClick={() => onAddModule(section)} />
+          {canEdit && (
+            <>
+              <IconButton icon="pencil" size="small" label={`Rename ${section.title}`} onClick={() => onRenameSection(section)} />
+              <IconButton icon="copy" size="small" label={`Duplicate ${section.title}`} onClick={() => onDuplicateSection(section)} />
+              <IconButton icon="trash" size="small" label={`Delete ${section.title}`} onClick={() => onDeleteSection(section)} />
+              <IconButton icon="plus" size="small" label={`Add module to ${section.title}`} onClick={() => onAddModule(section)} />
+            </>
+          )}
         </div>
       </div>
       
-      <SortableContext 
-        items={modules.map(m => `mod-${m.id}`)}
-        strategy={verticalListSortingStrategy}
-      >
-        <div style={{ minHeight: "10px" }}>
-          {modules.map((module) => (
-            <SortableModule 
-              key={module.id} 
-              module={module} 
-              isActive={activeModuleId === module.id}
-              onClick={onSelectModule}
-              onRename={onRenameModule}
-              onDelete={onDeleteModule}
-            />
-          ))}
-          {modules.length === 0 && (
-            <div style={{ padding: "12px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "6px", fontSize: "12px", color: "#64748b", textAlign: "center" }}>
-              No modules in this section.
-            </div>
-          )}
-        </div>
-      </SortableContext>
+      {!isCollapsed && (
+        <SortableContext
+          items={modules.map(m => `mod-${m.id}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div style={{ minHeight: "10px" }}>
+            {modules.map((module) => (
+              <SortableModule
+                key={module.id}
+                module={module}
+                isActive={activeModuleId === module.id}
+                onClick={onSelectModule}
+                onRename={onRenameModule}
+                onDuplicate={onDuplicateModule}
+                onDelete={onDeleteModule}
+                canEdit={canEdit}
+              />
+            ))}
+            {modules.length === 0 && (
+              <div style={{ padding: "12px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "6px", fontSize: "12px", color: "#64748b", textAlign: "center" }}>
+                No modules in this section.
+              </div>
+            )}
+          </div>
+        </SortableContext>
+      )}
     </div>
   );
 }
@@ -129,10 +195,28 @@ export function SyllabusTree({
   onSelectModule,
   onAddModule,
   onRenameSection,
+  onDuplicateSection,
   onDeleteSection,
   onRenameModule,
+  onDuplicateModule,
   onDeleteModule,
+  canEdit = true,
 }) {
+  const [collapsedSections, setCollapsedSections] = useState(() => new Set());
+  const { showToast } = useToast();
+
+  const toggleCollapsed = (sectionId) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -149,11 +233,41 @@ export function SyllabusTree({
     
     if (!over || active.id === over.id) return;
 
-    // For Stage 1, we only handle reordering within the same section easily, 
-    // or moving across sections if we find the parent.
-    // To keep it simple, we'll find source and dest modules.
+    // Handle section reordering
+    if (String(active.id).startsWith("sec-") && String(over.id).startsWith("sec-")) {
+      const activeId = parseInt(active.id.split("-")[1], 10);
+      const overId = parseInt(over.id.split("-")[1], 10);
+      
+      const oldIndex = sections.findIndex(s => s.id === activeId);
+      const newIndex = sections.findIndex(s => s.id === overId);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newSections = arrayMove(sections, oldIndex, newIndex);
+        newSections.forEach((s, idx) => { s.sort_order = idx; });
+        setSections(newSections);
+
+        try {
+          await api.put(`/authoring/courses/${courseId}/structure`, {
+            updates: newSections.map(s => ({
+              section_id: s.id,
+              sort_order: s.sort_order,
+              modules: (s.modules || []).map(m => ({ module_id: m.id, sort_order: m.sort_order }))
+            }))
+          });
+          showToast("Section order saved.", "success");
+        } catch (err) {
+          setSections(sections);
+          showToast(getErrorMessage(err, "Failed to save section order."), "error");
+        }
+      }
+      return;
+    }
+
+    // Handle module reordering
+    if (!String(active.id).startsWith("mod-")) return;
+
     const activeId = parseInt(active.id.split("-")[1], 10);
-    const overId = parseInt(over.id.split("-")[1], 10);
+    const overId = String(over.id).startsWith("mod-") ? parseInt(over.id.split("-")[1], 10) : null;
 
     let sourceSectionIndex = -1;
     let destSectionIndex = -1;
@@ -161,20 +275,33 @@ export function SyllabusTree({
     let destModuleIndex = -1;
 
     sections.forEach((sec, sIdx) => {
-      const mIdxA = sec.modules.findIndex(m => m.id === activeId);
+      const sectionModules = sec.modules || [];
+      const mIdxA = sectionModules.findIndex(m => m.id === activeId);
       if (mIdxA > -1) {
         sourceSectionIndex = sIdx;
         sourceModuleIndex = mIdxA;
       }
-      const mIdxO = sec.modules.findIndex(m => m.id === overId);
-      if (mIdxO > -1) {
-        destSectionIndex = sIdx;
-        destModuleIndex = mIdxO;
+      if (overId !== null) {
+        const mIdxO = sectionModules.findIndex(m => m.id === overId);
+        if (mIdxO > -1) {
+          destSectionIndex = sIdx;
+          destModuleIndex = mIdxO;
+        }
       }
     });
 
+    if (String(over.id).startsWith("sec-")) {
+      const sectionId = parseInt(over.id.split("-")[1], 10);
+      destSectionIndex = sections.findIndex((sec) => sec.id === sectionId);
+      destModuleIndex = sections[destSectionIndex]?.modules?.length || 0;
+    }
+
     if (sourceSectionIndex === -1 || destSectionIndex === -1) return;
 
+    const previousSections = sections.map((section) => ({
+      ...section,
+      modules: (section.modules || []).map((module) => ({ ...module })),
+    }));
     const newSections = [...sections];
 
     if (sourceSectionIndex === destSectionIndex) {
@@ -198,9 +325,10 @@ export function SyllabusTree({
             }
           ]
         });
+        showToast("Module order saved.", "success");
       } catch (err) {
-        console.error("Failed to save structure", err);
-        // We should really rollback here, but ignoring for stage 1 mock
+        setSections(previousSections);
+        showToast(getErrorMessage(err, "Failed to save module order. Reverted to previous order."), "error");
       }
     } else {
       // Move to different section — immutable copy to avoid React state mutation
@@ -244,8 +372,10 @@ export function SyllabusTree({
             }
           ]
         });
+        showToast("Module moved.", "success");
       } catch (err) {
-        console.error("Failed to save structure across sections", err);
+        setSections(previousSections);
+        showToast(getErrorMessage(err, "Failed to move module. Reverted to previous section."), "error");
       }
     }
   };
@@ -256,20 +386,30 @@ export function SyllabusTree({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      {sections.map((section) => (
-        <SyllabusSection 
-          key={section.id} 
-          section={section} 
-          modules={section.modules || []} 
-          activeModuleId={activeModuleId}
-          onSelectModule={onSelectModule}
-          onAddModule={onAddModule}
-          onRenameSection={onRenameSection}
-          onDeleteSection={onDeleteSection}
-          onRenameModule={onRenameModule}
-          onDeleteModule={onDeleteModule}
-        />
-      ))}
+      <SortableContext
+        items={sections.map(s => `sec-${s.id}`)}
+        strategy={verticalListSortingStrategy}
+      >
+        {sections.map((section) => (
+          <SyllabusSection 
+            key={section.id} 
+            section={section} 
+            modules={section.modules || []} 
+            activeModuleId={activeModuleId}
+            isCollapsed={collapsedSections.has(section.id)}
+            onToggleCollapsed={toggleCollapsed}
+            onSelectModule={onSelectModule}
+            onAddModule={onAddModule}
+            onRenameSection={onRenameSection}
+            onDuplicateSection={onDuplicateSection}
+            onDeleteSection={onDeleteSection}
+            onRenameModule={onRenameModule}
+            onDuplicateModule={onDuplicateModule}
+            onDeleteModule={onDeleteModule}
+            canEdit={canEdit}
+          />
+        ))}
+      </SortableContext>
       {sections.length === 0 && (
         <div style={{ color: "#64748b", fontSize: "14px", textAlign: "center", marginTop: "20px" }}>
           No sections yet.

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Button, LoadingState, ErrorState, Icon } from "../common/ui";
+import { Button, EmptyState, LoadingState, ErrorState, Icon, useToast } from "../common/ui";
 import { CourseSidebar } from "./CourseSidebar";
 import { BlockRenderer } from "./BlockRenderer";
 
 export function LearnerPlayer({ courseId, onExit }) {
+  const { showToast } = useToast();
   const [courseData, setCourseData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -91,7 +92,7 @@ export function LearnerPlayer({ courseId, onExit }) {
     if (!activeModule) return;
     const token = localStorage.getItem("token");
     try {
-      await fetch("/api/v1/learner/progress", {
+      const response = await fetch("/api/v1/learner/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -99,8 +100,10 @@ export function LearnerPlayer({ courseId, onExit }) {
           module_updates: [{ module_id: activeModule.id, status: "completed" }]
         })
       });
+      if (!response.ok) throw new Error("Progress update failed");
       // Update local progress state
       setProgressData(prev => ({ ...prev, [activeModule.id]: "completed" }));
+      showToast("Module marked complete.", "success");
       
       // Auto-advance to next module
       const currentIndex = courseData.modules_json.findIndex(m => m.id === activeModule.id);
@@ -109,6 +112,7 @@ export function LearnerPlayer({ courseId, onExit }) {
       }
     } catch (e) {
       console.error("Failed to update progress", e);
+      showToast("Unable to update progress.", "error");
     }
   };
 
@@ -137,8 +141,10 @@ export function LearnerPlayer({ courseId, onExit }) {
         {/* Content Scroll Area */}
         <div style={{ flex: 1, overflowY: "auto", padding: "40px", display: "flex", justifyContent: "center" }}>
           <div style={{ maxWidth: "800px", width: "100%" }}>
-            {activeModule ? (
+            {activeModule && activeModule.content?.length > 0 ? (
               <BlockRenderer content={activeModule.content} courseId={courseId} moduleId={activeModule.id} />
+            ) : activeModule ? (
+              <EmptyState title="No lesson content" body="This module does not have learner-visible blocks yet." />
             ) : (
               <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
                 Select a module to begin

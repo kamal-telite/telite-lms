@@ -1,100 +1,86 @@
-"""
-Phase 4 — Tenant-aware permission resolution.
-
-Resolves the full permission set for a user from:
-  1. Their membership record (Phase 3 memberships table)
-  2. Fallback to users.role + users.org_id (backward compat)
-  3. Platform admin flag always wins
-
-This module is the single source of truth for what a user can do.
-Routes import from here — never compute permissions inline.
-"""
+"""Permission enforcement middleware."""
 
 from __future__ import annotations
 
-import logging
-from typing import Any
+from typing import Callable
+from fastapi import Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from app.core.rbac import ROLE_PERMISSIONS, Permission
+from app.api.auth import get_current_user, TokenData
+from app.db.engine import db_session
+from app.models.role_permission import RolePermission
+from app.services.audit_service import AuditService
 
-logger = logging.getLogger("telite.permissions")
-
-
-def resolve_permissions(
-    role: str,
-    is_platform_admin: bool,
-    category_scope: str | None = None,
-) -> list[str]:
+def require_capability(permission_key: str) -> Callable:
     """
-    Return the full list of permission strings for a role.
-
-    Args:
-        role:              User's role string
-        is_platform_admin: Whether the user is a platform admin
-        category_scope:    Category slug for category_admin scoping
-
-    Returns:
-        Sorted list of permission strings to embed in JWT
+    Returns a FastAPI dependency that checks if the current user's role 
+    has the specified capability in the active organization.
     """
-    if is_platform_admin:
-        # Platform admins get all permissions
-        all_perms: set[str] = set()
-        for perms in ROLE_PERMISSIONS.values():
-            all_perms.update(perms)
-        return sorted(all_perms)
+    def dependency(
+        db: Session = Depends(db_session),
+        current_user: TokenData = Depends(get_current_user)
+    ):
+        # Super admin has unrestricted access
+        if current_user.role == "super_admin":
+            return current_user
 
-    base_perms = set(ROLE_PERMISSIONS.get(role, set()))
-    return sorted(base_perms)
+        # Fetch the capability for the user's current active role and organization
+        capability = db.query(RolePermission).filter(
+            RolePermission.org_id == current_user.org_id,
+            RolePermission.role == current_user.role,
+            RolePermission.permission_key == permission_key,
+            RolePermission.enabled == True
+        ).first()
 
+        if not capability:
+            # Explicitly log permission denial
+            AuditService.log(
+                db=db,
+                org_id=current_user.org_id,
+                user_id=current_user.id,
+                entity_type="system",
+                entity_id=permission_key,
+                action="permission.denied"
+            )
+            db.commit()
+            
+            raise HTTPException(
+                status_code=403, 
+                detail=f"You do not have the required capability: {permission_key}"
+            )
+            
+        return current_user
 
-def build_jwt_claims(user: dict[str, Any]) -> dict[str, Any]:
+    return dependency
+
+def check_capability(db: Session, current_user: TokenData, permission_key: str) -> bool:
     """
-    Build the full JWT payload for a user.
-
-    Phase 4 enhancement: includes permissions list and category_scope
-    so the frontend can make permission decisions without extra API calls.
-
-    JWT structure:
-    {
-        "sub": "user-abc123",
-        "email": "user@example.com",
-        "role": "category_admin",
-        "name": "Jane Smith",
-        "org_id": 3,
-        "category_scope": "engineering",
-        "is_platform_admin": false,
-        "permissions": ["cat.manage_courses", "cat.manage_learners", ...],
-        "iat": 1234567890,
-        "exp": 1234596690,
-        "type": "access"
-    }
+    Synchronously check capability when the required permission depends on the request payload.
+    Raises 403 Forbidden if the user lacks the capability.
     """
-    role = user.get("role", "learner")
-    is_platform_admin = bool(user.get("is_platform_admin", False))
-    category_scope = user.get("category_scope")
-
-    permissions = resolve_permissions(role, is_platform_admin, category_scope)
-
-    return {
-        "sub": user["id"],
-        "email": user["email"],
-        "role": role,
-        "name": user["full_name"],
-        "org_id": user.get("org_id"),
-        "category_scope": category_scope,
-        "is_platform_admin": is_platform_admin,
-        "permissions": permissions,
-    }
-
-
-def check_permission_in_token(
-    token_payload: dict[str, Any],
-    permission: str,
-) -> bool:
-    """
-    Check if a permission is present in a decoded JWT payload.
-    Used for fast permission checks without a DB lookup.
-    """
-    if token_payload.get("is_platform_admin"):
+    if current_user.role == "super_admin":
         return True
-    return permission in token_payload.get("permissions", [])
+
+    capability = db.query(RolePermission).filter(
+        RolePermission.org_id == current_user.org_id,
+        RolePermission.role == current_user.role,
+        RolePermission.permission_key == permission_key,
+        RolePermission.enabled == True
+    ).first()
+
+    if not capability:
+        AuditService.log(
+            db=db,
+            org_id=current_user.org_id,
+            user_id=current_user.id,
+            entity_type="system",
+            entity_id=permission_key,
+            action="permission.denied"
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=403, 
+            detail=f"You do not have the required capability: {permission_key}"
+        )
+        
+    return True

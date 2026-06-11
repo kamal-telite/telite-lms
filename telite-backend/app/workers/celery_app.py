@@ -37,6 +37,7 @@ celery_app = Celery(
     include=[
         "app.workers.reconciliation",
         "app.workers.notification_tasks",
+        "app.workers.reminder_tasks",
     ],
 )
 
@@ -45,11 +46,13 @@ celery_app = Celery(
 default_exchange = Exchange("default", type="direct")
 reconcile_exchange = Exchange("reconcile", type="direct")
 notifications_exchange = Exchange("notifications", type="direct")
+reminders_exchange = Exchange("reminders", type="direct")
 
 celery_app.conf.task_queues = (
     Queue("default", default_exchange, routing_key="default"),
     Queue("reconcile", reconcile_exchange, routing_key="reconcile"),
     Queue("notifications", notifications_exchange, routing_key="notifications"),
+    Queue("reminders", reminders_exchange, routing_key="reminders"),
 )
 
 celery_app.conf.task_default_queue = "default"
@@ -59,6 +62,7 @@ celery_app.conf.task_default_routing_key = "default"
 celery_app.conf.task_routes = {
     "app.workers.reconciliation.*": {"queue": "reconcile"},
     "app.workers.notification_tasks.*": {"queue": "notifications"},
+    "app.workers.reminder_tasks.*": {"queue": "reminders"},
 }
 
 # ── Retry / reliability settings ──────────────────────────────────────────────
@@ -106,5 +110,23 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.notification_tasks.dispatch_pending_notifications",
         "schedule": 300,  # every 5 minutes
         "options": {"queue": "notifications"},
+    },
+    # Every 12 hours: enrollment reminders
+    "enrollment-reminders": {
+        "task": "app.workers.reminder_tasks.enrollment_reminders",
+        "schedule": 43200,  # every 12 hours
+        "options": {"queue": "reminders"},
+    },
+    # Daily: course publication notifications
+    "publication-reminders": {
+        "task": "app.workers.reminder_tasks.publication_reminders",
+        "schedule": 86400,  # every 24 hours
+        "options": {"queue": "reminders"},
+    },
+    # Daily: review reminders
+    "review-reminders": {
+        "task": "app.workers.reminder_tasks.review_reminders",
+        "schedule": 86400,  # every 24 hours
+        "options": {"queue": "reminders"},
     },
 }

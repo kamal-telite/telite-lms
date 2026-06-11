@@ -26,7 +26,9 @@ from app.api.routes.sessions import sessions_router
 from app.api.routes.builder import builder_router
 from app.api.routes.publishing import publishing_router
 from app.api.routes.media import media_router
+from app.api.routes.permissions import permissions_router
 from app.api.routes.learning_paths import learning_paths_router
+from app.api.routes.audit import audit_router
 from app.core.request_context import reset_request_id, set_request_id
 from app.core.domain_context import resolve_domain_context
 from app.core.rate_limiter import close_redis_connection
@@ -168,7 +170,9 @@ def create_app() -> FastAPI:
     app.include_router(builder_router)
     app.include_router(publishing_router)
     app.include_router(media_router)
+    app.include_router(permissions_router)
     app.include_router(learning_paths_router)
+    app.include_router(audit_router)
 
     uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
     os.makedirs(uploads_dir, exist_ok=True)

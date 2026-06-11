@@ -10,21 +10,13 @@ import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent, ge
 export function ActivityFeedTab({ events = [] }) {
   const [filter, setFilter] = useState("all");
 
-  const MOCK_EVENTS = [
-    { id: 1, type: "enrollment", status: "success", title: "Karan Rawat enrolled in 'Frontend Basics'", timestamp: new Date(Date.now() - 3600000) },
-    { id: 2, type: "verification", status: "info", title: "Priya Subramanian's account approved", timestamp: new Date(Date.now() - 7200000) },
-    { id: 3, type: "task", status: "warning", title: "Task 'Mock interview' assigned to Simran Kaur", timestamp: new Date(Date.now() - 14400000) },
-    { id: 4, type: "enrollment", status: "error", title: "Varun Nair's enrollment denied", timestamp: new Date(Date.now() - 86400000) },
-    { id: 5, type: "pal", status: "success", title: "Rahul Singh completed 'Frontend Basics quiz'", timestamp: new Date(Date.now() - 172800000) },
-  ];
-
   const displayEvents = events.length ? events.map(e => ({
     id: e.id,
-    type: e.icon === 'launch' || e.icon === 'check' ? 'task' : e.icon === 'plus' ? 'enrollment' : 'system',
-    status: e.accent === 'emerald' || e.accent === 'teal' ? 'success' : e.accent === 'red' ? 'error' : e.accent === 'warning' ? 'warning' : 'info',
+    type: e.type || (e.icon === 'launch' || e.icon === 'check' ? 'task' : e.icon === 'plus' ? 'enrollment' : 'system'),
+    status: e.status || (e.accent === 'emerald' || e.accent === 'teal' ? 'success' : e.accent === 'red' ? 'error' : e.accent === 'warning' ? 'warning' : 'info'),
     title: e.message || e.title,
     timestamp: e.created_at ? new Date(e.created_at) : e.timestamp
-  })) : MOCK_EVENTS;
+  })) : [];
   const filteredEvents = displayEvents.filter(e => filter === "all" || e.type === filter);
 
   return (
@@ -412,7 +404,7 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
                         <div className="row-title">{learner.full_name}</div>
                       </div>
                     </td>
-                    <td>{learner.courses_completed}/6</td>
+                    <td>{learner.courses_completed}/{learner.total_courses || 0}</td>
                     <td className="mono" style={{ color: getScoreColor(learner.pal_score), fontWeight: "bold" }}>
                       {formatPercent(learner.pal_score)}
                     </td>
@@ -504,13 +496,13 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
 
       <div className="grid-2">
         {visiblePalCards.map((learner) => (
-          <Panel key={learner.id} title={learner.full_name} subtitle={`${learner.courses_completed}/6 courses · ${learner.enrollment_type}`}>
+          <Panel key={learner.id} title={learner.full_name} subtitle={`${learner.courses_completed}/${learner.total_courses || 0} courses · ${learner.enrollment_type}`}>
             <div className="metric-row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
               <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
                 <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={30} />
                 <div>
                   <div className="row-title">{learner.full_name}</div>
-                  <div className="row-subtitle">{learner.courses_completed}/6 courses · {learner.enrollment_type}</div>
+                  <div className="row-subtitle">{learner.courses_completed}/{learner.total_courses || 0} courses · {learner.enrollment_type}</div>
                 </div>
               </div>
               <div className="summary-chip__value" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</div>

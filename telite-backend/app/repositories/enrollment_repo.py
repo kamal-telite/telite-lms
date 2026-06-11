@@ -165,6 +165,9 @@ class EnrollmentRepository(BaseRepository[EnrollmentRequest]):
         if user.role in ("super_admin", "category_admin"):
             return True
 
+        if course.status not in ("active", "published"):
+            return False
+
         if user.category_scope and user.category_scope == course.category_slug:
             return True
 

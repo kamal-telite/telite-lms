@@ -167,10 +167,10 @@ def get_tenant_session(org_id: int) -> Generator[Session, None, None]:
 
     try:
         if is_postgres:
-            # Set RLS context for this transaction
+            # Set RLS context for this transaction using set_config
             session.execute(
-                text("SET LOCAL app.current_org_id = :org_id"),
-                {"org_id": org_id},
+                text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                {"org_id": str(org_id)},
             )
             session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
 

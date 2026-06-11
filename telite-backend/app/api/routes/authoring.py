@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import copy
+import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +18,7 @@ from app.models.course_section import CourseSection
 from app.models.course_version import CourseVersion
 from app.models.lesson_block import LessonBlock
 from app.models.media_asset import MediaAsset
+from app.models.quiz_models import QuizDefinition, QuizSettings
 from app.services.storage import storage_service
 from app.models.learning_path import LearningPath, LearningPathCourse
 
@@ -168,6 +171,86 @@ def delete_section(
     db.commit()
     return {"success": True}
 
+@authoring_router.post("/courses/{course_id}/sections/{section_id}/duplicate", dependencies=[Depends(require_admin)])
+def duplicate_section(
+    course_id: str,
+    section_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    section = db.query(CourseSection).filter(
+        CourseSection.id == section_id,
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).first()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    max_section_order = db.query(func.coalesce(func.max(CourseSection.sort_order), -1)).filter(
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).scalar()
+
+    new_section = CourseSection(
+        course_id=course_id,
+        org_id=current_user.org_id,
+        title=f"{section.title} Copy",
+        sort_order=(max_section_order or -1) + 1,
+    )
+    db.add(new_section)
+    db.flush()
+
+    source_modules = db.query(CourseModule).filter(
+        CourseModule.course_id == course_id,
+        CourseModule.section_id == section_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
+    ).order_by(CourseModule.sort_order).all()
+
+    new_modules = []
+    for module_index, source_module in enumerate(source_modules):
+        new_module = CourseModule(
+            course_id=course_id,
+            section=new_section.sort_order,
+            section_id=new_section.id,
+            status=source_module.status,
+            title=source_module.title,
+            module_type=source_module.module_type,
+            sort_order=module_index,
+            content_url=source_module.content_url,
+            org_id=current_user.org_id,
+        )
+        db.add(new_module)
+        db.flush()
+        new_modules.append(new_module)
+
+        source_blocks = db.query(LessonBlock).filter(
+            LessonBlock.module_id == source_module.id,
+            LessonBlock.org_id == current_user.org_id,
+            LessonBlock.deleted_at.is_(None),
+        ).order_by(LessonBlock.sort_order).all()
+        for source_block in source_blocks:
+            db.add(LessonBlock(
+                module_id=new_module.id,
+                org_id=current_user.org_id,
+                block_type=source_block.block_type,
+                content=source_block.content,
+                media_asset_id=source_block.media_asset_id,
+                sort_order=source_block.sort_order,
+                metadata_json=copy.deepcopy(source_block.metadata_json),
+            ))
+
+    db.commit()
+    db.refresh(new_section)
+    for module in new_modules:
+        db.refresh(module)
+
+    payload = new_section.to_dict()
+    payload["modules"] = [module.to_dict() for module in new_modules]
+    return {"success": True, "section": payload}
+
 class ModuleStructureUpdate(BaseModel):
     module_id: int
     sort_order: int
@@ -179,6 +262,45 @@ class SectionStructureUpdate(BaseModel):
 class SaveStructureRequest(BaseModel):
     updates: List[SectionStructureUpdate]
 
+def _quiz_to_response(quiz: QuizDefinition, module: CourseModule) -> dict:
+    return {
+        "id": quiz.id,
+        "title": quiz.title,
+        "description": quiz.description,
+        "passing_score": quiz.passing_score,
+        "module_id": module.id,
+        "module_title": module.title,
+        "course_id": module.course_id,
+    }
+
+@authoring_router.get("/courses/{course_id}/quizzes", dependencies=[Depends(require_admin)])
+def list_course_quizzes(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.org_id == current_user.org_id,
+        Course.status != "archived",
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    rows = db.query(QuizDefinition, CourseModule).join(
+        CourseModule,
+        CourseModule.id == QuizDefinition.module_id,
+    ).filter(
+        QuizDefinition.org_id == current_user.org_id,
+        QuizDefinition.deleted_at.is_(None),
+        CourseModule.course_id == course_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.module_type == "quiz",
+        CourseModule.deleted_at.is_(None),
+    ).order_by(CourseModule.sort_order, QuizDefinition.id).all()
+
+    return {"quizzes": [_quiz_to_response(quiz, module) for quiz, module in rows]}
+
 @authoring_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin)])
 def update_course_structure(
     course_id: str,
@@ -186,23 +308,45 @@ def update_course_structure(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.org_id == current_user.org_id,
+        Course.status != "archived",
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    sections_by_id: dict[int | None, CourseSection | None] = {None: None}
     for sec_update in request.updates:
         section_id = None if sec_update.section_id == 0 else sec_update.section_id
+        if section_id is None or section_id in sections_by_id:
+            continue
         section = db.query(CourseSection).filter(
             CourseSection.id == section_id,
             CourseSection.course_id == course_id,
-            CourseSection.org_id == current_user.org_id
-        ).first() if section_id else None
+            CourseSection.org_id == current_user.org_id,
+            CourseSection.deleted_at.is_(None),
+        ).first()
+        if not section:
+            raise HTTPException(status_code=404, detail=f"Section {section_id} not found")
+        sections_by_id[section_id] = section
+
+    for sec_update in request.updates:
+        section_id = None if sec_update.section_id == 0 else sec_update.section_id
+        section = sections_by_id.get(section_id)
             
         for mod_update in sec_update.modules:
             module = db.query(CourseModule).filter(
                 CourseModule.id == mod_update.module_id,
-                CourseModule.org_id == current_user.org_id
+                CourseModule.course_id == course_id,
+                CourseModule.org_id == current_user.org_id,
+                CourseModule.deleted_at.is_(None),
             ).first()
-            if module:
-                module.section_id = section.id if section else None
-                module.section = section.sort_order if section else -1
-                module.sort_order = mod_update.sort_order
+            if not module:
+                raise HTTPException(status_code=404, detail=f"Module {mod_update.module_id} not found")
+            module.section_id = section.id if section else None
+            module.section = section.sort_order if section else -1
+            module.sort_order = mod_update.sort_order
                 
     db.commit()
     return {"success": True}
@@ -435,6 +579,7 @@ def create_module(
     max_order = db.query(CourseModule).filter(
         CourseModule.course_id == request.course_id, 
         CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
         CourseModule.section_id == request.section_id if request.section_id else CourseModule.section == request.section
     ).count()
 
@@ -450,6 +595,16 @@ def create_module(
         status="published"
     )
     db.add(new_module)
+    db.flush()
+
+    if new_module.module_type == "quiz":
+        quiz = QuizDefinition(
+            org_id=current_user.org_id,
+            module_id=new_module.id,
+            title=new_module.title,
+        )
+        db.add(quiz)
+
     db.commit()
     db.refresh(new_module)
     
@@ -477,6 +632,94 @@ def update_module(
     
     return {"success": True, "module": module.to_dict()}
 
+@authoring_router.post("/modules/{module_id}/duplicate", dependencies=[Depends(require_admin)])
+def duplicate_module(
+    module_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    source_module = db.query(CourseModule).filter(
+        CourseModule.id == module_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
+    ).first()
+    if not source_module:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    max_module_order = db.query(func.coalesce(func.max(CourseModule.sort_order), -1)).filter(
+        CourseModule.course_id == source_module.course_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
+        CourseModule.section_id == source_module.section_id,
+    ).scalar()
+
+    new_module = CourseModule(
+        course_id=source_module.course_id,
+        section=source_module.section,
+        section_id=source_module.section_id,
+        status=source_module.status,
+        title=f"{source_module.title} Copy",
+        module_type=source_module.module_type,
+        sort_order=(max_module_order or -1) + 1,
+        content_url=source_module.content_url,
+        org_id=current_user.org_id,
+    )
+    db.add(new_module)
+    db.flush()
+
+    source_quiz = db.query(QuizDefinition).filter(
+        QuizDefinition.module_id == source_module.id,
+        QuizDefinition.org_id == current_user.org_id,
+        QuizDefinition.deleted_at.is_(None),
+    ).first()
+    new_quiz = None
+    if source_quiz:
+        new_quiz = QuizDefinition(
+            org_id=current_user.org_id,
+            module_id=new_module.id,
+            title=f"{source_quiz.title} Copy",
+            description=source_quiz.description,
+            passing_score=source_quiz.passing_score,
+        )
+        db.add(new_quiz)
+        db.flush()
+
+        source_settings = db.query(QuizSettings).filter(QuizSettings.quiz_id == source_quiz.id).first()
+        if source_settings:
+            db.add(QuizSettings(
+                quiz_id=new_quiz.id,
+                time_limit=source_settings.time_limit,
+                passing_score=source_settings.passing_score,
+                attempt_limit=source_settings.attempt_limit,
+                show_answers=source_settings.show_answers,
+                show_score=source_settings.show_score,
+                shuffle_questions=source_settings.shuffle_questions,
+                shuffle_options=source_settings.shuffle_options,
+                cooldown_minutes=source_settings.cooldown_minutes,
+                review_mode=source_settings.review_mode,
+            ))
+
+    source_blocks = db.query(LessonBlock).filter(
+        LessonBlock.module_id == source_module.id,
+        LessonBlock.org_id == current_user.org_id,
+        LessonBlock.deleted_at.is_(None),
+    ).order_by(LessonBlock.sort_order).all()
+    for source_block in source_blocks:
+        db.add(LessonBlock(
+            module_id=new_module.id,
+            org_id=current_user.org_id,
+            block_type=source_block.block_type,
+            content=source_block.content,
+            media_asset_id=source_block.media_asset_id,
+            sort_order=source_block.sort_order,
+            metadata_json=copy.deepcopy(source_block.metadata_json),
+        ))
+
+    db.commit()
+    db.refresh(new_module)
+
+    return {"success": True, "module": new_module.to_dict()}
+
 @authoring_router.delete("/modules/{module_id}", dependencies=[Depends(require_admin)])
 def delete_module(
     module_id: int,
@@ -491,8 +734,27 @@ def delete_module(
     if not module:
         raise HTTPException(status_code=404, detail="Module not found")
 
-    module.deleted_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    module.deleted_at = now
     module.deleted_by = current_user.id
+
+    blocks = db.query(LessonBlock).filter(
+        LessonBlock.module_id == module.id,
+        LessonBlock.org_id == current_user.org_id,
+        LessonBlock.deleted_at.is_(None),
+    ).all()
+    for block in blocks:
+        block.deleted_at = now
+        block.deleted_by = current_user.id
+
+    quiz_definitions = db.query(QuizDefinition).filter(
+        QuizDefinition.module_id == module.id,
+        QuizDefinition.org_id == current_user.org_id,
+        QuizDefinition.deleted_at.is_(None),
+    ).all()
+    for quiz in quiz_definitions:
+        quiz.deleted_at = now
+        quiz.deleted_by = current_user.id
     db.commit()
     return {"success": True}
 

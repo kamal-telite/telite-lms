@@ -101,7 +101,33 @@ services:
       moodle:
         condition: service_started
 
-  # ── Phase 5: Celery worker for async Moodle sync ──────────────────────────
+  # ── Seed permissions on first boot ─────────────────────────────────────────
+  seed_permissions:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_seed_permissions
+    restart: "no"
+    command: python -m scripts.seed_permissions
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TELITE_DB_BACKEND: ${TELITE_DB_BACKEND:-postgres}
+      TELITE_POSTGRES_HOST: postgres
+      TELITE_POSTGRES_PORT: 5432
+      TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
+      TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
+      TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
+      TELITE_DATABASE_URL: ""
+      TELITE_SQLITE_SOURCE_PATH: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  # ── Celery worker for async Moodle sync ────────────────────────────────────
   celery_worker:
     build:
       context: ./telite-backend
@@ -133,7 +159,7 @@ services:
       redis:
         condition: service_healthy
 
-  # ── Phase 5: Celery Beat for scheduled reconciliation ─────────────────────
+  # ── Celery Beat for scheduled reconciliation ───────────────────────────────
   celery_beat:
     build:
       context: ./telite-backend
@@ -151,7 +177,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-
 
   frontend:
     build:

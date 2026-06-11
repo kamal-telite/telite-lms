@@ -17,8 +17,57 @@ from app.models.course_progress import CourseProgress
 from app.models.module_progress import ModuleProgress
 from app.models.course_module import CourseModule
 from app.models.lesson_block import LessonBlock
+from app.models.media_asset import MediaAsset
+from app.services.r2_client import generate_presigned_download_url
 
 learner_router = APIRouter(prefix="/learner", tags=["Learner APIs"])
+
+
+def _download_url_for_asset(asset: MediaAsset) -> str:
+    if asset.object_key.startswith("/uploads/"):
+        return asset.object_key
+    return generate_presigned_download_url(asset.object_key)
+
+
+def _block_to_response(block: LessonBlock, db: Session, org_id: int) -> dict:
+    block_dict = block.to_dict()
+    settings = block_dict.pop("metadata_json", {}) or {}
+    if block.media_asset_id:
+        settings.setdefault("asset_id", block.media_asset_id)
+        asset = db.query(MediaAsset).filter(
+            MediaAsset.id == block.media_asset_id,
+            MediaAsset.org_id == org_id,
+            MediaAsset.deleted_at.is_(None),
+        ).first()
+        if asset:
+            settings.setdefault("url", _download_url_for_asset(asset))
+            settings.setdefault("filename", asset.filename)
+            settings.setdefault("mime_type", asset.mime_type)
+            settings.setdefault("asset_version", asset.asset_version)
+    block_dict["settings"] = settings
+    return block_dict
+
+
+def _valid_block_id(block_id: Optional[int], db: Session, org_id: int) -> Optional[int]:
+    if not block_id:
+        return None
+    exists = db.query(LessonBlock.id).filter(
+        LessonBlock.id == block_id,
+        LessonBlock.org_id == org_id,
+        LessonBlock.deleted_at.is_(None),
+    ).first()
+    return block_id if exists else None
+
+
+def _valid_block_id_text(block_id: Optional[str], db: Session, org_id: int) -> Optional[str]:
+    if not block_id:
+        return None
+    try:
+        parsed = int(block_id)
+    except (TypeError, ValueError):
+        return None
+    valid = _valid_block_id(parsed, db, org_id)
+    return str(valid) if valid else None
 
 class CourseListResponse(BaseModel):
     id: str
@@ -129,7 +178,7 @@ def get_learner_course(
         CourseModule.course_id == course.id,
         CourseModule.org_id == current_user.org_id,
         CourseModule.deleted_at.is_(None),
-    ).order_by(CourseModule.sort_order).all()
+    ).order_by(CourseModule.section, CourseModule.sort_order, CourseModule.id).all()
 
     blocks_by_module = {}
     if modules:
@@ -140,8 +189,7 @@ def get_learner_course(
             LessonBlock.deleted_at.is_(None),
         ).order_by(LessonBlock.sort_order).all()
         for block in blocks:
-            block_dict = block.to_dict()
-            block_dict["settings"] = block_dict.pop("metadata_json", {})
+            block_dict = _block_to_response(block, db, current_user.org_id)
             blocks_by_module.setdefault(block.module_id, []).append(block_dict)
 
     native_modules = []
@@ -225,8 +273,9 @@ def update_progress(
         else:
             mp.status = mod_upd.status
             
-        if mod_upd.last_block_id:
-            mp.last_block_id = mod_upd.last_block_id
+        valid_last_block_id = _valid_block_id_text(mod_upd.last_block_id, db, current_user.org_id)
+        if valid_last_block_id:
+            mp.last_block_id = valid_last_block_id
             
         if mod_upd.status == "completed" and not mp.completed_at:
             mp.completed_at = datetime.utcnow()
@@ -312,13 +361,14 @@ def heartbeat(
         raise HTTPException(status_code=403, detail="Not enrolled or access denied")
 
     now = datetime.utcnow()
+    valid_block_id = _valid_block_id(req.block_id, db, current_user.org_id)
 
     # Record event
     event = LearnerEvent(
         user_id=current_user.id,
         course_id=req.course_id,
         module_id=req.module_id,
-        block_id=req.block_id,
+        block_id=valid_block_id,
         event_type="HEARTBEAT",
         schema_version="1.0",
         payload_json={"time_spent_seconds": req.time_spent_seconds},
@@ -372,8 +422,8 @@ def heartbeat(
             mp.started_at = mp.started_at or now
         mp.time_spent_seconds = (mp.time_spent_seconds or 0) + req.time_spent_seconds
         mp.last_viewed_at = now
-        if req.block_id:
-            mp.last_block_id = str(req.block_id)
+        if valid_block_id:
+            mp.last_block_id = str(valid_block_id)
         progress_repo.upsert_module_progress(mp)
 
     db.commit()
@@ -396,7 +446,7 @@ def record_events(
             user_id=current_user.id,
             course_id=ev.course_id,
             module_id=ev.module_id,
-            block_id=ev.block_id,
+            block_id=_valid_block_id(ev.block_id, db, current_user.org_id),
             event_type=ev.event_type,
             schema_version="1.0",
             payload_json=ev.payload_json,

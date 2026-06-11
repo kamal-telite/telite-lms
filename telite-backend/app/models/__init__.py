@@ -26,6 +26,7 @@ from app.models.course_progress import CourseProgress
 from app.models.module_progress import ModuleProgress
 from app.models.lesson_block_progress import LessonBlockProgress
 from app.models.course_version import CourseVersion
+from app.models.course_review import CourseReview
 from app.models.learning_path import LearningPath, LearningPathCourse
 from app.models.learning_path_progress import LearningPathProgress
 from app.models.learner_event import LearnerEvent
@@ -39,6 +40,7 @@ from app.models.question import Question, QuestionVersion
 from app.models.quiz_attempt import QuizAttempt, QuizAttemptQuestion, QuizAttemptEvent
 from app.models.quiz_answer import QuizAnswer, GradingEvent
 from app.models.rubric import GradingRubric, RubricCriteria
+from app.models.role_permission import RolePermission
 
 __all__ = [
     "Base",
@@ -71,6 +73,7 @@ __all__ = [
     "ModuleProgress",
     "LessonBlockProgress",
     "CourseVersion",
+    "CourseReview",
     "LearningPath",
     "LearningPathCourse",
     "LearningPathProgress",
@@ -93,4 +96,5 @@ __all__ = [
     "GradingEvent",
     "GradingRubric",
     "RubricCriteria",
+    "RolePermission",
 ]

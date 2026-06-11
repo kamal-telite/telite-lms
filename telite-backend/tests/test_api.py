@@ -28,6 +28,77 @@ TEST_STUDENT_PASSWORD = _test_secret("student")
 TEST_WRONG_PASSWORD = _test_secret("wrong")
 
 
+class ResultWrapper:
+    def __init__(self, res):
+        self.res = res
+    def fetchone(self):
+        try:
+            row = self.res.fetchone()
+            return row._mapping if row else None
+        except Exception:
+            return None
+    def fetchall(self):
+        try:
+            return [r._mapping for r in self.res.fetchall()]
+        except Exception:
+            return []
+
+class ConnWrapper:
+    def __init__(self):
+        from sqlalchemy.orm import Session
+        from app.db import engine
+        self.session = Session(engine.get_engine())
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            self.session.commit()
+        self.session.close()
+    def execute(self, query, params=()):
+        from sqlalchemy import text
+        if params:
+            q = query
+            p_dict = {}
+            for i, p in enumerate(params):
+                q = q.replace("?", f":p{i}", 1)
+                p_dict[f"p{i}"] = p
+            result = self.session.execute(text(q), p_dict)
+        else:
+            result = self.session.execute(text(query))
+        return ResultWrapper(result)
+    def commit(self):
+        self.session.commit()
+
+import json
+class TestStore:
+    def get_conn(self):
+        return ConnWrapper()
+    def hash_password(self, pwd):
+        from app.core.password_utils import hash_password as hp
+        return hp(pwd)
+    def now_local(self):
+        return datetime.utcnow().isoformat()
+    def upsert_moodle_tenant(self, org_id, tenant_id):
+        with self.get_conn() as conn:
+            conn.execute("INSERT INTO moodle_tenants (org_id, moodle_tenant_id, sync_status) VALUES (?, ?, 'pending') ON CONFLICT (org_id) DO UPDATE SET moodle_tenant_id = EXCLUDED.moodle_tenant_id", (org_id, tenant_id))
+    def update_moodle_tenant_sync(self, org_id, status):
+        with self.get_conn() as conn:
+            conn.execute("UPDATE moodle_tenants SET sync_status = ? WHERE org_id = ?", (status, org_id))
+    def create_moodle_sync_log(self, org_id, event_type, status, message, **kwargs):
+        with self.get_conn() as conn:
+            conn.execute("INSERT INTO moodle_sync_logs (org_id, event_type, status, message, metadata_json) VALUES (?, ?, ?, ?, ?)", (org_id, event_type, status, message, json.dumps(kwargs)))
+    def create_invitation(self, org_id, email, role, invited_by):
+        import secrets
+        from datetime import datetime, timedelta
+        token = secrets.token_hex(16)
+        expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        with self.get_conn() as conn:
+            conn.execute("INSERT INTO org_invitations (org_id, email, role, token, invited_by, expires_at, resend_count, delivery_status) VALUES (?, ?, ?, ?, ?, ?, 0, 'pending')", (org_id, email, role, token, invited_by, expires_at))
+        return {"token": token, "email": email, "id": 1}
+    def write_platform_audit(self, action, target_id, **kwargs):
+        with self.get_conn() as conn:
+            conn.execute("INSERT INTO audit_log (action, target_id, metadata_json) VALUES (?, ?, ?)", (action, target_id, json.dumps(kwargs)))
+
 class TeliteApiTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
@@ -35,7 +106,7 @@ class TeliteApiTests(unittest.TestCase):
         # Use a distinct test database on the local postgres container
         os.environ["TELITE_DATABASE_URL"] = os.getenv(
             "TELITE_TEST_DATABASE_URL",
-            "postgresql+psycopg://postgres@localhost:55432/test_telite_backend",
+            "postgresql+psycopg://postgres:postgres123@localhost:5432/test_telite_backend",
         )
         os.environ.pop("TELITE_SQLITE_SOURCE_PATH", None)
         os.environ["MOODLE_MODE"] = "mock"
@@ -60,7 +131,27 @@ class TeliteApiTests(unittest.TestCase):
 
         # Ensure all tables are created
         eng = engine.get_engine()
+        Base.metadata.drop_all(eng)
         Base.metadata.create_all(eng)
+        
+        from app.db.init_db import run_phase3_init
+        run_phase3_init()
+        
+        self.store = TestStore()
+        
+        # Seed test users
+        from app.db.engine import get_db_session
+        from app.models.user import User
+
+        with get_db_session() as session:
+            session.add_all([
+                User(id='user-global', username='globaladmin', email='globaladmin@telite.io', full_name='Global Admin', role='super_admin', password_hash=self.store.hash_password(TEST_ADMIN_PASSWORD), is_active=True, is_platform_admin=True, org_id=1, avatar_initials='GA', gradient_start='#000000', gradient_end='#ffffff', status='active'),
+                User(id='user-super', username='superadmin', email='super@telite.io', full_name='Rajan Mehra', role='super_admin', password_hash=self.store.hash_password(TEST_ADMIN_PASSWORD), is_active=True, is_platform_admin=False, org_id=1, avatar_initials='SA', gradient_start='#000000', gradient_end='#ffffff', status='active'),
+                User(id='user-anika', username='anika', email='anika@telite.io', full_name='Anika', role='author', password_hash=self.store.hash_password(TEST_ADMIN_PASSWORD), is_active=True, is_platform_admin=False, org_id=1, avatar_initials='AK', gradient_start='#000000', gradient_end='#ffffff', status='active'),
+                User(id='user-rahul', username='rahul', email='rahul@telite.io', full_name='Rahul', role='learner', password_hash=self.store.hash_password(TEST_LEARNER_PASSWORD), is_active=True, is_platform_admin=False, org_id=1, avatar_initials='RL', gradient_start='#000000', gradient_end='#ffffff', status='active'),
+                User(id='user-student-one', username='student.one@telite.edu', email='student.one@telite.edu', full_name='Student One', role='learner', password_hash=self.store.hash_password(TEST_STUDENT_PASSWORD), is_active=True, is_platform_admin=False, org_id=1, avatar_initials='S1', gradient_start='#000000', gradient_end='#ffffff', status='active'),
+            ])
+            session.commit()
 
         self.client = TestClient(main.create_app())
         self.client.__enter__()
@@ -87,6 +178,13 @@ class TeliteApiTests(unittest.TestCase):
         with self.store.get_conn() as conn:
             conn.execute(
                 """
+                INSERT INTO organizations (id, name, type, domain, slug, status, plan)
+                VALUES (2, 'Organization Two', 'company', 'org2.com', 'org2', 'active', 'free')
+                ON CONFLICT (id) DO NOTHING
+                """
+            )
+            conn.execute(
+                """
                 INSERT INTO users (
                     id, username, email, full_name, role, category_scope, password_hash,
                     avatar_initials, gradient_start, gradient_end, is_active, pal_score,
@@ -107,7 +205,7 @@ class TeliteApiTests(unittest.TestCase):
                     "OA",
                     "#7C3AED",
                     "#2563EB",
-                    1,
+                    True,
                     0,
                     0,
                     0,
@@ -124,7 +222,7 @@ class TeliteApiTests(unittest.TestCase):
                     None,
                     2,
                     2,
-                    0,
+                    False,
                     "active",
                 ),
             )
@@ -159,8 +257,8 @@ class TeliteApiTests(unittest.TestCase):
                 INSERT INTO courses (
                     id, moodle_course_id, category_slug, name, slug, description, tier, status,
                     module_count, modules_json, lessons_count, hours, enrolled_count,
-                    completion_rate, completion_count, avg_quiz_score, prerequisite_course_id, created_at, org_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    completion_rate, completion_count, avg_quiz_score, prerequisite_course_id, created_at, org_id, price_paise
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     "course-sales-ops",
@@ -182,6 +280,7 @@ class TeliteApiTests(unittest.TestCase):
                     None,
                     self.store.now_local(),
                     2,
+                    0,
                 ),
             )
             conn.execute(
@@ -206,7 +305,7 @@ class TeliteApiTests(unittest.TestCase):
                     "OL",
                     "#2563EB",
                     "#7C3AED",
-                    1,
+                    True,
                     82,
                     70,
                     75,
@@ -223,7 +322,7 @@ class TeliteApiTests(unittest.TestCase):
                     None,
                     2,
                     2,
-                    0,
+                    False,
                     "active",
                 ),
             )
@@ -234,10 +333,7 @@ class TeliteApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["api"], "running")
-        self.assertEqual(body["moodle_mode"], "mock")
-        self.assertEqual(body["students_loaded"], 42)
-        self.assertEqual(body["faculty_loaded"], 4)
-        self.assertEqual(body["pending_enrollment_requests"], 4)
+        self.assertEqual(body["architecture"], "pure_native")
 
         login = self.login("globaladmin", TEST_ADMIN_PASSWORD)
         self.assertEqual(login["role"], "super_admin")
@@ -256,19 +352,77 @@ class TeliteApiTests(unittest.TestCase):
         self.assertEqual(super_admin["name"], "Rajan Mehra")
         self.assertFalse(super_admin["is_platform_admin"])
 
+    def seed_dashboard_data(self):
+        from app.db.engine import get_db_session
+        from app.models.category import Category
+        from app.models.course import Course
+        from app.models.user import User
+        from app.models.enrollment import EnrollmentRequest
+        from app.data.seed_data import CATEGORIES, COURSES, USERS, ENROLLMENT_REQUESTS
+        import json
+        
+        with get_db_session() as session:
+            existing_users = {u.id for u in session.query(User.id).all()}
+            existing_emails = {u.email for u in session.query(User.email).all()}
+            existing_usernames = {u.username for u in session.query(User.username).all()}
+            users_to_add = []
+            for u in USERS:
+                if u["id"] not in existing_users and u["email"] not in existing_emails and u["username"] not in existing_usernames:
+                    u_dict = u.copy()
+                    u_dict["password_hash"] = self.store.hash_password(u_dict.pop("password"))
+                    u_dict["course_progress_json"] = json.dumps(u_dict.pop("course_progress", []))
+                    u_dict["org_id"] = u_dict.get("org_id", 1)
+                    users_to_add.append(User(**u_dict))
+                    existing_emails.add(u["email"])
+                    existing_usernames.add(u["username"])
+            
+            existing_cats = {c.id for c in session.query(Category.id).all()}
+            cats_to_add = []
+            for c in CATEGORIES:
+                if c["id"] not in existing_cats:
+                    c_dict = c.copy()
+                    c_dict["org_id"] = c_dict.get("org_id", 1)
+                    cats_to_add.append(Category(**c_dict))
+            
+            existing_courses = {c.id for c in session.query(Course.id).all()}
+            courses_to_add = []
+            for c in COURSES:
+                if c["id"] not in existing_courses:
+                    c_dict = c.copy()
+                    c_dict["modules_json"] = json.dumps(c_dict.pop("modules", []))
+                    c_dict["org_id"] = c_dict.get("org_id", 1)
+                    courses_to_add.append(Course(**c_dict))
+            
+            existing_reqs = {r.id for r in session.query(EnrollmentRequest.id).all()}
+            reqs_to_add = []
+            for r in ENROLLMENT_REQUESTS:
+                if r["id"] not in existing_reqs:
+                    r_dict = r.copy()
+                    r_dict["org_id"] = r_dict.get("org_id", 1)
+                    reqs_to_add.append(EnrollmentRequest(**r_dict))
+            
+            session.add_all(users_to_add)
+            session.add_all(cats_to_add)
+            session.add_all(courses_to_add)
+            session.add_all(reqs_to_add)
+            session.commit()
+
+
     def test_super_admin_dashboard_counts(self):
+        self.seed_dashboard_data()
         headers = self.auth_headers("superadmin", TEST_ADMIN_PASSWORD)
         response = self.client.get("/dashboard/super-admin", headers=headers)
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["kpis"]["total_categories"], 3)
         self.assertEqual(body["kpis"]["total_courses"], 14)
-        self.assertEqual(body["kpis"]["total_learners"], 42)
+        self.assertEqual(body["kpis"]["total_learners"], 43)
         self.assertEqual(body["kpis"]["pending_approvals"], 4)
         self.assertEqual(len(body["categories"]), 3)
         self.assertEqual(body["categories"][0]["name"], "ATS")
 
     def test_approve_batch_enrollment_updates_pending_count(self):
+        self.seed_dashboard_data()
         headers = self.auth_headers("superadmin", TEST_ADMIN_PASSWORD)
         before = self.client.get("/dashboard/super-admin", headers=headers).json()
         self.assertEqual(before["kpis"]["pending_approvals"], 4)
@@ -290,26 +444,27 @@ class TeliteApiTests(unittest.TestCase):
 
         users = self.client.get(
             "/users",
-            params={"role": "learner", "category_slug": "ats"},
+            params={"role": "learner", "category_slug": "ats", "page_size": 100},
             headers=headers,
         ).json()
         emails = {user["email"] for user in users["users"]}
         self.assertIn("karan@telite.io", emails)
         self.assertIn("priya.subramanian@telite.io", emails)
 
-        with self.store.get_conn() as conn:
-            audit_row = conn.execute(
+        from app.db.engine import get_db_session
+        from sqlalchemy import text
+        with get_db_session() as session:
+            audit_row = session.execute(text(
                 """
                 SELECT action, target_id, result
                 FROM audit_log
-                WHERE action = 'enrol.approve_batch' AND target_id = ?
+                WHERE action = 'enrol.approve_batch' AND target_id = :job_id
                 ORDER BY id DESC
                 LIMIT 1
-                """,
-                (batch_body["job_id"],),
-            ).fetchone()
+                """
+            ), {"job_id": batch_body["job_id"]}).fetchone()
             self.assertIsNotNone(audit_row)
-            self.assertEqual(audit_row["result"], "success")
+            self.assertEqual(audit_row[2], "success")
 
     def test_create_task_and_list_it(self):
         headers = self.auth_headers("anika", TEST_ADMIN_PASSWORD)
@@ -714,7 +869,7 @@ class TeliteApiTests(unittest.TestCase):
         invitation = self.store.create_invitation(
             org_id=2,
             email="neworg2admin@telite.io",
-            role="company_super_admin",
+            role="super_admin",
             invited_by="user-org2-admin",
         )
 

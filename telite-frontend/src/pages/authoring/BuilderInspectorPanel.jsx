@@ -1,5 +1,6 @@
 import React from "react";
 import { Badge, Button } from "../../components/common/ui";
+import { inspectorRegistry } from "./inspectors/inspectorRegistry";
 
 function DetailRow({ label, value }) {
   return (
@@ -29,12 +30,17 @@ export function BuilderInspectorPanel({
   course,
   activeSection,
   activeModule,
+  activeBlock,
+  onBlockSettingChange,
   validationStatus,
   lockState,
   onOpenHistory,
 }) {
   const moduleCount = (activeSection?.modules || []).length;
   const errors = validationStatus?.errors || [];
+  const blockSettings = activeBlock?.settings || {};
+  
+  const InspectorComponent = activeBlock ? inspectorRegistry[activeBlock.block_type] : null;
 
   return (
     <aside style={{ width: "320px", background: "#f8fafc", borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
@@ -66,6 +72,51 @@ export function BuilderInspectorPanel({
             <div style={{ color: "#64748b", fontSize: "13px" }}>Select a module to inspect its properties.</div>
           )}
         </SectionCard>
+
+        <SectionCard title="Selected Block">
+          {activeBlock ? (
+            <>
+              <DetailRow label="Block ID" value={activeBlock.id || "Unsaved"} />
+              <DetailRow label="Type" value={activeBlock.block_type} />
+              <DetailRow label="Sort Order" value={activeBlock.sort_order} />
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "#334155" }}>
+                <span>Hide in learner preview</span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(blockSettings.hidden)}
+                  onChange={(event) => onBlockSettingChange?.("hidden", event.target.checked)}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "#334155" }}>
+                <span>Lock editing</span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(blockSettings.locked)}
+                  onChange={(event) => onBlockSettingChange?.("locked", event.target.checked)}
+                />
+              </label>
+              {blockSettings.hidden || blockSettings.locked ? (
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {blockSettings.hidden ? <Badge tone="warning">Hidden</Badge> : null}
+                  {blockSettings.locked ? <Badge tone="danger">Locked</Badge> : null}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div style={{ color: "#64748b", fontSize: "13px" }}>Select a lesson block to edit visibility and lock settings.</div>
+          )}
+        </SectionCard>
+
+        {InspectorComponent ? (
+          <SectionCard title="Block Properties">
+            <InspectorComponent 
+              blockType={activeBlock.block_type}
+              settings={blockSettings}
+              onChange={onBlockSettingChange}
+              disabled={Boolean(blockSettings.locked)}
+            />
+          </SectionCard>
+        ) : null}
 
         <SectionCard title="Section">
           {activeSection ? (

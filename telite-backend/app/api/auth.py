@@ -357,13 +357,15 @@ def ensure_org_access(current_user: TokenData, target_org_id: int | None) -> int
 
 # ── Token helpers ─────────────────────────────────────────────────────────────
 
-def _build_token_response(user: dict[str, Any], refresh_token: str) -> TokenResponse:
+def _build_token_response(user: dict[str, Any], refresh_token: str, db: Session | None = None) -> TokenResponse:
     from app.core.permissions import resolve_permissions
     access_token = create_access_token(create_access_payload(user))
     permissions = resolve_permissions(
         user["role"],
         bool(user.get("is_platform_admin")),
         user.get("category_scope"),
+        user.get("org_id"),
+        db
     )
     return TokenResponse(
         access_token=access_token,
@@ -412,7 +414,7 @@ def issue_login_response(
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     user_repo.update_last_login(user.id, now_str)
 
-    token_response = _build_token_response(user_dict, refresh_token)
+    token_response = _build_token_response(user_dict, refresh_token, db)
     csrf_token = generate_csrf_token()
 
     # Set HttpOnly cookies
@@ -465,6 +467,7 @@ def refresh(
     response: Response,
     body: RefreshRequest | None = None,
     cookie_refresh: str | None = Cookie(default=None, alias="telite_refresh_token"),
+    db: Session = Depends(db_session),
 ) -> TokenResponse:
     # Prefer cookie, fall back to body
     refresh_token = cookie_refresh or (body.refresh_token if body else None)
@@ -486,7 +489,7 @@ def refresh(
         user["org_id"] = session_org_id
         user["organization_id"] = session_org_id
 
-    token_response = _build_token_response(user, refresh_token)
+    token_response = _build_token_response(user, refresh_token, db)
     csrf_token = generate_csrf_token()
     _set_auth_cookies(
         response,

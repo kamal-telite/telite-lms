@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { CourseBuilderLayout } from "./CourseBuilderLayout";
 import { LoadingState, ErrorState, useToast } from "../../components/common/ui";
 import { getErrorMessage, api } from "../../services/client";
@@ -7,13 +7,18 @@ import { getErrorMessage, api } from "../../services/client";
 export default function CourseBuilderPage({ session, onLogout }) {
   const { course_id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
+  
+  const initialModuleId = searchParams.get("module") ? parseInt(searchParams.get("module"), 10) : null;
+  const initialBlockId = searchParams.get("block") ? parseInt(searchParams.get("block"), 10) : null;
   
   const [course, setCourse] = useState(null);
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lockExpiresAt, setLockExpiresAt] = useState(null);
+  const [lockState, setLockState] = useState("connecting");
   const heartbeatIntervalRef = useRef(null);
 
   // 1. Fetch Structure
@@ -33,8 +38,10 @@ export default function CourseBuilderPage({ session, onLogout }) {
     try {
       const { data } = await api.post(`/authoring/courses/${course_id}/lock`);
       setLockExpiresAt(data.expires_at);
+      setLockState("active");
       return true;
     } catch (err) {
+      setLockState("blocked");
       setError(getErrorMessage(err, "Failed to acquire lock. Someone else might be editing this course."));
       return false;
     }
@@ -52,8 +59,10 @@ export default function CourseBuilderPage({ session, onLogout }) {
     try {
       const { data } = await api.post(`/authoring/courses/${course_id}/heartbeat`);
       setLockExpiresAt(data.expires_at);
+      setLockState("active");
     } catch (err) {
       console.error("Heartbeat failed", err);
+      setLockState("lost");
       showToast("Lost connection to course lock. Please refresh to continue editing safely.", "error");
     }
   }, [course_id, showToast]);
@@ -112,9 +121,14 @@ export default function CourseBuilderPage({ session, onLogout }) {
       course={course}
       sections={sections}
       setSections={setSections}
+      onReloadStructure={fetchStructure}
+      lockExpiresAt={lockExpiresAt}
+      lockState={lockState}
       onBack={handleBack}
       session={session}
       onLogout={onLogout}
+      initialModuleId={initialModuleId}
+      initialBlockId={initialBlockId}
     />
   );
 }

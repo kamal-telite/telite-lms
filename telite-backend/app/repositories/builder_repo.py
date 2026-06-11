@@ -105,6 +105,7 @@ class BuilderRepository(BaseRepository):
         self.session.flush()
         return block
 
-    def delete_block(self, block: LessonBlock) -> None:
-        self.session.delete(block)
+    def delete_block(self, block: LessonBlock, deleted_by: str | None = None) -> None:
+        block.deleted_at = datetime.now(timezone.utc)
+        block.deleted_by = deleted_by
         self.session.flush()

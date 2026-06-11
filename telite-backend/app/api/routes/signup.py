@@ -92,7 +92,7 @@ class RejectPayload(BaseModel):
 
 @signup_router.get("/signup/organizations")
 def get_organizations(type: str | None = Query(default=None), db: Session = Depends(db_session)):
-    org_repo = OrganizationRepository(db)
+    org_repo = OrgRepository(db)
     orgs = org_repo.list_all(org_type=type)
     return [
         {
@@ -147,7 +147,7 @@ def register(body: SignupPayload, db: Session = Depends(db_session)):
         raise HTTPException(status_code=400, detail="Branch / Department is required for this role.")
 
     try:
-        org_repo = OrganizationRepository(db)
+        org_repo = OrgRepository(db)
         user_repo = UserRepository(db)
         signup_repo = SignupRepository(db)
 

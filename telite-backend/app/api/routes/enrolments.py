@@ -86,8 +86,8 @@ def _approve_request(db: Session, request_id: str, actor):
     
     req = enrol_repo.approve(req, reviewed_by=actor.id)
     
-    AuditRepository(db).log_action(
-        actor_id=actor.id,
+    AuditRepository(db).write(
+        actor_user_id=actor.id,
         actor_name=actor.full_name,
         action="enrollment.approve",
         target_type="enrollment_request",
@@ -256,16 +256,16 @@ def approve_batch(
     request: Request,
     current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    actor = UserRepository(db).get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
 
     # Org-scope validation: ensure all request IDs belong to actor's org
-    actor_org_id = actor.get("org_id") or actor.get("organization_id")
+    actor_org_id = actor.org_id
     if not current_user.is_platform_admin:
         ensure_org_access(current_user, actor_org_id)
 
-    key = _rate_key("enrol-approve-batch", f"{actor['id']}:{_client_ip(request)}")
+    key = _rate_key("enrol-approve-batch", f"{actor.id}:{_client_ip(request)}")
     retry_after = is_limited(
         key,
         limit=ENROL_BATCH_APPROVE_LIMIT,
@@ -274,4 +274,31 @@ def approve_batch(
     if retry_after is not None:
         _raise_rate_limit(retry_after)
     record_attempt(key, window_seconds=ENROL_BATCH_APPROVE_WINDOW_SECONDS)
-    return approve_enrollment_requests_batch(body.request_ids, actor)
+    
+    approved_count = 0
+    enrol_repo = EnrollmentRepository(db)
+    for req_id in body.request_ids:
+        try:
+            _approve_request(db, req_id, actor)
+            approved_count += 1
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
+            
+    import uuid
+    job_id = f"job-{uuid.uuid4().hex[:8]}"
+    
+    AuditRepository(db).write(
+        actor_user_id=actor.id,
+        actor_name=actor.full_name,
+        action="enrol.approve_batch",
+        target_type="job",
+        target_id=job_id,
+        org_id=actor_org_id,
+        message=f"Batch approved {approved_count} requests",
+        result="success",
+    )
+    
+    db.commit()
+    return {"approved": approved_count, "job_id": job_id, "failed": len(body.request_ids) - approved_count, "requested": len(body.request_ids)}

@@ -97,8 +97,8 @@ export default function LearnerPage({ session, onLogout }) {
   
   const { data, loading, error, fetchData: load } = useLearnerStore();
   const [submittingTaskId, setSubmittingTaskId] = useState(null);
-  const [launchingId, setLaunchingId] = useState(null);
-  const [activeModuleId, setActiveModuleId] = useState(null);
+  const [launchingCourseId, setLaunchingCourseId] = useState(null);
+  const [activeCourseId, setActiveCourseId] = useState(null);
 
   // Tabs for sub-pages
   const [courseFilter, setCourseFilter] = useState("all");
@@ -161,10 +161,9 @@ export default function LearnerPage({ session, onLogout }) {
       return;
     }
     
-    // Instead of launching Moodle URL, we look up the first module cmid or use courseId logic
-    // For Phase E, we assume courseId translates to a cmid or we fetch the module list.
-    // Setting activeModuleId triggers the NativePlayer overlay
-    setActiveModuleId(courseId);
+    setLaunchingCourseId(courseId);
+    setActiveCourseId(courseId);
+    window.setTimeout(() => setLaunchingCourseId(null), 250);
   }
 
   async function handleSubmitTask(taskId) {
@@ -239,9 +238,9 @@ export default function LearnerPage({ session, onLogout }) {
             tone="primary"
             icon="external"
             onClick={() => handleLaunch(data.hero.current_course?.id)}
-            disabled={launchingId === data.hero.current_course?.id}
+            disabled={launchingCourseId === data.hero.current_course?.id}
           >
-            {launchingId === data.hero.current_course?.id ? "Launching..." : "Resume Course"}
+            {launchingCourseId === data.hero.current_course?.id ? "Launching..." : "Resume Course"}
           </Button>
           <button className="icon-btn" title="Notifications" onClick={() => setShowNotifications(true)}>
             <span role="img" aria-label="bell">🔔</span>
@@ -258,9 +257,9 @@ export default function LearnerPage({ session, onLogout }) {
     >
       <NotificationDrawer open={showNotifications} onClose={() => setShowNotifications(false)} notifications={data.notifications} />
       
-      {activeModuleId && (
+      {activeCourseId && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: "#fff" }}>
-          <LearnerPlayer courseId={activeModuleId} onExit={() => { setActiveModuleId(null); load(); }} />
+          <LearnerPlayer courseId={activeCourseId} onExit={() => { setActiveCourseId(null); load(); }} />
         </div>
       )}
 
@@ -337,8 +336,8 @@ export default function LearnerPage({ session, onLogout }) {
                       <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                         {formatPercent(course.completion_pct)} done
                       </div>
-                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
-                        {launchingId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingCourseId === course.id}>
+                        {launchingCourseId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
                       </Button>
                     </div>
                   </article>
@@ -383,8 +382,8 @@ export default function LearnerPage({ session, onLogout }) {
                       <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                         {formatPercent(course.completion_pct)} done
                       </div>
-                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
-                        {launchingId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingCourseId === course.id}>
+                        {launchingCourseId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
                       </Button>
                     </div>
                   </article>

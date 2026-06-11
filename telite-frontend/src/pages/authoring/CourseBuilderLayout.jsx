@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, IconButton, Badge, Modal, useToast } from "../../components/common/ui";
 import { LessonBlockEditor } from "./LessonBlockEditor";
 import { PublishToolbar } from "./PublishToolbar";
@@ -9,29 +9,44 @@ import { BuilderInspectorPanel } from "./BuilderInspectorPanel";
 import { ProfileDropdown } from "../../layouts/DashboardLayout";
 import { getInitials } from "../../utils/formatters";
 import { api, getErrorMessage } from "../../services/client";
+import { validateCourseForPublishing } from "../../services/publishValidation";
+import { AuditLogViewer } from "./AuditLogViewer";
+import { useCapability } from "../../hooks/useCapability";
 
 export function CourseBuilderLayout({
   course,
   sections,
   setSections,
+  onReloadStructure,
+  lockExpiresAt,
+  lockState,
   onBack,
   session,
-  onLogout
+  onLogout,
+  initialModuleId,
+  initialBlockId
 }) {
+  const { canEditStructure, canViewAudit } = useCapability();
   const { showToast } = useToast();
-  const [activeModuleId, setActiveModuleId] = useState(null);
+  const [activeModuleId, setActiveModuleId] = useState(initialModuleId || null);
+  const [highlightBlockId, setHighlightBlockId] = useState(initialBlockId || null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [courseStatus, setCourseStatus] = useState("draft");
+  const [editorSaveState, setEditorSaveState] = useState({ state: "idle", lastSaved: null });
+  const [showLockWarningModal, setShowLockWarningModal] = useState(false);
+  const [showAuditLogModal, setShowAuditLogModal] = useState(false);
   const [sectionModalOpen, setSectionModalOpen] = useState(false);
   const [moduleModalSection, setModuleModalSection] = useState(null);
   const [sectionTitle, setSectionTitle] = useState("");
   const [moduleTitle, setModuleTitle] = useState("");
-  const [moduleDuration, setModuleDuration] = useState("30 mins");
+  const [moduleType, setModuleType] = useState("page");
   const [isCreatingStructure, setIsCreatingStructure] = useState(false);
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [activeBlock, setActiveBlock] = useState(null);
+  const [blockSettingsUpdater, setBlockSettingsUpdater] = useState(null);
 
   const activeContext = useMemo(() => {
     for (const section of sections || []) {
@@ -43,6 +58,89 @@ export function CourseBuilderLayout({
     return { section: null, module: null };
   }, [sections, activeModuleId]);
 
+  const handleFixValidation = useCallback((moduleId, blockId) => {
+    setActiveModuleId(moduleId);
+    if (blockId) {
+      setHighlightBlockId(blockId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (initialModuleId && !activeModuleId) {
+      setActiveModuleId(initialModuleId);
+    }
+    if (initialBlockId && !highlightBlockId) {
+      setHighlightBlockId(initialBlockId);
+    }
+  }, [initialModuleId, initialBlockId]);
+
+  useEffect(() => {
+    if (course?.status) {
+      setCourseStatus(course.status);
+    }
+  }, [course?.status]);
+
+  useEffect(() => {
+    if (!lockExpiresAt) return;
+    
+    const checkExpiry = () => {
+      const expires = new Date(lockExpiresAt).getTime();
+      const now = Date.now();
+      const timeLeft = expires - now;
+      
+      // If less than 5 minutes (300,000 ms) and more than 0, show warning
+      if (timeLeft > 0 && timeLeft <= 5 * 60 * 1000) {
+        setShowLockWarningModal(true);
+      } else {
+        setShowLockWarningModal(false);
+      }
+    };
+    
+    const intervalId = setInterval(checkExpiry, 30000); // Check every 30 seconds
+    checkExpiry();
+    
+    return () => clearInterval(intervalId);
+  }, [lockExpiresAt]);
+
+  const saveLabel = useMemo(() => {
+    if (editorSaveState.state === "saving") return "Saving changes...";
+    if (editorSaveState.state === "offline") return "Offline draft saved locally";
+    if (editorSaveState.state === "conflict") return "Save conflict";
+    if (editorSaveState.lastSaved) {
+      return `Saved ${editorSaveState.lastSaved.toLocaleTimeString()}`;
+    }
+    return "No unsaved block changes";
+  }, [editorSaveState]);
+
+  const lockLabel = useMemo(() => {
+    if (lockState === "lost") return "Lock connection lost";
+    if (lockState === "blocked") return "Lock unavailable";
+    if (lockState === "connecting") return "Lock connecting";
+    if (!lockExpiresAt) return "Lock active";
+    const expires = new Date(lockExpiresAt);
+    if (Number.isNaN(expires.getTime())) return "Lock active";
+    return `Lock until ${expires.toLocaleTimeString()}`;
+  }, [lockExpiresAt, lockState]);
+
+  const registerBlockSettingsUpdater = useCallback((updater) => {
+    setBlockSettingsUpdater(() => updater);
+  }, []);
+
+  const handleActiveBlockChange = useCallback((block) => {
+    setActiveBlock(block);
+  }, []);
+
+  const handleBlockSettingChange = useCallback((key, value) => {
+    if (!activeBlock || !blockSettingsUpdater) return;
+
+    blockSettingsUpdater(activeBlock.id || activeBlock._tempId, key, value);
+    setActiveBlock((current) =>
+      current
+        ? { ...current, settings: { ...(current.settings || {}), [key]: value } }
+        : current
+    );
+  }, [activeBlock, blockSettingsUpdater]);
+
   const openSectionModal = () => {
     if (!course?.id) return;
     setSectionTitle(`Section ${sections.length + 1}`);
@@ -53,7 +151,7 @@ export function CourseBuilderLayout({
     if (!course?.id || !section) return;
     setModuleModalSection(section);
     setModuleTitle("New module");
-    setModuleDuration("30 mins");
+    setModuleType("page");
   };
 
   const handleCreateSection = async (event) => {
@@ -87,7 +185,7 @@ export function CourseBuilderLayout({
         section: moduleModalSection.sort_order ?? 0,
         section_id: moduleModalSection.id || null,
         title: moduleTitle.trim(),
-        module_type: "page",
+        module_type: moduleType,
       });
       const module = data.module;
       setSections((current) =>
@@ -119,6 +217,52 @@ export function CourseBuilderLayout({
   const openRenameModule = (module) => {
     setRenameTarget({ type: "module", item: module });
     setRenameTitle(module.title || "");
+  };
+
+  const handleDuplicateSection = async (section) => {
+    if (!course?.id || !section?.id || section.id === 0) {
+      showToast("The unassigned module group cannot be duplicated.", "warning");
+      return;
+    }
+
+    setIsCreatingStructure(true);
+    try {
+      const { data } = await api.post(`/authoring/courses/${course.id}/sections/${section.id}/duplicate`);
+      const duplicatedSection = data.section;
+      setSections((current) => [...(current || []), duplicatedSection]);
+      const firstModule = duplicatedSection.modules?.[0];
+      if (firstModule) {
+        setActiveModuleId(firstModule.id);
+      }
+      showToast("Section duplicated.", "success");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Duplicate section failed."), "error");
+    } finally {
+      setIsCreatingStructure(false);
+    }
+  };
+
+  const handleDuplicateModule = async (module) => {
+    if (!module?.id) return;
+
+    setIsCreatingStructure(true);
+    try {
+      const { data } = await api.post(`/authoring/modules/${module.id}/duplicate`);
+      const duplicatedModule = data.module;
+      setSections((current) =>
+        current.map((section) =>
+          section.id === duplicatedModule.section_id
+            ? { ...section, modules: [...(section.modules || []), duplicatedModule] }
+            : section
+        )
+      );
+      setActiveModuleId(duplicatedModule.id);
+      showToast("Module duplicated.", "success");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Duplicate module failed."), "error");
+    } finally {
+      setIsCreatingStructure(false);
+    }
   };
 
   const handleRename = async (event) => {
@@ -189,6 +333,7 @@ export function CourseBuilderLayout({
         );
         if (activeModuleId === deleteTarget.item.id) {
           setActiveModuleId(null);
+          setActiveBlock(null);
         }
         showToast("Module deleted.", "warning");
       }
@@ -200,28 +345,17 @@ export function CourseBuilderLayout({
     }
   };
   
-  // Derive real validation from the syllabus tree:
-  // valid if course has a name, at least one section, and every section has at least one module
-  const validationStatus = {
-    isValid: (
-      Boolean(course?.name) &&
-      Array.isArray(sections) &&
-      sections.length > 0 &&
-      sections.every(s => Array.isArray(s.modules) && s.modules.length > 0)
-    ),
-    errors: (() => {
-      const errs = [];
-      if (!course?.name) errs.push("Course has no title.");
-      if (!sections || sections.length === 0) errs.push("Add at least one section.");
-      else {
-        sections.forEach((s, i) => {
-          if (!s.modules || s.modules.length === 0)
-            errs.push(`Section ${i + 1} ("${s.title || "Untitled"}") has no modules.`);
-        });
-      }
-      return errs;
-    })(),
-  };
+  const [validationStatus, setValidationStatus] = useState({ isValid: true, readinessScore: 100, errors: [], warnings: [] });
+
+  useEffect(() => {
+    let mounted = true;
+    if (course?.id && editorSaveState.state === "idle") {
+      validateCourseForPublishing(course.id).then((result) => {
+        if (mounted) setValidationStatus(result);
+      });
+    }
+    return () => { mounted = false; };
+  }, [course?.id, sections, editorSaveState.state]);
 
   return (
     <div className="builder-layout" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc' }}>
@@ -240,15 +374,27 @@ export function CourseBuilderLayout({
           <div>
             <div style={{ fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '12px' }}>
               {course?.name} 
-              <Badge tone="accent">Draft Mode</Badge>
+              <Badge tone={courseStatus === "published" ? "success" : courseStatus === "review" ? "warning" : "accent"}>
+                {courseStatus ? `${courseStatus.toUpperCase()} Mode` : "DRAFT Mode"}
+              </Badge>
+            </div>
+            <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px" }}>
+              {course?.id}
             </div>
           </div>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {canViewAudit && (
+            <Button tone="neutral" icon="list" onClick={() => setShowAuditLogModal(true)}>Audit Log</Button>
+          )}
           <Button tone="neutral" icon="clock" onClick={() => setShowVersionHistory(!showVersionHistory)}>History</Button>
-          <div style={{ fontSize: '13px', color: '#64748b', marginRight: '16px' }}>
-            Autosaved just now
+          <div style={{ fontSize: '12px', marginRight: '16px', textAlign: "right", lineHeight: 1.35, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: editorSaveState.state === "saving" ? "#d97706" : editorSaveState.state === "conflict" ? "#dc2626" : "#64748b" }}>
+              {editorSaveState.state === "saving" && <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b", animation: "pulse 1.5s infinite" }} />}
+              {saveLabel}
+            </div>
+            <div style={{ color: lockState === "lost" ? "#dc2626" : "#64748b" }}>{lockLabel}</div>
           </div>
           <Button tone="neutral" icon="eye" onClick={() => setShowPreviewModal(true)}>Preview</Button>
           <div style={{ width: '1px', height: '24px', background: '#e2e8f0', margin: '0 8px' }} />
@@ -269,7 +415,7 @@ export function CourseBuilderLayout({
         courseStatus={courseStatus} 
         onStatusChanged={setCourseStatus} 
         validationStatus={validationStatus} 
-        onSelectModule={setActiveModuleId}
+        onFixValidation={handleFixValidation}
       />
       
       {/* 3-Pane Body */}
@@ -295,22 +441,36 @@ export function CourseBuilderLayout({
               onSelectModule={setActiveModuleId}
               onAddModule={openModuleModal}
               onRenameSection={openRenameSection}
+              onDuplicateSection={handleDuplicateSection}
               onDeleteSection={openDeleteSection}
               onRenameModule={openRenameModule}
+              onDuplicateModule={handleDuplicateModule}
               onDeleteModule={openDeleteModule}
+              canEdit={canEditStructure}
             />
           </div>
-          <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0' }}>
-            <Button tone="neutral" style={{ width: '100%', justifyContent: 'center' }} icon="plus" onClick={openSectionModal}>
-              Add Section
-            </Button>
-          </div>
+          {canEditStructure && (
+            <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0' }}>
+              <Button tone="neutral" style={{ width: '100%', justifyContent: 'center' }} icon="plus" onClick={openSectionModal}>
+                Add Section
+              </Button>
+            </div>
+          )}
         </div>
         
         {/* Center Pane: Editor (Stage 2) */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '40px', background: '#f8fafc' }}>
           {activeModuleId ? (
-            <LessonBlockEditor courseId={course?.id} moduleId={activeModuleId} />
+            <LessonBlockEditor
+              courseId={course?.id}
+              moduleId={activeModuleId}
+              activeBlock={activeBlock}
+              highlightBlockId={highlightBlockId}
+              onHighlightClear={() => setHighlightBlockId(null)}
+              onActiveBlockChange={handleActiveBlockChange}
+              onRegisterBlockSettingsUpdater={registerBlockSettingsUpdater}
+              onSaveStateChange={setEditorSaveState}
+            />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.2 }}>📄</div>
@@ -329,6 +489,11 @@ export function CourseBuilderLayout({
             <VersionHistoryPanel 
               courseId={course?.id} 
               currentVersion={{ id: 1, version_number: 1 }} // dummy 
+              onVersionChanged={() => {
+                setActiveModuleId(null);
+                setActiveBlock(null);
+                onReloadStructure?.();
+              }}
             />
           </div>
         ) : (
@@ -336,7 +501,10 @@ export function CourseBuilderLayout({
             course={course}
             activeSection={activeContext.section}
             activeModule={activeContext.module}
+            activeBlock={activeBlock}
+            onBlockSettingChange={handleBlockSettingChange}
             validationStatus={validationStatus}
+            lockState={lockLabel}
             onOpenHistory={() => setShowVersionHistory(true)}
           />
         )}
@@ -349,6 +517,31 @@ export function CourseBuilderLayout({
         courseId={course?.id} 
         courseName={course?.name} 
       />
+
+      <Modal
+        open={showAuditLogModal}
+        onClose={() => setShowAuditLogModal(false)}
+        title={`Audit Trail: ${course?.name}`}
+        width={1000}
+        footer={<Button tone="neutral" onClick={() => setShowAuditLogModal(false)}>Close</Button>}
+      >
+        <div style={{ height: "70vh" }}>
+          <AuditLogViewer courseId={course?.id} />
+        </div>
+      </Modal>
+
+      <Modal
+        open={showLockWarningModal}
+        onClose={() => setShowLockWarningModal(false)}
+        title="Lock Expiring Soon"
+        width={400}
+        footer={<Button tone="primary" onClick={() => setShowLockWarningModal(false)}>Understood</Button>}
+      >
+        <p style={{ margin: 0, color: "#991b1b", lineHeight: 1.5 }}>
+          <strong>Warning:</strong> Your editing lock for this course will expire in less than 5 minutes. 
+          Please save your work or refresh your session to renew the lock.
+        </p>
+      </Modal>
 
       <Modal
         open={sectionModalOpen}
@@ -402,12 +595,17 @@ export function CourseBuilderLayout({
             />
           </label>
           <label className="field" style={{ marginTop: "16px" }}>
-            <span className="field__label">Duration</span>
-            <input
+            <span className="field__label">Module Type</span>
+            <select
               className="field__input"
-              value={moduleDuration}
-              onChange={(event) => setModuleDuration(event.target.value)}
-            />
+              value={moduleType}
+              onChange={(event) => setModuleType(event.target.value)}
+            >
+              <option value="page">Lesson page</option>
+              <option value="quiz">Quiz</option>
+              <option value="resource">Resource</option>
+              <option value="assignment">Assignment shell</option>
+            </select>
           </label>
         </form>
       </Modal>

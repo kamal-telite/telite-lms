@@ -3,10 +3,11 @@ import { api } from "../services/client";
 import { saveDraftToCache, clearDraftFromCache, getDraftFromCache } from "../services/draftCache";
 import { useToast } from "../components/common/ui";
 
-export function useAutosave({ courseId, data, onConflict, onBlocksSaved }) {
+export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecoverDraft }) {
   const { showToast } = useToast();
   const [saveState, setSaveState] = useState("idle"); // idle, saving, error, offline
   const [lastSaved, setLastSaved] = useState(null);
+  const [pendingDraft, setPendingDraft] = useState(null);
   
   const timerRef = useRef(null);
   const previousDataRef = useRef(null);
@@ -17,12 +18,29 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved }) {
     async function recoverDraft() {
       const draft = await getDraftFromCache(courseId);
       if (draft && draft.payload) {
+        setPendingDraft(draft);
         showToast("Unsaved changes recovered from local cache.", "warning");
-        // Optionally pass to a recovery handler if the consumer provides one
       }
     }
     recoverDraft();
   }, [courseId, showToast]);
+
+  const restoreDraft = useCallback(() => {
+    if (!pendingDraft?.payload) return;
+    onRecoverDraft?.(pendingDraft.payload);
+    setPendingDraft(null);
+    showToast("Recovered draft applied. Autosave will sync it shortly.", "success");
+  }, [onRecoverDraft, pendingDraft, showToast]);
+
+  const discardDraft = useCallback(async () => {
+    await clearDraftFromCache(courseId);
+    setPendingDraft(null);
+    showToast("Recovered draft discarded.", "info");
+  }, [courseId, showToast]);
+
+  const clearConflict = useCallback(() => {
+    setSaveState("idle");
+  }, []);
 
   const performSave = useCallback(async (payload, hasRetriedLock = false) => {
     setSaveState("saving");
@@ -54,13 +72,14 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved }) {
 
       // Clear cache on success
       await clearDraftFromCache(courseId);
+      setPendingDraft(null);
       setLastSaved(new Date());
       setSaveState("idle");
     } catch (err) {
       if (err.response && err.response.status === 409) {
         // Optimistic Concurrency Conflict
         setSaveState("conflict");
-        if (onConflict) onConflict(err.response.data);
+        if (onConflict) onConflict(err.response.data, payload);
       } else if (err.response && err.response.status === 403) {
         // Lock expired — surface clearly rather than silently caching
         if (!hasRetriedLock) {
@@ -106,5 +125,13 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved }) {
     return () => clearTimeout(timerRef.current);
   }, [data, performSave]);
 
-  return { saveState, lastSaved, forceSave: () => performSave(data) };
+  return {
+    saveState,
+    lastSaved,
+    pendingDraft,
+    restoreDraft,
+    discardDraft,
+    clearConflict,
+    forceSave: () => performSave(data),
+  };
 }

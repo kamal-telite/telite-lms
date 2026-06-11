@@ -706,7 +706,7 @@ def api_accept_invitation(payload: AcceptInvitationPayload, request: Request, re
         category_scope=inv.category_scope
     )
     
-    db.delete(inv)
+    inv.accepted_at = datetime.utcnow().isoformat()
     db.commit()
     
-    return issue_login_response(user.to_dict(), response, request)
+    return issue_login_response(db, user, response, request)

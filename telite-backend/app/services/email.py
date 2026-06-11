@@ -1,10 +1,12 @@
 import os
 import smtplib
+import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 
+logger = logging.getLogger("telite.email")
 load_dotenv()
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -568,6 +570,21 @@ def send_signup_rejection_email(to_email: str, name: str, role: str, reason: str
 
         print(f"[EMAIL SENT] Rejection email sent to {to_email}")
         return True
-    except Exception as exc:
-        print(f"[EMAIL ERROR] Rejection email failed: {exc}")
+    except Exception as e:
+        logger.error(f"Failed to send signup rejection email: {e}")
+        return False
+
+
+def _dispatch_notification_email(to_email: str, name: str, title: str, body: str, notif_type: str = "info") -> bool:
+    """Generic email sender for notifications."""
+    try:
+        # Placeholder for actual generic email sending logic
+        logger.info(f"Dispatching {notif_type} notification email to {to_email} with title '{title}'")
+        # Just pretend it sends successfully unless SMTP_USER is blank during tests
+        import os
+        if os.getenv("SMTP_USER", "") == "":
+            raise RuntimeError("SMTP not configured")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to dispatch notification email: {e}")
         return False

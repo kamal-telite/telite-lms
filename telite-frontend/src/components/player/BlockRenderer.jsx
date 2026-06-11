@@ -38,6 +38,16 @@ function TrackedBlock({ children, blockId, courseId, moduleId }) {
 }
 
 function VideoBlock({ src, courseId, moduleId, blockId }) {
+  const title = "Video lesson";
+
+  if (!src) {
+    return (
+      <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+        Video is not configured.
+      </div>
+    );
+  }
+
   const handleEvent = (eventType) => {
     if (!courseId) return;
     const token = localStorage.getItem("token");
@@ -56,14 +66,128 @@ function VideoBlock({ src, courseId, moduleId, blockId }) {
   };
 
   return (
-    <video 
-      src={src} 
-      controls 
-      style={{ maxWidth: "100%", borderRadius: "8px", margin: "1em 0" }}
-      onPlay={() => handleEvent("VIDEO_STARTED")}
-      onPause={() => handleEvent("VIDEO_PAUSED")}
-      onEnded={() => handleEvent("VIDEO_COMPLETED")}
+    <div style={{ margin: "1em 0" }}>
+      <video
+        src={src}
+        controls
+        preload="metadata"
+        title={title}
+        style={{ width: "100%", maxHeight: "70vh", background: "#0f172a", borderRadius: "8px", display: "block" }}
+        onPlay={() => handleEvent("VIDEO_STARTED")}
+        onPause={() => handleEvent("VIDEO_PAUSED")}
+        onEnded={() => handleEvent("VIDEO_COMPLETED")}
+      >
+        <a href={src} target="_blank" rel="noreferrer">Open video</a>
+      </video>
+      <div style={{ marginTop: "8px" }}>
+        <a href={src} target="_blank" rel="noreferrer" style={{ color: "var(--brand)", fontWeight: 700 }}>
+          Open video in new tab
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function AudioBlock({ src }) {
+  return (
+    <audio
+      src={src}
+      controls
+      style={{ width: "100%", margin: "1em 0" }}
     />
+  );
+}
+
+function EmbedBlock({ title, src }) {
+  if (!src) {
+    return (
+      <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)" }}>
+        Embed not configured
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ margin: "1em 0" }}>
+      {title ? <div style={{ fontWeight: 600, marginBottom: "8px" }}>{title}</div> : null}
+      <iframe
+        src={src}
+        title={title || "Embedded content"}
+        loading="lazy"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        style={{ width: "100%", minHeight: "420px", border: "1px solid var(--border)", borderRadius: "8px" }}
+      />
+    </div>
+  );
+}
+
+function ScormBlock({ title, src, filename }) {
+  return (
+    <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)", margin: "1em 0" }}>
+      <div style={{ fontWeight: 700, marginBottom: "6px" }}>{title || "SCORM Package"}</div>
+      <div style={{ color: "var(--text-muted)", fontSize: "14px", marginBottom: "12px" }}>
+        {filename || "Launch the attached SCORM package."}
+      </div>
+      {src ? (
+        <a href={src} target="_blank" rel="noreferrer" style={{ color: "var(--brand)", fontWeight: 700 }}>
+          Launch SCORM
+        </a>
+      ) : (
+        <span style={{ color: "var(--text-muted)" }}>Package not configured</span>
+      )}
+    </div>
+  );
+}
+
+function PdfBlock({ title, src, filename }) {
+  if (!src) {
+    return (
+      <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+        PDF is not configured.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ margin: "1em 0", border: "1px solid var(--border)", borderRadius: "8px", overflow: "hidden", background: "var(--surface)" }}>
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 700 }}>{title || filename || "PDF Document"}</div>
+          {filename ? <div style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "2px" }}>{filename}</div> : null}
+        </div>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <a href={src} target="_blank" rel="noreferrer" style={{ color: "var(--brand)", fontWeight: 700 }}>Open</a>
+          <a href={src} download style={{ color: "var(--brand)", fontWeight: 700 }}>Download</a>
+        </div>
+      </div>
+      <iframe
+        src={src}
+        title={title || filename || "PDF document"}
+        style={{ width: "100%", height: "680px", border: 0, display: "block", background: "#fff" }}
+      />
+    </div>
+  );
+}
+
+function AssignmentBlock({ title, settings }) {
+  const dueDate = settings?.due_date;
+  const points = settings?.points;
+
+  return (
+    <div style={{ padding: "18px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)", margin: "1em 0" }}>
+      <div style={{ fontWeight: 700, fontSize: "18px", marginBottom: "8px" }}>
+        {title || "Assignment"}
+      </div>
+      <p style={{ margin: 0, whiteSpace: "pre-wrap", color: "var(--text)" }}>
+        {settings?.instructions || "Assignment instructions are not available."}
+      </p>
+      {(dueDate || points) ? (
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "14px", color: "var(--text-muted)", fontSize: "14px" }}>
+          {dueDate ? <span>Due: {dueDate}</span> : null}
+          {points ? <span>Points: {points}</span> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -85,9 +209,11 @@ export function BlockRenderer({ content, courseId, moduleId }) {
   }
 
   if (Array.isArray(parsed)) {
+    const visibleBlocks = parsed.filter((block) => !block.settings?.hidden);
+
     return (
       <div className="native-block-content" style={{ display: "flex", flexDirection: "column", gap: "1em", fontSize: "16px", lineHeight: 1.6, color: "var(--text)" }}>
-        {parsed.map((block) => (
+        {visibleBlocks.map((block) => (
           <TrackedBlock key={block.id || block.sort_order} blockId={block.id} courseId={courseId} moduleId={moduleId}>
             {renderNativeBlock(block, courseId, moduleId)}
           </TrackedBlock>
@@ -125,10 +251,18 @@ function renderNativeBlock(block, courseId, moduleId) {
       return <img src={settings.url} alt={settings.alt || ""} style={{ maxWidth: "100%", height: "auto", borderRadius: "8px", margin: "1em 0" }} />;
     case "video":
       return <VideoBlock src={settings.url} courseId={courseId} moduleId={moduleId} blockId={block.id} />;
+    case "audio":
+      return <AudioBlock src={settings.url} />;
     case "pdf":
-      return <a href={settings.url} target="_blank" rel="noreferrer">Open PDF</a>;
+      return <PdfBlock title={block.content} src={settings.url} filename={settings.filename} />;
+    case "scorm":
+      return <ScormBlock title={block.content} src={settings.url} filename={settings.filename} />;
+    case "embed":
+      return <EmbedBlock title={block.content} src={settings.url} />;
+    case "assignment":
+      return <AssignmentBlock title={block.content} settings={settings} />;
     case "quiz_reference":
-      return <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)" }}>Quiz: {settings.quiz_id || "Not configured"}</div>;
+      return <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)" }}>Quiz: {settings.quiz_title || settings.quiz_id || "Not configured"}</div>;
     default:
       return <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{block.content || ""}</p>;
   }

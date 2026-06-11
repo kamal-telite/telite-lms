@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.api.auth import get_current_user, require_admin, TokenData
+from app.core.permissions import require_capability
 from app.db.engine import db_session
 from app.repositories.course_repo import CourseRepository
 from app.repositories.builder_repo import BuilderRepository
 from app.models.course_module import CourseModule
 from app.models.media_asset import MediaAsset
 from app.services.r2_client import generate_presigned_download_url
+from app.services.audit_service import AuditService
 
 builder_router = APIRouter(prefix="/authoring", tags=["Builder Gateway"])
 
@@ -181,12 +183,13 @@ class ModuleStructureUpdate(BaseModel):
 
 class SectionStructureUpdate(BaseModel):
     section_id: int
+    sort_order: Optional[int] = None
     modules: List[ModuleStructureUpdate]
 
 class SaveStructureRequest(BaseModel):
     updates: List[SectionStructureUpdate]
 
-@builder_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin)])
+@builder_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin), Depends(require_capability("module.edit"))])
 def save_course_structure(
     course_id: str,
     request: SaveStructureRequest,
@@ -200,6 +203,18 @@ def save_course_structure(
 
     for section_update in request.updates:
         section_id = None if section_update.section_id == 0 else section_update.section_id
+        
+        if section_id is not None and section_update.sort_order is not None:
+            from app.models.course_section import CourseSection
+            sec = db.query(CourseSection).filter(
+                CourseSection.id == section_id,
+                CourseSection.course_id == course_id,
+                CourseSection.org_id == current_user.org_id
+            ).first()
+            if sec:
+                sec.sort_order = section_update.sort_order
+                AuditService.log(db, current_user.org_id, current_user.id, "section", sec.id, "update", course_id)
+                
         for module_update in section_update.modules:
             module = db.query(CourseModule).filter(
                 CourseModule.id == module_update.module_id,
@@ -209,6 +224,7 @@ def save_course_structure(
             if module:
                 module.section_id = section_id
                 module.sort_order = module_update.sort_order
+                AuditService.log(db, current_user.org_id, current_user.id, "module", module.id, "update", course_id)
 
     db.commit()
     return {"success": True}
@@ -240,7 +256,7 @@ def get_module_blocks(
         results.append(_block_to_response(b, db, current_user.org_id))
     return {"blocks": results}
 
-@builder_router.put("/courses/{course_id}/blocks", dependencies=[Depends(require_admin)])
+@builder_router.put("/courses/{course_id}/blocks", dependencies=[Depends(require_admin), Depends(require_capability("block.edit"))])
 def save_module_blocks(
     course_id: str,
     request: SaveBlocksRequest,
@@ -264,12 +280,15 @@ def save_module_blocks(
         if bp.is_deleted and bp.id:
             block = builder_repo.get_block_by_id(bp.id, current_user.org_id)
             if block:
-                builder_repo.delete_block(block)
+                before_dict = block.to_dict()
+                builder_repo.delete_block(block, current_user.id)
                 builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_DELETED", json.dumps({"block_id": bp.id}))
+                AuditService.log(db, current_user.org_id, current_user.id, "Block", bp.id, "delete", course_id, before_dict=before_dict)
         elif bp.id:
             # Update existing
             block = builder_repo.get_block_by_id(bp.id, current_user.org_id)
             if block:
+                before_dict = block.to_dict()
                 # Basic optimistic concurrency could go here by checking a version number if it existed
                 block.block_type = bp.block_type
                 block.content = bp.content
@@ -277,7 +296,9 @@ def save_module_blocks(
                 block.metadata_json = bp.settings
                 block.sort_order = bp.sort_order
                 builder_repo.save_block(block)
+                after_dict = block.to_dict()
                 builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_UPDATED", json.dumps({"block_id": block.id, "type": block.block_type}))
+                AuditService.log(db, current_user.org_id, current_user.id, "Block", block.id, "update", course_id, before_dict=before_dict, after_dict=after_dict)
                 
                 results.append(_block_to_response(block, db, current_user.org_id))
         else:
@@ -292,9 +313,36 @@ def save_module_blocks(
                 sort_order=bp.sort_order
             )
             builder_repo.save_block(block)
+            after_dict = block.to_dict()
             builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_CREATED", json.dumps({"block_id": block.id, "type": block.block_type}))
+            AuditService.log(db, current_user.org_id, current_user.id, "Block", block.id, "create", course_id, after_dict=after_dict)
             
             results.append(_block_to_response(block, db, current_user.org_id))
 
     db.commit()
     return {"success": True, "blocks": results}
+
+@builder_router.get("/courses/{course_id}/validate", dependencies=[Depends(require_admin)])
+def validate_course(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    from app.services.validation.engine import ValidationEngine
+    val_engine = ValidationEngine(db)
+    result = val_engine.run(course_id, current_user.org_id)
+    return result.dict()
+
+@builder_router.get("/courses/{course_id}/audit-logs", dependencies=[Depends(require_admin)])
+def get_audit_logs(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    from app.models.audit_log import AuditLog
+    logs = db.query(AuditLog).filter(
+        AuditLog.course_id == course_id,
+        AuditLog.org_id == current_user.org_id
+    ).order_by(AuditLog.created_at.desc()).all()
+    
+    return {"audit_logs": [log.to_dict() for log in logs]}
