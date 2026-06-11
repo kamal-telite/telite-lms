@@ -2,9 +2,9 @@ name: Telite LMS CI
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, dev, Dev ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main, dev, Dev ]
 
 jobs:
   lint-and-static-analysis:
