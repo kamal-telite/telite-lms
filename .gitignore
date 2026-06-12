@@ -122,3 +122,9 @@ projects
 commit_*.txt
 context.md
 *.patch
+*.rej
+
+tmp_trivy_check/
+
+# Runtime uploads and temporary backend storage
+telite-backend/uploads/
