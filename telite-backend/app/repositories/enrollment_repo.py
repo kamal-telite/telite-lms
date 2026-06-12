@@ -12,8 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Sequence
 
-from sqlalchemy import select, update
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.models.enrollment import EnrollmentRequest
 from app.repositories.base_repo import BaseRepository

@@ -1,7 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useShallow } from "zustand/react/shallow";
 import {
   approveBatchEnrollments,
   approveEnrollmentRequest,
@@ -61,6 +60,7 @@ import {
   titleize,
 } from "../../utils/formatters";
 import { useKpiPulse } from "../../hooks/useKpiPulse";
+import { loadPdfModules } from "../../utils/pdfExport";
 
 const CATEGORY_INITIAL = {
   name: "",
@@ -113,8 +113,18 @@ export default function SuperAdminPage({ session, onLogout }) {
     loading,
     error,
     fetchData: load,
-    updateTaskState
-  } = useSuperAdminStore();
+    updateTaskState,
+  } = useSuperAdminStore(useShallow((state) => ({
+    dashboard: state.dashboard,
+    users: state.users,
+    settings: state.settings,
+    verifications: state.verifications,
+    organizations: state.organizations,
+    loading: state.loading,
+    error: state.error,
+    fetchData: state.fetchData,
+    updateTaskState: state.updateTaskState,
+  })));
   const [exportOpen, setExportOpen] = useState(false);
   const [categoryModal, setCategoryModal] = useState({ open: false, item: null });
   const [adminModal, setAdminModal] = useState({ open: false, item: null });
@@ -478,9 +488,10 @@ export default function SuperAdminPage({ session, onLogout }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setExportOpen(false);
                       try {
+                        const { jsPDF, autoTable } = await loadPdfModules();
                         const doc = new jsPDF();
                         doc.text(`Telite Super Admin Export - ${titleize(activeNav.replace('section-', ''))}`, 14, 15);
                         doc.setFontSize(10);

@@ -10,8 +10,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Sequence
 
-from sqlalchemy import or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy import or_, select
 
 from app.models.category import Category
 from app.models.course import Course

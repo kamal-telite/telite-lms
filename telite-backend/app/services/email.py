@@ -405,7 +405,7 @@ def send_signup_approval_email(to_email: str, name: str, role: str, username: st
         print(f"[MOCK EMAIL] Approval -> {to_email} | Role: {role} | Username: {username}")
         return False
 
-    subject = f"Your Telite LMS account has been approved!"
+    subject = "Your Telite LMS account has been approved!"
     html_body = f"""
 <!DOCTYPE html>
 <html>

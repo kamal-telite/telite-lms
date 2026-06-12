@@ -264,8 +264,8 @@ def compare_versions(
         right_snapshot = right.snapshot_json
         right_dict = right.to_dict()
 
-    left_summary = pub_repo.snapshot_summary(left_snapshot)
-    right_summary = pub_repo.snapshot_summary(right_snapshot)
+    pub_repo.snapshot_summary(left_snapshot)
+    pub_repo.snapshot_summary(right_snapshot)
     
     diff = DiffService.compute(left_snapshot, right_snapshot)
     

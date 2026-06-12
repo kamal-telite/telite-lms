@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.allowed_domain import AllowedDomain
 from app.models.platform_setting import PlatformSetting

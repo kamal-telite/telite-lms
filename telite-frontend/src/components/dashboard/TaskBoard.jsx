@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Button } from "../common/ui";
 import { 
   DndContext, 
@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-function SortableTaskCard({ task, onEdit, onDelete }) {
+const SortableTaskCard = memo(function SortableTaskCard({ task, onEdit, onDelete }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const {
     attributes,
@@ -94,13 +94,13 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
       </div>
     </div>
   );
-}
+});
 
-function TaskColumn({ id, title, tasks, onEdit, onDelete }) {
+const TaskColumn = memo(function TaskColumn({ id, title, tasks, onEdit, onDelete, itemIds }) {
   return (
     <div className="soft-card" style={{ background: "var(--surface-alt)", display: "flex", flexDirection: "column", minHeight: 300 }}>
       <div className="row-title" style={{ marginBottom: 12 }}>{title} ({tasks.length})</div>
-      <SortableContext id={id} items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext id={id} items={itemIds} strategy={verticalListSortingStrategy}>
         <div style={{ flex: 1 }}>
           {tasks.map(t => <SortableTaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />)}
           {tasks.length === 0 && <div className="muted" style={{ fontSize: 12, textAlign: "center", padding: 16 }}>No tasks here.</div>}
@@ -108,7 +108,7 @@ function TaskColumn({ id, title, tasks, onEdit, onDelete }) {
       </SortableContext>
     </div>
   );
-}
+});
 
 export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete }) {
   const [columns, setColumns] = useState({
@@ -130,7 +130,7 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  function handleDragOver(event) {
+  const handleDragOver = useCallback((event) => {
     const { active, over } = event;
     if (!over) return;
     
@@ -167,9 +167,9 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
         [overContainer]: overItems
       };
     });
-  }
+  }, []);
 
-  function handleDragEnd(event) {
+  const handleDragEnd = useCallback((event) => {
     const { active, over } = event;
     if (!over) return;
     
@@ -188,7 +188,11 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
          }));
        }
     }
-  }
+  }, [columns, onTaskStatusChange]);
+
+  const pendingIds = useMemo(() => columns.pending.map(t => t.id), [columns.pending]);
+  const inProgressIds = useMemo(() => columns.in_progress.map(t => t.id), [columns.in_progress]);
+  const completedIds = useMemo(() => columns.completed.map(t => t.id), [columns.completed]);
 
   return (
     <DndContext 
@@ -198,9 +202,9 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
       onDragEnd={handleDragEnd}
     >
       <div className="grid-3">
-        <TaskColumn id="pending" title="📋 To Do" tasks={columns.pending} onEdit={onEdit} onDelete={onDelete} />
-        <TaskColumn id="in_progress" title="🔄 In Progress" tasks={columns.in_progress} onEdit={onEdit} onDelete={onDelete} />
-        <TaskColumn id="completed" title="✅ Done" tasks={columns.completed} onEdit={onEdit} onDelete={onDelete} />
+        <TaskColumn id="pending" title="📋 To Do" tasks={columns.pending} onEdit={onEdit} onDelete={onDelete} itemIds={pendingIds} />
+        <TaskColumn id="in_progress" title="🔄 In Progress" tasks={columns.in_progress} onEdit={onEdit} onDelete={onDelete} itemIds={inProgressIds} />
+        <TaskColumn id="completed" title="✅ Done" tasks={columns.completed} onEdit={onEdit} onDelete={onDelete} itemIds={completedIds} />
       </div>
     </DndContext>
   );

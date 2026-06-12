@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 
 from app.api.auth import get_current_user, require_admin, TokenData
 from app.db.engine import db_session
 from app.models.question_bank import QuestionBank
 from app.models.question import Question, QuestionVersion
 from app.models.quiz_models import QuizSettings, QuizDefinition
-from app.models.rubric import GradingRubric, RubricCriteria
+from app.models.rubric import GradingRubric
 
 quiz_authoring_router = APIRouter(prefix="/quiz-authoring", tags=["Quiz Authoring"])
 

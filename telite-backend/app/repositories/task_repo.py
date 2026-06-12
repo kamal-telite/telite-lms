@@ -11,7 +11,6 @@ import uuid
 from typing import Any, Sequence
 
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
 
 from app.models.task import Task
 from app.repositories.base_repo import BaseRepository
@@ -57,7 +56,6 @@ class TaskRepository(BaseRepository[Task]):
         assigned_by: str | None = None,
         **extra: Any,
     ) -> Task:
-        from datetime import datetime
         task = Task(
             id=f"task-{uuid.uuid4().hex[:10]}",
             title=title.strip(),

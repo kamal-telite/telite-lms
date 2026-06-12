@@ -176,7 +176,6 @@ def send_email_notification(
     """
     from app.db.engine import get_platform_session, get_tenant_session
     from app.repositories.audit_repo import AuditRepository
-    import json
 
     def _log_audit(action: str, result: str, msg: str, metadata: dict = None):
         if org_id > 0:

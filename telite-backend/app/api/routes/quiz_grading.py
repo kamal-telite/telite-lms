@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
-from typing import List
 
 from app.api.auth import get_current_user, require_admin, TokenData
 from app.db.engine import db_session

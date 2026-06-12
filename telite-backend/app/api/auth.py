@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -358,15 +357,9 @@ def ensure_org_access(current_user: TokenData, target_org_id: int | None) -> int
 # ── Token helpers ─────────────────────────────────────────────────────────────
 
 def _build_token_response(user: dict[str, Any], refresh_token: str, db: Session | None = None) -> TokenResponse:
-    from app.core.permissions import resolve_permissions
-    access_token = create_access_token(create_access_payload(user))
-    permissions = resolve_permissions(
-        user["role"],
-        bool(user.get("is_platform_admin")),
-        user.get("category_scope"),
-        user.get("org_id"),
-        db
-    )
+    claims = create_access_payload(user, db=db)
+    access_token = create_access_token(claims)
+    permissions = claims.get("permissions", [])
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,

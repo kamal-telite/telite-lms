@@ -5,7 +5,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.course import Course
-from app.models.course_module import CourseModule
 from app.models.learning_path import LearningPath
 from app.models.user import User
 

@@ -136,7 +136,6 @@ def retry_dead_letter_events(self) -> dict:
     try:
         from app.db.engine import get_platform_session, get_tenant_session
         from sqlalchemy import text
-        from app.repositories.audit_repo import AuditRepository
 
         retried = 0
 

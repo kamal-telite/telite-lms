@@ -1,5 +1,4 @@
 from typing import List
-from sqlalchemy.orm import Session
 from app.services.validation.base_validator import BaseValidator
 from app.services.validation.schemas import ValidationResultItem, FixTarget
 from app.models.media_asset import MediaAsset

@@ -11,7 +11,6 @@ import json
 from typing import Any, Sequence
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
 from app.repositories.base_repo import BaseRepository

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 const ThemeContext = createContext({
   theme: "dark",
@@ -14,14 +14,18 @@ export function ThemeProvider({ children }) {
     return "dark";
   });
 
-  const setTheme = (nextTheme) => {
+  const setTheme = useCallback((nextTheme) => {
     setThemeState(nextTheme);
     localStorage.setItem("telite_theme", nextTheme);
-  };
+  }, []);
 
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  };
+  const toggleTheme = useCallback(() => {
+    setThemeState((current) => {
+      const nextTheme = current === "dark" ? "light" : "dark";
+      localStorage.setItem("telite_theme", nextTheme);
+      return nextTheme;
+    });
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -32,8 +36,13 @@ export function ThemeProvider({ children }) {
     }
   }, [theme]);
 
+  const value = useMemo(
+    () => ({ theme, toggleTheme, setTheme }),
+    [theme, toggleTheme, setTheme]
+  );
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

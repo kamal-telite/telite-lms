@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
 
 from app.models.organization import Organization
 from app.repositories.base_repo import BaseRepository
@@ -112,7 +111,7 @@ class OrgRepository(BaseRepository[Organization]):
         if b and b.terminology_json:
             try:
                 terminology = json.loads(b.terminology_json)
-            except:
+            except Exception:
                 pass
 
         return {
@@ -149,7 +148,7 @@ class OrgRepository(BaseRepository[Organization]):
             try:
                 config = json.loads(draft.configuration_json)
                 return config
-            except:
+            except Exception:
                 pass
                 
         # Fallback to published if no draft

@@ -14,7 +14,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
 
 from app.models.session import AuthSession
 from app.repositories.base_repo import BaseRepository

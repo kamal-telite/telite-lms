@@ -1,6 +1,6 @@
 """Learning Path Progress Repository."""
 
-from typing import Optional, Sequence
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

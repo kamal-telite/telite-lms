@@ -1,13 +1,12 @@
 """Progress Repository for fetching and updating learner course and module progress."""
 
-from typing import Optional, Sequence
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.course_progress import CourseProgress
 from app.models.module_progress import ModuleProgress
 from app.models.lesson_block_progress import LessonBlockProgress
-from app.repositories.base_repo import BaseRepository
 
 
 class ProgressRepository:

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { memo, useState, useEffect, useCallback, useMemo } from "react";
 import {
   DndContext,
   closestCenter,
@@ -26,7 +26,7 @@ function blockKey(block) {
 }
 
 // Sortable Block Component
-function SortableBlock({
+const SortableBlock = memo(function SortableBlock({
   block,
   isSelected,
   onSelect,
@@ -281,8 +281,7 @@ function SortableBlock({
       </div>
     </div>
   );
-}
-
+});
 
 export function LessonBlockEditor({
   courseId,

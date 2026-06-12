@@ -7,7 +7,6 @@ from typing import Optional, List, Dict, Any
 from app.api.auth import get_current_user, require_admin, TokenData
 from app.db.engine import db_session
 from app.repositories.learning_path_repo import LearningPathRepository
-from app.repositories.publishing_repo import PublishingRepository
 
 learning_paths_router = APIRouter(prefix="/authoring/learning-paths", tags=["Learning Paths API"])
 

@@ -34,10 +34,6 @@ from app.core.domain_context import resolve_domain_context
 from app.core.rate_limiter import close_redis_connection
 from app.db.engine import dispose_engine, db_session
 from sqlalchemy.orm import Session
-from app.repositories.course_repo import CategoryRepository
-from app.repositories.user_repo import UserRepository
-from app.repositories.org_repo import OrgRepository
-from app.repositories.invite_repo import InviteRepository
 
 # ── Structured logging ───────────────────────────────────────────────────────
 

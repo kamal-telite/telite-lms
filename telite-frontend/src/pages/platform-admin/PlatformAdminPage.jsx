@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Routes, Route, useLocation, useNavigate, Link } from "react-router-dom";
+import { useShallow } from "zustand/react/shallow";
 import { useToast } from "../../components/common/ui";
 import { platformApi } from "../../services/platform";
 import "../../styles/platform-admin.css";
@@ -30,7 +31,21 @@ export default function PlatformAdminPage({ session, onLogout }) {
     organizations, loadOrganizations,
     admins, loadAdmins,
     syncTenants, triggerGlobalSync, settingsState
-  } = useAdminStore();
+  } = useAdminStore(useShallow((state) => ({
+    sidebarCollapsed: state.sidebarCollapsed,
+    toggleSidebar: state.toggleSidebar,
+    searchQuery: state.searchQuery,
+    setSearchQuery: state.setSearchQuery,
+    notifications: state.notifications,
+    markAllRead: state.markAllRead,
+    organizations: state.organizations,
+    loadOrganizations: state.loadOrganizations,
+    admins: state.admins,
+    loadAdmins: state.loadAdmins,
+    syncTenants: state.syncTenants,
+    triggerGlobalSync: state.triggerGlobalSync,
+    settingsState: state.settingsState,
+  })));
 
   useEffect(() => {
     loadOrganizations();
@@ -1432,23 +1447,27 @@ export function AnalyticsTab({ searchQuery }) {
     }
   }, [chartPeriod, liveMonitorActive]);
 
-  // Live Monitor loop
+  // Live Monitor loop — pauses when tab is hidden to save CPU
   useEffect(() => {
-    let interval = null;
-    if (liveMonitorActive) {
-      interval = setInterval(() => {
-        setBarChartData(current => current.map(item => {
-          const delta = Math.floor(Math.random() * 20 - 10);
-          const newVal = Math.max(10, Math.min(120, item.val + delta));
-          return { ...item, val: newVal };
-        }));
-      }, 2000);
-      showToast('Live monitor activated — updating every 2s', 'success');
-    } else if (interval) {
-      clearInterval(interval);
+    if (!liveMonitorActive) {
+      return undefined;
     }
-    return () => { if (interval) clearInterval(interval); };
-  }, [liveMonitorActive]);
+
+    showToast('Live monitor activated — updating every 2s', 'success');
+
+    const interval = setInterval(() => {
+      if (document.hidden) {
+        return;
+      }
+      setBarChartData((current) => current.map((item) => {
+        const delta = Math.floor(Math.random() * 20 - 10);
+        const newVal = Math.max(10, Math.min(120, item.val + delta));
+        return { ...item, val: newVal };
+      }));
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [liveMonitorActive, showToast]);
 
   const handlePeriodChange = (e) => {
     setChartPeriod(e.target.value);

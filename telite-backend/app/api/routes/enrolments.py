@@ -16,8 +16,6 @@ from app.repositories.user_repo import UserRepository
 from app.repositories.course_repo import CourseRepository
 from app.repositories.audit_repo import AuditRepository
 from app.core.password_utils import hash_password, get_default_learner_password
-from app.core.rbac import ROLE_PERMISSIONS, Permission
-from datetime import datetime, timezone
 import uuid
 import json
 
@@ -276,7 +274,7 @@ def approve_batch(
     record_attempt(key, window_seconds=ENROL_BATCH_APPROVE_WINDOW_SECONDS)
     
     approved_count = 0
-    enrol_repo = EnrollmentRepository(db)
+    EnrollmentRepository(db)
     for req_id in body.request_ids:
         try:
             _approve_request(db, req_id, actor)
@@ -286,7 +284,6 @@ def approve_batch(
             traceback.print_exc()
             raise e
             
-    import uuid
     job_id = f"job-{uuid.uuid4().hex[:8]}"
     
     AuditRepository(db).write(

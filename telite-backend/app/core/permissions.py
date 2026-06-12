@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Callable
+import logging
+from typing import Any, Callable
+
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.engine import db_session
 from app.models.role_permission import RolePermission
 from app.services.audit_service import AuditService
+
+logger = logging.getLogger("telite.permissions")
 
 def resolve_permissions(
     role: str,
@@ -36,25 +40,42 @@ def resolve_permissions(
                 else:
                     active.discard(override.permission_key)
         except Exception:
-            pass
-            
+            logger.warning(
+                "Failed to load org permission overrides for org_id=%s role=%s",
+                org_id,
+                role,
+                exc_info=True,
+            )
+
     return list(active)
 
-def build_jwt_claims(user: dict[str, Any]) -> dict[str, Any]:
-    from app.db.engine import get_db_session
-    
+
+def build_jwt_claims(user: dict[str, Any], db: Session | None = None) -> dict[str, Any]:
     role = user.get("role") or "learner"
     is_platform_admin = bool(user.get("is_platform_admin"))
     category_scope = user.get("category_scope")
     org_id = user.get("org_id") or user.get("organization_id")
-    
-    permissions = []
-    try:
-        with get_db_session() as db:
-            permissions = resolve_permissions(role, is_platform_admin, category_scope, org_id, db)
-    except Exception:
-        permissions = resolve_permissions(role, is_platform_admin, category_scope, org_id, None)
-        
+
+    if db is not None:
+        permissions = resolve_permissions(role, is_platform_admin, category_scope, org_id, db)
+    else:
+        try:
+            from app.db.engine import get_db_session
+
+            with get_db_session() as session:
+                permissions = resolve_permissions(
+                    role, is_platform_admin, category_scope, org_id, session
+                )
+        except Exception:
+            logger.warning(
+                "Falling back to static permissions for role=%s (no DB session)",
+                role,
+                exc_info=True,
+            )
+            permissions = resolve_permissions(
+                role, is_platform_admin, category_scope, org_id, None
+            )
+
     return {
         "sub": str(user.get("id")),
         "email": user.get("email"),
@@ -85,7 +106,7 @@ def require_capability(permission_key: str) -> Callable:
             RolePermission.org_id == current_user.org_id,
             RolePermission.role == current_user.role,
             RolePermission.permission_key == permission_key,
-            RolePermission.enabled == True
+            RolePermission.enabled
         ).first()
 
         if not capability:
@@ -121,7 +142,7 @@ def check_capability(db: Session, current_user: "TokenData", permission_key: str
         RolePermission.org_id == current_user.org_id,
         RolePermission.role == current_user.role,
         RolePermission.permission_key == permission_key,
-        RolePermission.enabled == True
+        RolePermission.enabled
     ).first()
 
     if not capability:

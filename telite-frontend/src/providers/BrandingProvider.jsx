@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { fetchBranding } from "../services/client";
 import { getTenantSlugFromUrl } from "../utils/tenant";
 import { ThemeEngine } from "../utils/ThemeEngine";
@@ -53,24 +53,28 @@ export function BrandingProvider({ session, children, preloadedConfig }) {
     return () => {
       cancelled = true;
     };
-  }, [tenantSlug]);
+  }, [tenantSlug, preloadedConfig]);
 
   // Live preview postMessage listener
   useEffect(() => {
     function handleMessage(event) {
-      // Validate that this is our preview message
-      if (event.data && event.data.type === 'UPDATE_BRANDING_PREVIEW') {
+      if (event.data && event.data.type === "UPDATE_BRANDING_PREVIEW") {
         const previewBranding = event.data.branding;
-        setBranding(prev => ({ ...prev, ...previewBranding }));
+        setBranding((prev) => ({ ...prev, ...previewBranding }));
         ThemeEngine.applyBrandingStyles(previewBranding);
       }
     }
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
+  const value = useMemo(
+    () => ({ branding, loading, tenantSlug }),
+    [branding, loading, tenantSlug]
+  );
+
   return (
-    <BrandingContext.Provider value={{ branding, loading, tenantSlug }}>
+    <BrandingContext.Provider value={value}>
       {children}
     </BrandingContext.Provider>
   );

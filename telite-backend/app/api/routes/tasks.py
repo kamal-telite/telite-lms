@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.api.auth import TokenData, get_current_user, require_admin, resolve_org_scope
 from app.core.rbac import validate_task_access

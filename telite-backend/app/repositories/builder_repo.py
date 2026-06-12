@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from typing import Sequence
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.course_section import CourseSection
 from app.models.course_module import CourseModule

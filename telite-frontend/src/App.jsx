@@ -1,7 +1,8 @@
-import React, { useEffect, useState, lazy, Suspense } from "react";
-import Lenis from "lenis";
+import React, { useCallback, useEffect, useState, lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "./components/common/ui";
+import RouteChunkFallback from "./components/common/RouteChunkFallback";
+import LenisSmoothScroll from "./components/common/LenisSmoothScroll";
 import { fetchMe, logoutRequest } from "./services/client";
 import {
   clearSession,
@@ -49,7 +50,7 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
   }
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<RouteChunkFallback />}>
       <Routes>
         <Route
           path="/login"
@@ -134,7 +135,7 @@ export default function App() {
   const [session, setSessionState] = useState(() => getSession());
   const [booting, setBooting] = useState(() => Boolean(getSession()?.user));
 
-  const setSession = (nextSession) => {
+  const setSession = useCallback((nextSession) => {
     if (nextSession?.user) {
       persistSession(nextSession);
       setSessionState(nextSession);
@@ -142,9 +143,9 @@ export default function App() {
       clearSession();
       setSessionState(null);
     }
-  };
+  }, []);
 
-  const onLogout = async () => {
+  const onLogout = useCallback(async () => {
     const activeSession = getSession();
     try {
       if (activeSession?.user) {
@@ -157,30 +158,6 @@ export default function App() {
       setSessionState(null);
       window.location.assign("/login");
     }
-  };
-
-  useEffect(() => {
-    // Initialize smooth scrolling
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      direction: "vertical",
-      gestureDirection: "vertical",
-      smooth: true,
-      mouseMultiplier: 1,
-      smoothTouch: false,
-      touchMultiplier: 2,
-      infinite: false,
-    });
-    function raf(time) {
-      lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
-    requestAnimationFrame(raf);
-
-    return () => {
-      lenis.destroy();
-    };
   }, []);
 
   useEffect(() => {
@@ -225,6 +202,7 @@ export default function App() {
       <BrandingProvider session={session}>
         <ToastProvider>
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <LenisSmoothScroll />
             <AppRoutes
               session={session}
               setSession={setSession}

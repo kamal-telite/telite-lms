@@ -2,7 +2,7 @@
 
 import difflib
 import html
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 class DiffService:
     @staticmethod

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import Dict, List, Any
+from typing import Dict, List
 from pydantic import BaseModel
 
 from app.api.auth import get_current_user, TokenData

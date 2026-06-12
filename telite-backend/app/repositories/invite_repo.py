@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.invitation import OrgInvitation
 from app.repositories.base_repo import BaseRepository

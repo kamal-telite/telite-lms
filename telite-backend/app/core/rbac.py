@@ -12,8 +12,7 @@ PHASE 2 SECURITY HARDENING:
 from __future__ import annotations
 
 import logging
-from functools import wraps
-from typing import Any, Callable
+from typing import Callable
 
 from fastapi import Depends, HTTPException, status
 
@@ -21,9 +20,6 @@ from app.api.auth import (
     TokenData,
     get_current_user,
     ensure_org_access,
-    require_admin,
-    require_platform_admin,
-    require_super_admin,
 )
 
 logger = logging.getLogger("telite.rbac")

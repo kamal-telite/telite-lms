@@ -1,7 +1,6 @@
 import React, { Component, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation, useSearchParams } from "react-router-dom";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { loadPdfModules } from "../../utils/pdfExport";
 import {
   approveEnrollmentRequest,
   approveVerification,
@@ -499,9 +498,10 @@ function CategoryAdminPageContent({ session, onLogout }) {
                   }}>
                     📥 All Reports (CSV)
                   </button>
-                  <button type="button" onClick={() => {
+                  <button type="button" onClick={async () => {
                     setExportOpen(false);
                     try {
+                      const { jsPDF, autoTable } = await loadPdfModules();
                       const doc = new jsPDF();
                       doc.text(`Telite LMS Export - ${titleize(activeTab)}`, 14, 15);
                       doc.setFontSize(10);

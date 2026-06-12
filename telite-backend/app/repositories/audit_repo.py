@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.audit import ActivityLog, AuditLog
 from app.repositories.base_repo import BaseRepository

@@ -4,7 +4,6 @@ from typing import Sequence
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.course import Course
 from app.models.course_section import CourseSection

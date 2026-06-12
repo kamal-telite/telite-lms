@@ -26,7 +26,7 @@ ATS_STATS_CONFIG = {
 def _list_pal_leaderboard(db: Session, category_slug: str, org_id: int | None = None, limit: int | None = None) -> list[dict[str, Any]]:
     stmt = select(User).where(
         User.role.in_(["learner", "student"]),
-        User.is_active == True,
+        User.is_active,
         User.category_scope == category_slug
     )
     if org_id is not None:
@@ -125,8 +125,8 @@ def post_compute(
     current_user: TokenData = Depends(require_admin),
     db: Session = Depends(db_session),
 ):
-    scoped_org_id = resolve_org_scope(current_user, org_id)
+    resolve_org_scope(current_user, org_id)
     if current_user.role == "category_admin":
-        category_slug = current_user.category_scope
+        pass
         
     return {"status": "success", "message": "PAL recomputation queued successfully"}

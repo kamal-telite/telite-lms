@@ -1,10 +1,8 @@
 from __future__ import annotations
 from typing import Sequence
-import json
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.learning_path import LearningPath, LearningPathCourse
 from app.repositories.base_repo import BaseRepository

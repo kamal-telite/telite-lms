@@ -1,8 +1,39 @@
 import { useRef } from "react";
-import { Chart as ChartJS, registerables } from "chart.js";
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+} from "chart.js";
 import { Chart } from "react-chartjs-2";
 
-ChartJS.register(...registerables);
+let chartRegistered = false;
+
+function ensureChartRegistered() {
+  if (chartRegistered) {
+    return;
+  }
+  ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    BarElement,
+    ArcElement,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+  );
+  chartRegistered = true;
+}
 
 export function ChartCanvas({
   type,
@@ -13,6 +44,7 @@ export function ChartCanvas({
   className = "",
   centerLabel,
 }) {
+  ensureChartRegistered();
   const chartRef = useRef(null);
 
   const plugins = [];
@@ -39,8 +71,6 @@ export function ChartCanvas({
     });
   }
 
-  // To prevent the UI glitch (auto-scroll) from Chart.js resizing/re-rendering on every pulse,
-  // we let react-chartjs-2 handle the update lifecycle natively instead of destroying and recreating.
   return (
     <div className={className} style={{ height, position: "relative" }}>
       <Chart

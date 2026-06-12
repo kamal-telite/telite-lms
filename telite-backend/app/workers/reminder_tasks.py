@@ -169,7 +169,6 @@ def review_reminders(self) -> dict:
     """
     try:
         from app.db.engine import get_platform_session, get_tenant_session
-        from app.workers.notification_tasks import send_email_notification
         from sqlalchemy import text
 
         orgs_processed = 0
@@ -180,11 +179,11 @@ def review_reminders(self) -> dict:
                 text("SELECT id FROM organizations WHERE status = 'active'")
             ).scalars().all()
 
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        datetime.now(timezone.utc) - timedelta(days=1)
 
         for org_id in active_orgs:
             try:
-                with get_tenant_session(org_id) as tenant_session:
+                with get_tenant_session(org_id):
                     # In a real implementation, we'd query pending assignment_submissions.
                     # As a placeholder, we just log that we would process them here.
                     # pending_reviews = tenant_session.execute(...)

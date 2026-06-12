@@ -13,9 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
-import os
 import sqlite3
 from pathlib import Path
 

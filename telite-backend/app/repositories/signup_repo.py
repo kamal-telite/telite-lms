@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Sequence
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.pending_verification import PendingVerification
 from app.repositories.base_repo import BaseRepository

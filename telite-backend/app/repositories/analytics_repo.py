@@ -10,7 +10,6 @@ import json
 from typing import Any
 from datetime import datetime, timedelta
 from sqlalchemy import func, select, desc
-from sqlalchemy.orm import Session
 
 from app.models.category import Category
 from app.models.course import Course
@@ -87,7 +86,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         """Provides KPIs for Super Admin Dashboard."""
         cat_stmt = select(Category).where(Category.status != "archived")
         course_stmt = select(Course).where(Course.status != "archived")
-        learner_stmt = select(func.count(User.id)).where(User.role == "learner", User.is_active == True)
+        learner_stmt = select(func.count(User.id)).where(User.role == "learner", User.is_active)
         enroll_stmt = select(func.count(EnrollmentRequest.id)).where(EnrollmentRequest.status.in_(["pending", "flagged"]))
         
         if org_id:
@@ -123,7 +122,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         audit_entries = [{"action": log.action, "user": log.actor_name, "timestamp": log.created_at.isoformat()} for log in self.session.execute(audit_stmt).scalars().all()]
 
         # Tasks
-        task_stmt = select(Task).where(Task.is_cross_category == True)
+        task_stmt = select(Task).where(Task.is_cross_category)
         if org_id:
             task_stmt = task_stmt.where(Task.org_id == org_id)
         tasks = [{"id": t.id, "title": t.title, "status": t.status} for t in self.session.execute(task_stmt).scalars().all()]
@@ -171,7 +170,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         pending_requests = self.session.execute(enroll_stmt).scalars().all()
         pending_verifications = self.session.execute(verification_stmt).scalar() or 0
         course_ids = [course.id for course in courses]
-        learner_ids = [learner.id for learner in learners]
+        [learner.id for learner in learners]
 
         module_rows = []
         progress_rows = []

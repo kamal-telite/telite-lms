@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { api } from "../services/client";
 import { saveDraftToCache, clearDraftFromCache, getDraftFromCache } from "../services/draftCache";
 import { useToast } from "../components/common/ui";
+import { blocksFingerprint } from "../utils/blocksFingerprint";
 
 export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecoverDraft }) {
   const { showToast } = useToast();
@@ -107,8 +108,8 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
       return;
     }
 
-    // Basic deep equality check for changes (simplified for this context)
-    const hasChanged = JSON.stringify(data) !== JSON.stringify(previousDataRef.current);
+    // Lightweight fingerprint avoids JSON.stringify on every keystroke.
+    const hasChanged = blocksFingerprint(data) !== blocksFingerprint(previousDataRef.current);
     if (!hasChanged) return;
 
     previousDataRef.current = data;

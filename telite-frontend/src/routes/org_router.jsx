@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from "react";
 import { Route, Routes, useLocation, useParams } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoutes";
+import RouteChunkFallback from "../components/common/RouteChunkFallback";
 
 const SuperAdminPage = lazy(() => import("../pages/super-admin/SuperAdminPage"));
 const CategoryAdminPage = lazy(() => import("../pages/company/CategoryAdminPage"));
@@ -13,7 +14,7 @@ export default function OrgRouter({ session, onLogout }) {
   const isCategoryContext = location.pathname.startsWith("/categories");
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<RouteChunkFallback />}>
       <Routes>
         {/* If matched under /categories/:slug/* parent path */}
         {isCategoryContext && (

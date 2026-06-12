@@ -8,7 +8,6 @@ from typing import Sequence
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.models.media_asset import MediaAsset
 from app.repositories.base_repo import BaseRepository

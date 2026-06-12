@@ -13,7 +13,6 @@ import uuid
 from typing import Any, Sequence
 
 from sqlalchemy import or_, select, update
-from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.membership import Membership

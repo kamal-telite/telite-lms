@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Any
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -14,7 +13,7 @@ from app.db.engine import db_session
 
 from app.api.auth import TokenData, TokenResponse, issue_login_response, require_platform_admin
 from app.services.auth_rate_limiter import is_limited, record_attempt
-from app.services.email import send_invitation_email, send_password_reset_email
+from app.services.email import send_invitation_email
 
 from app.repositories.org_repo import OrgRepository
 from app.repositories.user_repo import UserRepository

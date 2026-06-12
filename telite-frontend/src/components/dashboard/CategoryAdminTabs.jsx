@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { loadPdfModules } from "../../utils/pdfExport";
 import { Avatar, Badge, Button, EmptyState, StatCard, Panel, useToast } from "../common/ui";
 import { TaskBoardKanban } from "./TaskBoard";
 import { ChartCanvas } from "../common/charts";
@@ -177,8 +176,9 @@ export function ReportsTab({ dashboard, learners }) {
     }
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
+      const { jsPDF, autoTable } = await loadPdfModules();
       const doc = new jsPDF();
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);

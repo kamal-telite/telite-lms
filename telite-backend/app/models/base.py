@@ -7,7 +7,7 @@ TimestampMixin — adds created_at / updated_at to every table
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, func, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column

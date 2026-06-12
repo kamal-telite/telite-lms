@@ -4,8 +4,6 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.models.learning_path import LearningPath
-from app.models.learning_path_progress import LearningPathProgress
-from app.models.course_progress import CourseProgress
 from app.models.learner_event import LearnerEvent
 from app.repositories.progress_repo import ProgressRepository
 from app.repositories.learning_path_progress_repo import LearningPathProgressRepository

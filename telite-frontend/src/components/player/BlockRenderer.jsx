@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 
 // Reusable component to track when a block enters the viewport
-function TrackedBlock({ children, blockId, courseId, moduleId }) {
+const TrackedBlock = memo(function TrackedBlock({ children, blockId, courseId, moduleId }) {
   const ref = useRef(null);
   const [viewed, setViewed] = useState(false);
 
@@ -35,7 +35,7 @@ function TrackedBlock({ children, blockId, courseId, moduleId }) {
   }, [viewed, courseId, moduleId, blockId]);
 
   return <div ref={ref}>{children}</div>;
-}
+});
 
 function VideoBlock({ src, courseId, moduleId, blockId }) {
   const title = "Video lesson";

@@ -14,6 +14,7 @@ from typing import Any
 
 import jwt
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
 
 # JWT Configuration
@@ -153,13 +154,14 @@ def decode_token(token: str, token_type: str = "access") -> dict[str, Any]:
         ) from exc
 
 
-def create_access_payload(user: dict[str, Any]) -> dict[str, Any]:
+def create_access_payload(user: dict[str, Any], db: Session | None = None) -> dict[str, Any]:
     """
     Create the payload for an access token.
     Phase 4: includes full permissions list in JWT.
     """
     from app.core.permissions import build_jwt_claims
-    return build_jwt_claims(user)
+
+    return build_jwt_claims(user, db=db)
 
 
 def create_refresh_payload(user: dict[str, Any]) -> dict[str, Any]:

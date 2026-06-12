@@ -7,11 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 import pandas as pd
 import io
 from pydantic import BaseModel, Field
-from app.core.password_utils import get_default_learner_password
 
-from app.api.auth import TokenData, ensure_org_access, require_admin, require_super_admin, resolve_org_scope
-from app.services.email import send_signup_approval_email, send_signup_rejection_email
-from app.core.utils import slugify
+from app.api.auth import TokenData, ensure_org_access, require_admin, resolve_org_scope
+from app.services.email import send_signup_rejection_email
 import sqlalchemy
 from datetime import datetime
 from sqlalchemy.orm import Session
