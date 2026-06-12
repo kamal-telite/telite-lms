@@ -116,7 +116,7 @@ jobs:
           python -m pip install -r telite-backend/requirements.txt
           python -m pip install pytest httpx pytest-cov
 
-      - name: Run Alembic migrations
+      - name: Initialize database schema
         env:
           TELITE_DB_BACKEND: postgres
           TELITE_POSTGRES_HOST: localhost
@@ -126,7 +126,7 @@ jobs:
           TELITE_POSTGRES_PASSWORD: testpassword
         run: |
           cd telite-backend
-          python -m alembic upgrade head
+          python init_db.py
 
       - name: Run pytest with coverage
         env:
