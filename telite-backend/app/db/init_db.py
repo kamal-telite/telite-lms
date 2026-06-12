@@ -27,6 +27,9 @@ logger = logging.getLogger("telite.db.init")
 
 def create_all_tables() -> None:
     """Create all ORM-mapped tables that don't exist yet."""
+    # Ensure all model modules are imported so SQLAlchemy metadata includes every mapped table.
+    import app.models  # noqa: F401
+
     engine = get_engine()
     Base.metadata.create_all(engine, checkfirst=True)
     logger.info("SQLAlchemy tables verified/created.")
