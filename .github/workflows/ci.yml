@@ -119,19 +119,20 @@ jobs:
       - name: Wait for PostgreSQL and Redis
         run: |
           python - <<'PY'
-import socket, sys, time
-for name, port in [('PostgreSQL', 5432), ('Redis', 6379)]:
-    for attempt in range(30):
-        try:
-            with socket.create_connection(('localhost', port), timeout=2):
-                print(f'{name} ready on port {port}')
-                break
-        except OSError:
-            time.sleep(2)
-    else:
-        print(f'{name} not ready after 30 retries', file=sys.stderr)
-        sys.exit(1)
-PY
+            import socket, sys, time
+
+            for name, port in [('PostgreSQL', 5432), ('Redis', 6379)]:
+                for attempt in range(30):
+                    try:
+                        with socket.create_connection(('localhost', port), timeout=2):
+                            print(f'{name} ready on port {port}')
+                            break
+                    except OSError:
+                        time.sleep(2)
+                else:
+                    print(f'{name} not ready after 30 retries', file=sys.stderr)
+                    sys.exit(1)
+          PY
 
       - name: Run Alembic migrations
         env:
