@@ -5,15 +5,17 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.api.auth import TokenData, require_admin, resolve_org_scope, ensure_org_access
 from app.core.rate_limiter import is_limited, record_attempt
-from app.core.rbac import validate_enrollment_access
+from app.core.rbac import validate_category_scope, validate_enrollment_access
 from sqlalchemy.orm import Session
 from app.db.engine import db_session
+from app.models.enrollment import EnrollmentRequest
 from app.repositories.enrollment_repo import EnrollmentRepository
 from app.repositories.user_repo import UserRepository
-from app.repositories.course_repo import CourseRepository
+from app.repositories.course_repo import CategoryRepository, CourseRepository
 from app.repositories.audit_repo import AuditRepository
 from app.core.password_utils import hash_password, get_default_learner_password
 import uuid
@@ -36,6 +38,57 @@ def _default_progress(courses):
 def _slugify(text):
     return text.lower().replace(" ", "-")
 
+
+def _enrollment_to_dict(request: EnrollmentRequest) -> dict:
+    return request.to_dict()
+
+
+def _category_org_id(db: Session, category_slug: str) -> int:
+    category = CategoryRepository(db).get_by_slug(category_slug)
+    if not category:
+        raise ValueError("Category not found.")
+    return category.org_id
+
+
+def _list_requests(
+    db: Session,
+    *,
+    category_slug: str | None = None,
+    statuses: list[str] | None = None,
+    org_id: int | None = None,
+) -> list[dict]:
+    stmt = select(EnrollmentRequest)
+    if org_id is not None:
+        stmt = stmt.where(EnrollmentRequest.org_id == org_id)
+    if category_slug:
+        stmt = stmt.where(EnrollmentRequest.category_slug == category_slug)
+    if statuses:
+        stmt = stmt.where(EnrollmentRequest.status.in_(statuses))
+    stmt = stmt.order_by(EnrollmentRequest.requested_at.desc())
+    return [_enrollment_to_dict(req) for req in db.execute(stmt).scalars().all()]
+
+
+def _reject_request(db: Session, request_id: str, actor, reason: str | None = None) -> dict:
+    enrol_repo = EnrollmentRepository(db)
+    req = enrol_repo.get_by_id(request_id)
+    if not req:
+        raise ValueError("Enrollment request not found.")
+    if req.status != "pending":
+        raise ValueError("Only pending requests can be rejected.")
+
+    req = enrol_repo.reject(req, reviewed_by=actor.id, reason=reason)
+    AuditRepository(db).write(
+        actor_user_id=actor.id,
+        actor_name=actor.full_name,
+        action="enrollment.reject",
+        target_type="enrollment_request",
+        target_id=req.id,
+        org_id=req.org_id,
+        message=f"Rejected enrollment request for {req.email}",
+    )
+    return _enrollment_to_dict(req)
+
+
 def _approve_request(db: Session, request_id: str, actor):
     enrol_repo = EnrollmentRepository(db)
     req = enrol_repo.get_by_id(request_id)
@@ -57,10 +110,10 @@ def _approve_request(db: Session, request_id: str, actor):
     if user:
         if user.org_id is not None and user.org_id != req_org_id:
             raise ValueError("This user belongs to another organization.")
-        user = user_repo.update_user(
+        user = user_repo.update(
             user,
             category_scope=req.category_slug,
-            role='learner',
+            role="learner",
             enrollment_type=req.request_type,
             is_active=True,
             current_course_id=courses[0].id if courses else None,
@@ -159,19 +212,24 @@ def post_manual_enrollment(
     body: ManualEnrollmentPayload,
     current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    actor = UserRepository(db).get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
     try:
-        ensure_category_access(actor, body.category_slug)
-        return create_manual_enrollment(body.model_dump(), actor)
+        target_org_id = actor.org_id or current_user.org_id or _category_org_id(db, body.category_slug)
+        validate_enrollment_access(current_user, target_org_id)
+        validate_category_scope(current_user, body.category_slug)
+
+        request_record = EnrollmentRepository(db).create_request(
+            full_name=body.full_name,
+            email=body.email,
+            category_slug=body.category_slug,
+            org_id=target_org_id,
+            request_type=body.enrollment_type,
+        )
+        return _approve_request(db, request_record.id, actor)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
@@ -179,14 +237,28 @@ def post_manual_enrollment(
 @enrol_router.post("/self")
 def post_self_enrollment(
     body: SelfEnrollmentPayload,
+    db: Session = Depends(db_session),
 ):
     try:
-        return create_self_enrollment_request(body.model_dump(), None)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        org_id = _category_org_id(db, body.category_slug)
+        existing = EnrollmentRepository(db).get_by_email_and_category(
+            body.email,
+            body.category_slug,
+            org_id,
+        )
+        if existing and existing.status == "pending":
+            return _enrollment_to_dict(existing)
 
+        request_record = EnrollmentRepository(db).create_request(
+            full_name=body.full_name,
+            email=body.email,
+            category_slug=body.category_slug,
+            org_id=org_id,
+            request_type="self",
+        )
+        return _enrollment_to_dict(request_record)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
@@ -199,10 +271,10 @@ def get_enrollment_requests(
     current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session),
 ):
     scoped_org_id = resolve_org_scope(current_user, org_id)
-    if is_category_admin_role(current_user.role):
+    if current_user.role == "category_admin":
         category_slug = current_user.category_scope
     statuses = [status] if status else None
-    return {"requests": list_enrollment_requests(category_slug=category_slug, statuses=statuses, org_id=scoped_org_id)}
+    return {"requests": _list_requests(db, category_slug=category_slug, statuses=statuses, org_id=scoped_org_id)}
 
 
 @enrol_router.post("/requests/{request_id}/approve")
@@ -210,18 +282,20 @@ def approve_request(
     request_id: str,
     current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    actor = UserRepository(db).get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
 
     # Validate that the request belongs to the actor's org
-    enrol_req = fetch_enrollment_request_by_id(request_id)
+    enrol_req = EnrollmentRepository(db).get_by_id(request_id)
     if not enrol_req:
         raise HTTPException(status_code=404, detail="Enrollment request not found")
-    validate_enrollment_access(current_user, enrol_req.get("org_id") or actor.get("org_id"))
+    validate_enrollment_access(current_user, enrol_req.org_id)
+    if current_user.role == "category_admin":
+        validate_category_scope(current_user, enrol_req.category_slug)
 
     try:
-        return approve_enrollment_request(request_id, actor)
+        return _approve_request(db, request_id, actor)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -232,18 +306,20 @@ def reject_request(
     body: RejectPayload,
     current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session),
 ):
-    actor = fetch_user_by_id(current_user.id)
+    actor = UserRepository(db).get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
 
     # Validate that the request belongs to the actor's org
-    enrol_req = fetch_enrollment_request_by_id(request_id)
+    enrol_req = EnrollmentRepository(db).get_by_id(request_id)
     if not enrol_req:
         raise HTTPException(status_code=404, detail="Enrollment request not found")
-    validate_enrollment_access(current_user, enrol_req.get("org_id") or actor.get("org_id"))
+    validate_enrollment_access(current_user, enrol_req.org_id)
+    if current_user.role == "category_admin":
+        validate_category_scope(current_user, enrol_req.category_slug)
 
     try:
-        return reject_enrollment_request(request_id, actor, body.reason)
+        return _reject_request(db, request_id, actor, body.reason)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

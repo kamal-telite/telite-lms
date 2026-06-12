@@ -216,9 +216,12 @@ def get_verifications(
     from sqlalchemy import select
     from app.models.pending_verification import PendingVerification
     stmt = select(PendingVerification)
-    if status: stmt = stmt.where(PendingVerification.status == status)
-    if domain_type: stmt = stmt.where(PendingVerification.domain_type == domain_type)
-    if scoped_org_id is not None: stmt = stmt.where(PendingVerification.organization_id == scoped_org_id)
+    if status:
+        stmt = stmt.where(PendingVerification.status == status)
+    if domain_type:
+        stmt = stmt.where(PendingVerification.domain_type == domain_type)
+    if scoped_org_id is not None:
+        stmt = stmt.where(PendingVerification.organization_id == scoped_org_id)
     stmt = stmt.order_by(PendingVerification.created_at.desc())
     verifications_orm = db.execute(stmt).scalars().all()
     

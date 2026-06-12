@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -13,6 +13,9 @@ from app.models.role_permission import RolePermission
 from app.services.audit_service import AuditService
 
 logger = logging.getLogger("telite.permissions")
+
+if TYPE_CHECKING:
+    from app.api.auth import TokenData
 
 def resolve_permissions(
     role: str,

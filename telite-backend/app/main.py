@@ -33,6 +33,7 @@ from app.core.request_context import reset_request_id, set_request_id
 from app.core.domain_context import resolve_domain_context
 from app.core.rate_limiter import close_redis_connection
 from app.db.engine import dispose_engine, db_session
+from app.db.init_db import run_phase3_init
 from sqlalchemy.orm import Session
 
 # ── Structured logging ───────────────────────────────────────────────────────
@@ -77,6 +78,11 @@ logger = logging.getLogger("telite.api")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("Starting up FastAPI application...")
+    try:
+        run_phase3_init()
+    except Exception as exc:
+        logger.exception("Database initialization failed during startup: %s", exc)
+        raise
     yield
     dispose_engine()
     close_redis_connection()

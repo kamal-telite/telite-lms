@@ -522,6 +522,17 @@ ADMIN_USERS = [
         gradient_end="#2563EB",
     ),
     _user(
+        user_id="user-superadmin-telite",
+        username="superadmin",
+        email="superadmin@telite.io",
+        full_name="Super Admin",
+        role="super_admin",
+        category_scope=None,
+        password="SuperAdmin@2025!",
+        gradient_start="#7C3AED",
+        gradient_end="#2563EB",
+    ),
+    _user(
         user_id="user-anika-kapoor",
         username="anika",
         email="anika@telite.io",
