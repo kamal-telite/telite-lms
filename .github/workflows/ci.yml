@@ -71,6 +71,7 @@ jobs:
     name: Backend Tests
     runs-on: ubuntu-latest
     needs: [lint, security]
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:14-alpine
@@ -81,7 +82,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -h localhost -p 5432"
+          --health-cmd "pg_isready -U postgres -d telite_backend_test -h localhost -p 5432"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
@@ -123,11 +124,16 @@ jobs:
           import sys
           import time
 
-          for name, port in [('PostgreSQL', 5432), ('Redis', 6379)]:
+          targets = [
+              ('PostgreSQL', 'postgres', 5432),
+              ('Redis', 'redis', 6379),
+          ]
+
+          for name, host, port in targets:
               for attempt in range(30):
                   try:
-                      with socket.create_connection(('127.0.0.1', port), timeout=2):
-                          print(f'{name} is ready on port {port}')
+                      with socket.create_connection((host, port), timeout=2):
+                          print(f'{name} is ready on {host}:{port}')
                           break
                   except OSError:
                       time.sleep(2)
@@ -139,7 +145,7 @@ jobs:
       - name: Run Alembic migrations
         env:
           TELITE_DB_BACKEND: postgres
-          TELITE_POSTGRES_HOST: localhost
+          TELITE_POSTGRES_HOST: postgres
           TELITE_POSTGRES_PORT: 5432
           TELITE_POSTGRES_DB: telite_backend_test
           TELITE_POSTGRES_USER: postgres
@@ -151,12 +157,12 @@ jobs:
       - name: Run pytest with coverage
         env:
           TELITE_DB_BACKEND: postgres
-          TELITE_POSTGRES_HOST: localhost
+          TELITE_POSTGRES_HOST: postgres
           TELITE_POSTGRES_PORT: 5432
           TELITE_POSTGRES_DB: telite_backend_test
           TELITE_POSTGRES_USER: postgres
           TELITE_POSTGRES_PASSWORD: testpassword
-          REDIS_HOST: localhost
+          REDIS_HOST: redis
           REDIS_PORT: 6379
           REDIS_ENABLED: 'true'
           ENVIRONMENT: testing
