@@ -38,7 +38,7 @@ jobs:
         run: python -m pip install ruff
 
       - name: Run Ruff with GitHub annotations
-        run: ruff check telite-backend/app --format github-annotations
+        run: ruff check telite-backend/app --output-format github
 
   security:
     name: Security Scan
@@ -64,7 +64,7 @@ jobs:
 
       - name: Run Bandit strict security scan
         run: |
-          bandit -r telite-backend/app --confidence high --severity high -ll -ii
+          bandit -r telite-backend/app --confidence-level high --severity-level high
 
   backend-tests:
     name: Backend Tests
