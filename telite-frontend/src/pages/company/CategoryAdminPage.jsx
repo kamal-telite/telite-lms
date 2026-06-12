@@ -622,7 +622,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                             </td>
                             <td className="mono">{course.enrolled_count}</td>
                             <td>
-                              <div className="progress-track" style={{ width: 90 }}>
+                              <div className="progress-track progress-track--compact">
                                 <div
                                   className="progress-fill"
                                   style={{ width: `${course.completion_rate}%`, background: getCompletionColor(course.completion_rate) }}
@@ -664,7 +664,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                           gradient={request.domain_verified ? ["#7C3AED", "#2563EB"] : ["#D97706", "#92400E"]}
                           size={32}
                         />
-                        <div style={{ flex: 1 }}>
+                        <div className="flex-fill">
                           <div className="row-title">{request.full_name}</div>
                           <div className="row-subtitle">
                             {request.request_type} · {formatMonthDate(request.requested_at)} · {request.company_domain}
@@ -678,10 +678,10 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       </div>
                     ))}
                   </div>
-                  <div className="soft-card soft-card--tinted" style={{ marginTop: 16 }}>
-                    <div className="row-title" style={{ marginBottom: 10 }}>Manual enrollment</div>
-                    <div className="split-actions" style={{ alignItems: "flex-start" }}>
-                      <div style={{ flex: 1 }}>
+                  <div className="soft-card soft-card--tinted soft-card--spaced">
+                    <div className="row-title row-subtitle--spaced">Manual enrollment</div>
+                    <div className="split-actions split-actions--start">
+                      <div className="flex-fill">
                         <input
                           className={`field__input ${quickError ? "is-invalid" : ""}`}
                           value={manualQuickInput}
@@ -717,7 +717,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                         {learners.slice(0, 4).map((learner) => (
                           <tr key={learner.id}>
                             <td>
-                              <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+                              <div className="leaderboard-row leaderboard-row--compact">
                                 <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={26} />
                                 <div>
                                   <div className="row-title">{learner.full_name}</div>
@@ -727,7 +727,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                             </td>
                             <td className="mono">{formatMonthDate(learner.created_at)}</td>
                             <td className="mono">{learner.courses_completed}/{learner.total_courses}</td>
-                            <td className="mono" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</td>
+                            <td className="mono leaderboard-score-cell" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</td>
                             <td><Badge tone={learner.enrollment_type === "self" ? "accent" : "brand"}>{learner.enrollment_type}</Badge></td>
                             <td>
                               <div className="split-actions">
@@ -749,7 +749,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ marginTop: 16 }}>
+                  <div className="action-row--spaced">
                     <Button tone="ghost" className="btn--block" onClick={() => handleTabChange("learners")}>
                       Show all {totalLearners} {labels.users.toLowerCase()}
                     </Button>
@@ -765,7 +765,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                           checked={task.status === "completed"}
                           onChange={() => toggleTask(task)}
                         />
-                        <div style={{ flex: 1 }}>
+                        <div className="flex-fill">
                           <div className="row-title">{task.title}</div>
                           <div className="row-subtitle">
                             {task.assigned_label} · {task.status === "completed" ? `done · ${formatMonthDate(task.due_at)}` : task.status === "overdue" ? "Overdue!" : `due ${formatMonthDate(task.due_at)}`}
@@ -774,7 +774,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                       </label>
                     ))}
                   </div>
-                  <div style={{ marginTop: 16 }}>
+                  <div className="action-row--spaced">
                     <Button tone="ghost" className="btn--block" onClick={() => handleTabChange("tasks")}>
                       View full task board
                     </Button>
@@ -874,7 +874,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                     {paginatedLearners.map((learner) => (
                       <tr key={learner.id}>
                         <td>
-                          <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+                          <div className="leaderboard-row leaderboard-row--compact">
                             <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={26} />
                             <div>
                               <div className="row-title">{learner.full_name}</div>
@@ -884,7 +884,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                         </td>
                         <td className="mono">{formatShortDate(learner.created_at)}</td>
                         <td className="mono">{learner.courses_completed}/{learner.total_courses}</td>
-                        <td className="mono" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</td>
+                        <td className="mono leaderboard-score-cell" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</td>
                         <td><Badge tone={learner.enrollment_type === "self" ? "accent" : "brand"}>{learner.enrollment_type}</Badge></td>
                         <td><Badge tone={learner.is_active ? "success" : "neutral"}>{learner.is_active ? "Active" : "Inactive"}</Badge></td>
                         <td>
@@ -907,7 +907,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                   </tbody>
                 </table>
               </div>
-              <div className="pagination" style={{ marginTop: 16 }}>
+              <div className="pagination action-row--spaced">
                 <Button tone="ghost" disabled={learnerPage === 1} onClick={() => setLearnerPage(1)}>Page 1</Button>
                 <Button tone="ghost" disabled={learnerPage === pageCount} onClick={() => setLearnerPage((prev) => Math.min(prev + 1, pageCount))}>Next</Button>
               </div>
@@ -922,7 +922,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                   {(dashboard?.pending_enrollment || []).map((request) => (
                     <div className="activity-item" key={request.id}>
                       <Avatar initials={getInitials(request.full_name)} gradient={request.domain_verified ? ["#7C3AED", "#2563EB"] : ["#D97706", "#92400E"]} size={32} />
-                      <div style={{ flex: 1 }}>
+                      <div className="flex-fill">
                         <div className="row-title">{request.full_name}</div>
                         <div className="row-subtitle">{request.request_type} · {request.email}</div>
                       </div>
@@ -936,7 +936,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
               </Panel>
 
               <Panel title="Manual Enrollment form" subtitle="Create learner access and enrol them into courses">
-                {manualSuccess ? <div className="form-alert" style={{ background: "var(--success-light)", border: "1px solid var(--success-mid)", color: "var(--success)" }}>{manualSuccess}</div> : null}
+                {manualSuccess ? <div className="form-alert form-alert--success">{manualSuccess}</div> : null}
                 <form
                   className="form-stack"
                   onSubmit={async (event) => {
@@ -1029,11 +1029,11 @@ function CategoryAdminPageContent({ session, onLogout }) {
                         onChange={(e) => setBulkFile(e.target.files[0])}
                       />
                       <label htmlFor="bulk-file-input" className="file-drop-label">
-                        <i className="icon icon-upload" style={{ fontSize: 24, marginBottom: 8, display: 'block' }}></i>
+                        <i className="icon icon-upload"></i>
                         {bulkFile ? bulkFile.name : "Click or drag Excel/CSV file here to upload"}
                       </label>
                     </div>
-                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                    <div className="align-end-row">
                       <Button 
                         tone="primary" 
                         type="submit" 
@@ -1047,15 +1047,15 @@ function CategoryAdminPageContent({ session, onLogout }) {
                   </form>
 
                   {bulkResult && (
-                    <div className="bulk-result-dashboard" style={{ marginTop: 24 }}>
+                    <div className="bulk-result-dashboard">
                       <div className="grid-3">
                         <div className="stat-card">
                           <div className="stat-card__label">Total Processed</div>
                           <div className="stat-card__value">{bulkResult.total_processed}</div>
                         </div>
-                        <div className="stat-card" style={{ borderLeft: '4px solid var(--success)' }}>
+                        <div className="stat-card stat-card--success-accent">
                           <div className="stat-card__label">Approved</div>
-                          <div className="stat-card__value" style={{ color: 'var(--success)' }}>{bulkResult.approved_count}</div>
+                          <div className="stat-card__value stat-card__value--success">{bulkResult.approved_count}</div>
                         </div>
                         <div className="stat-card">
                           <div className="stat-card__label">Ignored/Failed</div>
@@ -1063,7 +1063,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                         </div>
                       </div>
                       {bulkResult.errors?.length > 0 && (
-                        <div className="error-log" style={{ marginTop: 16 }}>
+                        <div className="error-log">
                           <div className="row-title">Issues encountered:</div>
                           <ul className="row-subtitle">
                             {bulkResult.errors.map((err, i) => <li key={i}>{err}</li>)}
@@ -1220,7 +1220,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
       >
         {detailLearner ? (
           <div className="dashboard-stack">
-            <div className="leaderboard-row" style={{ borderBottom: 0, padding: 0 }}>
+            <div className="leaderboard-row leaderboard-row--compact">
               <Avatar initials={detailLearner.avatar_initials || getInitials(detailLearner.full_name)} gradient={detailLearner.avatar_gradient} size={42} />
               <div>
                 <div className="row-title">{detailLearner.full_name}</div>
@@ -1229,13 +1229,13 @@ function CategoryAdminPageContent({ session, onLogout }) {
               </div>
             </div>
             <div className="soft-card soft-card--tinted">
-              <div className="row-title" style={{ marginBottom: 10 }}>Enrolled courses</div>
+              <div className="row-title row-subtitle--spaced">Enrolled courses</div>
               <div className="activity-list">
                 {(dashboard?.courses || []).map((course) => {
                   const progress = detailLearner.course_progress.find((item) => item.course_id === course.id);
                   return (
                     <div className="course-status-row" key={course.id}>
-                      <div style={{ flex: 1 }}>
+                      <div className="flex-fill">
                         <div className="row-title">{course.name}</div>
                         <div className="row-subtitle">{progress?.current_lesson || progress?.status || "Not started"}</div>
                       </div>
@@ -1246,19 +1246,19 @@ function CategoryAdminPageContent({ session, onLogout }) {
               </div>
             </div>
             <div className="soft-card soft-card--tinted">
-              <div className="row-title" style={{ marginBottom: 10 }}>PAL metrics</div>
+              <div className="row-title row-subtitle--spaced">PAL metrics</div>
               {[
                 ["Completion", detailLearner.pal_completion_pct],
                 ["Quiz Avg", detailLearner.pal_quiz_avg],
                 ["Time", detailLearner.pal_time_spent_hours * 2],
                 ["Tasks", detailLearner.pal_task_completion_pct],
               ].map(([label, value]) => (
-                <div className="metric-row" key={label} style={{ marginBottom: 10 }}>
-                  <div className="row-subtitle" style={{ width: 80 }}>{label}</div>
+                <div className="metric-row metric-row--spaced" key={label}>
+                  <div className="row-subtitle metric-label--fixed">{label}</div>
                   <div className="progress-track">
                     <div className="progress-fill" style={{ width: `${Math.min(100, value)}%`, background: getScoreColor(value) }} />
                   </div>
-                  <div className="mono" style={{ width: 36, textAlign: "right" }}>{Math.round(value)}</div>
+                  <div className="mono metric-value--fixed">{Math.round(value)}</div>
                 </div>
               ))}
             </div>
@@ -1316,7 +1316,7 @@ function FragmentCourseRow({
         <tr>
           <td colSpan={7}>
             <div className="soft-card soft-card--tinted">
-              <div className="row-title" style={{ marginBottom: 8 }}>Course structure preview</div>
+              <div className="row-title row-subtitle--spaced">Course structure preview</div>
               <div className="activity-list">
                 {course.modules.map((module) => (
                   <div className="row-subtitle" key={module}>• {module}</div>
@@ -1640,7 +1640,7 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: "2rem", color: "var(--danger)", textAlign: "center" }}>
+        <div className="state-message">
           <h2>Something went wrong loading this dashboard.</h2>
           <p>Please refresh the page or try again later.</p>
         </div>

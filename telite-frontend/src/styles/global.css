@@ -1017,6 +1017,14 @@ code {
   overflow: hidden;
 }
 
+.progress-track--thin {
+  height: 4px;
+}
+
+.progress-track--compact {
+  width: 90px;
+}
+
 .progress-fill,
 .mini-bar__fill,
 .distribution-fill {
@@ -1721,6 +1729,54 @@ code {
   margin-bottom: 12px;
 }
 
+.row-subtitle--spaced {
+  margin-bottom: 10px;
+}
+
+.split-actions--start {
+  align-items: flex-start;
+}
+
+.form-alert--success {
+  color: var(--success);
+  background: var(--success-light);
+  border-color: var(--success-mid);
+}
+
+.align-end-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.metric-row--spaced {
+  margin-bottom: 10px;
+}
+
+.metric-label--fixed {
+  width: 80px;
+}
+
+.metric-value--fixed {
+  width: 36px;
+  text-align: right;
+}
+
+.state-message {
+  padding: 2rem;
+  color: var(--danger);
+  text-align: center;
+}
+
+.grid--centered {
+  align-items: center;
+}
+
+.inline-divider {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
 .panel-link {
   color: var(--theme-accent, var(--primary));
   font-size: 11px;
@@ -1756,6 +1812,10 @@ code {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.course-bar-row__label--narrow {
+  width: 70px;
 }
 
 .course-bar-row__score {
@@ -3133,6 +3193,80 @@ code {
   padding-left: 18px;
   font-size: 11.5px;
   color: var(--text-secondary);
+}
+
+.bulk-verify-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bulk-verify-info {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.bulk-verify-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.file-drop-zone {
+  position: relative;
+}
+
+.file-drop-zone input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-drop-label {
+  display: block;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 36px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: var(--surface);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.file-drop-label:hover {
+  border-color: var(--primary-mid);
+  background: var(--primary-light);
+}
+
+.file-drop-label .icon {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 24px;
+}
+
+.bulk-result-dashboard {
+  margin-top: 24px;
+}
+
+.stat-card--success-accent {
+  border-left: 4px solid var(--success);
+}
+
+.stat-card__value--success {
+  color: var(--success);
+}
+
+.error-log {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--danger-mid);
+  border-radius: var(--radius-md);
+  background: var(--danger-light);
 }
 
 /* ── State Cards (Loading / Error / Empty) ── */

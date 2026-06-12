@@ -283,7 +283,7 @@ export default function CategoryStatsPage({ session, onLogout }) {
               </div>
 
               {detailsOpen ? (
-                <div className="table-wrap" style={{ marginTop: 16 }}>
+                <div className="table-wrap table-wrap--spaced">
                   <table>
                     <thead>
                       <tr>
@@ -311,8 +311,8 @@ export default function CategoryStatsPage({ session, onLogout }) {
                 </div>
               ) : null}
 
-              <div style={{ marginTop: 18, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-                <div className="row-title" style={{ marginBottom: 12 }}>Enrollment trend - last 6 months</div>
+              <div className="layout-section--spaced">
+                <div className="row-title row-title--spaced">Enrollment trend - last 6 months</div>
                 <ChartCanvas
                   type="bar"
                   height={140}
@@ -347,7 +347,7 @@ export default function CategoryStatsPage({ session, onLogout }) {
 
             <div className="dashboard-stack">
               <Panel title="User breakdown" subtitle="enrolled vs pending">
-                <div id="section-users" className="grid-2" style={{ alignItems: "center" }}>
+                <div id="section-users" className="grid-2 grid--centered">
                   <ChartCanvas
                     type="doughnut"
                     height={160}
@@ -371,7 +371,7 @@ export default function CategoryStatsPage({ session, onLogout }) {
                   <div className="legend-list">
                     <LegendRow color="#2563EB" label="Enrolled" value={data.user_breakdown.enrolled} />
                     <LegendRow color="#D97706" label="Pending" value={data.user_breakdown.pending} />
-                    <div style={{ borderTop: "1px solid var(--border)", marginTop: 6, paddingTop: 6 }}>
+                    <div className="inline-divider">
                       <LegendRow color="#7C3AED" label="Self-enrol" value={data.user_breakdown.self_enrol} />
                       <LegendRow color="#67E8F9" label="Manual" value={data.user_breakdown.manual} />
                     </div>
@@ -383,7 +383,7 @@ export default function CategoryStatsPage({ session, onLogout }) {
                 <div className="distribution-list">
                   {data.pal_distribution.map((row, index) => (
                     <div className="course-bar-row" key={`distribution-${row.range}-${index}`}>
-                      <div className="course-bar-row__label" style={{ width: 70 }}>{row.range}</div>
+                      <div className="course-bar-row__label course-bar-row__label--narrow">{row.range}</div>
                       <div className="distribution-track">
                         <div className="distribution-fill" style={{ width: `${row.width}%`, background: row.color }} />
                       </div>
@@ -409,20 +409,20 @@ export default function CategoryStatsPage({ session, onLogout }) {
                           #{index + 1}
                         </div>
                         <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={26} />
-                        <div style={{ flex: 1 }}>
+                        <div className="flex-fill">
                           <div className="row-title">{learner.full_name}</div>
                           <div className="row-subtitle">{learner.courses_completed}/6 courses</div>
                         </div>
                         <div className="bar-score">
-                          <div className="progress-track" style={{ height: 4 }}>
+                          <div className="progress-track progress-track--thin">
                             <div className="progress-fill" style={{ width: `${learner.pal_score}%`, background: getScoreColor(learner.pal_score) }} />
                           </div>
                         </div>
-                        <div className="mono" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</div>
+                        <div className="mono leaderboard-score-cell" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{ marginTop: 16 }}>
+                  <div className="action-row--spaced">
                     <Button tone="ghost" className="btn--block" onClick={() => scrollToSection({ id: "section-users" })}>
                       Show all {data.kpis.enrolled_learners} learners
                     </Button>
@@ -433,7 +433,7 @@ export default function CategoryStatsPage({ session, onLogout }) {
 
             <Panel title="Login activity" subtitle="last 12 weeks">
               <div id="section-tasks">
-                <div className="row-subtitle" style={{ marginBottom: 10 }}>Daily logins · hover for details</div>
+                <div className="row-subtitle row-subtitle--spaced">Daily logins · hover for details</div>
                 <div className="heatmap-grid">
                   {data.heatmap_weights.slice(0, 84).map((value, index) => (
                     <div
@@ -455,8 +455,8 @@ export default function CategoryStatsPage({ session, onLogout }) {
                 </div>
               </div>
 
-              <div className="soft-card soft-card--tinted" style={{ marginTop: 16 }}>
-                <div className="row-title" style={{ marginBottom: 10 }}>Quick task assignment</div>
+              <div className="soft-card soft-card--tinted soft-card--spaced">
+                <div className="row-title row-subtitle--spaced">Quick task assignment</div>
                 <form
                   className="task-form"
                   onSubmit={async (event) => {
