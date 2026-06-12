@@ -61,7 +61,7 @@ export default function LandingPage({ session }) {
   }, []);
 
   return (
-    <div className="bg-[#FAFAFA] text-[#1A1A2E]" style={{ fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div className="lp-root bg-[#FAFAFA] text-[#1A1A2E]">
       {/* ── NAVBAR ── */}
       <nav id="lp-nav" className="sticky top-0 z-50 border-b border-[#E8E8F0] bg-white/80 backdrop-blur transition-all duration-200">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
@@ -115,7 +115,7 @@ export default function LandingPage({ session }) {
               <span className="text-sm font-medium text-slate-700 ml-1">ATS Admin Dashboard</span>
               <span className="ml-auto bg-indigo-50 text-indigo-600 text-xs px-2 py-0.5 rounded-full">admin panel</span>
             </div>
-            <div className="grid" style={{ gridTemplateColumns: "100px 1fr" }}>
+            <div className="grid lp-mockup-grid">
               <div className="bg-slate-50 border-r border-slate-100 py-3 px-2">
                 {["Dashboard","Courses","Learners","Enrollment","PAL tracking","Reports"].map((s,i) => (
                   <div key={s} className={`text-xs px-2 py-1.5 rounded-md mb-0.5 ${i===0 ? "bg-indigo-50 text-indigo-700 font-medium" : "text-slate-500"}`}>{s}</div>
@@ -190,7 +190,7 @@ export default function LandingPage({ session }) {
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeader eyebrow="How it works" title="Up and running in three steps" sub="No complex setup. Your team can be learning within hours."/>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative max-w-4xl mx-auto">
-            <div className="hidden md:block absolute top-6 left-[16.66%] right-[16.66%] h-px bg-slate-200 z-0" style={{ marginLeft: 24, marginRight: 24 }}/>
+            <div className="lp-step-connector hidden md:block absolute top-6 left-[16.66%] right-[16.66%] h-px bg-slate-200 z-0"/>
             {STEPS.map(s => (
               <div key={s.n} className="text-center relative z-10">
                 <div className="w-12 h-12 rounded-full bg-indigo-50 border-2 border-indigo-200 flex items-center justify-center mx-auto mb-4 text-indigo-700 font-semibold text-lg">{s.n}</div>

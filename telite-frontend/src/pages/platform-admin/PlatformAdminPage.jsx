@@ -112,10 +112,6 @@ export default function PlatformAdminPage({ session, onLogout }) {
 
         {/* PAGES WRAPPER */}
         <div className="flex-1 relative overflow-y-auto" id="pwrap">
-          {/* Background blobs */}
-          <div className="fixed pointer-events-none" style={{top: '-10%', right: '-5%', width: '40%', height: '40%', background: 'rgba(70,72,212,0.05)', borderRadius: '50%', filter: 'blur(120px)', zIndex: 0}}></div>
-          <div className="fixed pointer-events-none" style={{bottom: '-10%', left: '-5%', width: '30%', height: '30%', background: 'rgba(91,89,140,0.08)', borderRadius: '50%', filter: 'blur(100px)', zIndex: 0}}></div>
-
           <div className="relative z-10 p-container-padding pb-xl max-w-[1400px] mx-auto w-full">
             <Routes>
               <Route index element={<OverviewTab />} />

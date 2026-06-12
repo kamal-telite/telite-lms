@@ -1,3 +1,87 @@
 /* Landing page — Tailwind v4 utilities only (no preflight to avoid conflicts) */
 @import "tailwindcss/theme" layer(theme);
 @import "tailwindcss/utilities" layer(utilities);
+
+.lp-root {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.lp-root a,
+.lp-root button {
+  font: inherit;
+}
+
+.lp-root a:focus-visible,
+.lp-root button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.lp-root .rounded-md,
+.lp-root .rounded-lg,
+.lp-root .rounded-xl,
+.lp-root .rounded-2xl {
+  border-radius: var(--radius-md) !important;
+}
+
+.lp-root .rounded-full {
+  border-radius: var(--radius-pill) !important;
+}
+
+.lp-root .shadow-sm {
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.lp-root .hover\:shadow-sm:hover {
+  box-shadow: var(--shadow-md) !important;
+}
+
+.lp-root .bg-\[\#FAFAFA\] {
+  background-color: var(--bg) !important;
+}
+
+.lp-root .text-\[\#1A1A2E\] {
+  color: var(--text-primary) !important;
+}
+
+.lp-root .bg-indigo-600 {
+  background-color: var(--primary) !important;
+}
+
+.lp-root .hover\:bg-indigo-700:hover {
+  background-color: var(--primary-dark) !important;
+}
+
+.lp-root .text-indigo-600,
+.lp-root .hover\:text-indigo-600:hover,
+.lp-root .hover\:text-indigo-700:hover {
+  color: var(--primary) !important;
+}
+
+.lp-root .border-indigo-600,
+.lp-root .hover\:border-indigo-400:hover {
+  border-color: var(--primary) !important;
+}
+
+.lp-mockup-grid {
+  grid-template-columns: 100px minmax(0, 1fr);
+}
+
+.lp-step-connector {
+  margin-left: 24px;
+  margin-right: 24px;
+}
+
+@media (max-width: 640px) {
+  .lp-mockup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lp-mockup-grid > div:first-child {
+    border-right: 0;
+    border-bottom: 1px solid rgb(241 245 249);
+  }
+}

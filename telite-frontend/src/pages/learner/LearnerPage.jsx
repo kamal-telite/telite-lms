@@ -67,27 +67,26 @@ function PalRing({ score, size = 120 }) {
 function NotificationDrawer({ open, onClose, notifications }) {
   if (!open) return null;
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 320, background: "var(--surface)", borderLeft: "1px solid var(--border)", zIndex: 100, boxShadow: "-4px 0 15px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: 16, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ margin: 0, fontSize: "16px" }}>Notifications</h3>
-        <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: "18px", cursor: "pointer", color: "var(--text-muted)" }}>×</button>
+    <div className="notification-drawer" role="dialog" aria-modal="true" aria-label="Notifications">
+      <div className="notification-drawer__header">
+        <h3>Notifications</h3>
+        <IconButton label="Close notifications" icon="close" size="sm" onClick={onClose} />
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+      <div className="notification-drawer__body">
         {notifications?.length === 0 ? (
-           <EmptyState title="You're all caught up! 🎉" body="No new notifications." />
+          <EmptyState title="You're all caught up" body="No new notifications." />
         ) : (
-           notifications?.map(n => (
-             <div key={n.id} style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
-                <div style={{ fontSize: "13px", fontWeight: "bold" }}>{n.title}</div>
-                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: 4 }}>{n.message}</div>
-             </div>
-           ))
+          notifications?.map(n => (
+            <div key={n.id} className="notification-drawer__item">
+              <div className="notification-drawer__title">{n.title}</div>
+              <div className="notification-drawer__message">{n.message}</div>
+            </div>
+          ))
         )}
       </div>
     </div>
   );
 }
-
 export default function LearnerPage({ session, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -233,9 +232,7 @@ export default function LearnerPage({ session, onLogout }) {
           >
             {launchingId === data.hero.current_course?.id ? "Launching..." : "Resume Course"}
           </Button>
-          <button className="icon-btn" title="Notifications" onClick={() => setShowNotifications(true)}>
-            <span role="img" aria-label="bell">🔔</span>
-          </button>
+          <IconButton label="Notifications" icon="bell" onClick={() => setShowNotifications(true)} />
           <ProfileDropdown profile={{
             initials: getInitials(session?.user?.name || "Learner"),
             gradient: ["#0ea5e9", "#6366f1"],
@@ -253,15 +250,15 @@ export default function LearnerPage({ session, onLogout }) {
         {activeNav === "section-dashboard" && (
           <section id="section-dashboard">
             <div className="hero-banner">
-              <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0, justifyContent: "space-between", alignItems: "center" }}>
+              <div className="learner-hero-row">
                 <div>
-                  <div className="eyebrow" style={{ margin: 0, color: "rgba(255,255,255,0.8)" }}>Learner workspace</div>
+                  <div className="learner-hero-eyebrow">Learner workspace</div>
                   <h2>{data.hero.headline}</h2>
                   <p>{data.hero.subtext}</p>
                 </div>
-                <div className="summary-chip" style={{ background: "rgba(255,255,255,0.14)", borderColor: "rgba(255,255,255,0.24)" }}>
-                  <div className="summary-chip__label" style={{ color: "rgba(255,255,255,0.75)" }}>PAL score</div>
-                  <div className="summary-chip__value" style={{ color: "#fff" }}>{formatPercent(data.hero.pal_score)}</div>
+                <div className="summary-chip summary-chip--hero">
+                  <div className="summary-chip__label">PAL score</div>
+                  <div className="summary-chip__value">{formatPercent(data.hero.pal_score)}</div>
                 </div>
               </div>
               <div className="hero-banner__metrics">
@@ -278,7 +275,7 @@ export default function LearnerPage({ session, onLogout }) {
                   <strong>{Math.round(data.hero.time_spent_hours)}h</strong>
                 </div>
               </div>
-              <div className="hero-actions" style={{ marginTop: 18 }}>
+              <div className="hero-actions hero-actions--spaced">
                 <Button tone="primary" icon="external" onClick={() => handleLaunch(data.hero.current_course?.id)}>
                   Resume Course
                 </Button>
@@ -295,7 +292,7 @@ export default function LearnerPage({ session, onLogout }) {
               <StatCard accent="#7C3AED" label="Cohort Rank" value={`#${data.stats.cohort_rank}`} meta="You lead the cohort" />
             </div>
 
-            <Panel title="Recent Courses" subtitle="Resume where you left off" action={<button className="panel-link" onClick={() => changeSection({ id: 'section-courses' })}>View all →</button>}>
+            <Panel title="Recent Courses" subtitle="Resume where you left off" action={<button className="panel-link" onClick={() => changeSection({ id: 'section-courses' })}>View all</button>}>
               <div className="grid-3">
                 {data.courses.slice(0,3).map((course) => (
                   <article className={`course-card ${data.hero.current_course?.id === course.id ? "is-active" : ""}`} key={course.id}>
@@ -305,7 +302,7 @@ export default function LearnerPage({ session, onLogout }) {
                         {titleize(course.status)}
                       </Badge>
                     </div>
-                    <div className="bar-score" style={{ marginTop: 12 }}>
+                    <div className="bar-score bar-score--spaced">
                       <div className="progress-track">
                         <div
                           className="progress-fill"
@@ -317,7 +314,7 @@ export default function LearnerPage({ session, onLogout }) {
                       </div>
                     </div>
                     <div className="course-card__footer">
-                      <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                      <div className="mono course-card__progress-label">
                         {formatPercent(course.completion_pct)} done
                       </div>
                       <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
@@ -335,7 +332,7 @@ export default function LearnerPage({ session, onLogout }) {
         {activeNav === "section-courses" && (
           <section id="section-courses">
             <Panel title="All Courses" subtitle="Your complete learning path">
-              <div className="toolbar" style={{ marginBottom: 16 }}>
+              <div className="toolbar toolbar--panel-filter">
                 {["all", "in_progress", "completed", "not_started"].map(f => (
                   <label className="chip" key={f}>
                     <input type="radio" checked={courseFilter === f} onChange={() => setCourseFilter(f)} /> {titleize(f.replace("_", " "))}
@@ -351,7 +348,7 @@ export default function LearnerPage({ session, onLogout }) {
                         {titleize(course.status)}
                       </Badge>
                     </div>
-                    <div className="bar-score" style={{ marginTop: 12 }}>
+                    <div className="bar-score bar-score--spaced">
                       <div className="progress-track">
                         <div
                           className="progress-fill"
@@ -363,7 +360,7 @@ export default function LearnerPage({ session, onLogout }) {
                       </div>
                     </div>
                     <div className="course-card__footer">
-                      <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                      <div className="mono course-card__progress-label">
                         {formatPercent(course.completion_pct)} done
                       </div>
                       <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingId === course.id}>
@@ -380,12 +377,12 @@ export default function LearnerPage({ session, onLogout }) {
         {/* PAL PROGRESS PAGE */}
         {activeNav === "section-pal" && (
           <section id="section-pal">
-            <div className="hero-banner" style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", padding: "40px 20px" }}>
-              <div style={{ textAlign: "center", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+            <div className="hero-banner hero-banner--pal">
+              <div className="pal-hero-content">
                 <PalRing score={Math.round(data.hero.pal_score)} />
                 <div>
-                  <h2 style={{ fontSize: "1.5rem", margin: 0 }}>PAL Score Analysis</h2>
-                  <p style={{ margin: "4px 0 0", opacity: 0.9 }}>Your holistic performance rating across all modules.</p>
+                  <h2>PAL Score Analysis</h2>
+                  <p>Your holistic performance rating across all modules.</p>
                 </div>
               </div>
             </div>
@@ -418,7 +415,7 @@ export default function LearnerPage({ session, onLogout }) {
         {activeNav === "section-tasks" && (
           <section id="section-tasks">
             <Panel title="Task Management" subtitle="Your assigned projects and assessments">
-              <div className="toolbar" style={{ marginBottom: 16 }}>
+              <div className="toolbar toolbar--panel-filter">
                 {["all", "pending", "submitted", "completed", "overdue"].map(f => (
                   <label className="chip" key={f}>
                     <input type="radio" checked={taskFilter === f} onChange={() => setTaskFilter(f)} /> {titleize(f)}
@@ -482,28 +479,28 @@ export default function LearnerPage({ session, onLogout }) {
                 <table>
                   <thead>
                     <tr>
-                      <th style={{ width: 60, textAlign: "center" }}>Rank</th>
+                      <th className="table-cell--rank">Rank</th>
                       <th>Learner</th>
-                      <th style={{ textAlign: "right" }}>PAL Score</th>
-                      <th style={{ textAlign: "right" }}>Streak</th>
+                      <th className="table-cell--right">PAL Score</th>
+                      <th className="table-cell--right">Streak</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.recommendation?.leaderboard?.map((row, idx) => (
                       <tr key={row.id || idx} className={row.id === data.profile.id ? "is-highlighted" : ""}>
-                        <td style={{ textAlign: "center", fontWeight: 700, color: getRankColor(row.rank) }}>
+                        <td className="table-cell--rank leaderboard-rank-cell" style={{ color: getRankColor(row.rank) }}>
                           #{row.rank}
                         </td>
                         <td>
-                          <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+                          <div className="leaderboard-row leaderboard-row--compact">
                             <Avatar initials={getInitials(row.full_name)} size={24} />
                             <span>{row.full_name}</span>
                           </div>
                         </td>
-                        <td className="mono" style={{ textAlign: "right", color: getScoreColor(row.pal_score), fontWeight: 700 }}>
+                        <td className="mono table-cell--right leaderboard-score-cell" style={{ color: getScoreColor(row.pal_score) }}>
                           {formatPercent(row.pal_score)}
                         </td>
-                        <td className="mono" style={{ textAlign: "right", color: "var(--text-secondary)" }}>
+                        <td className="mono table-cell--right text-secondary">
                           {row.streak_days}d
                         </td>
                       </tr>

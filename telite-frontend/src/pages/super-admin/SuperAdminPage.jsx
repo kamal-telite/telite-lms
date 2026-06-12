@@ -587,7 +587,7 @@ export default function SuperAdminPage({ session, onLogout }) {
             </div>
 
             {!isMoodleSource ? (
-              <div className="grid-2" style={{ marginTop: 18 }}>
+              <div className="grid-2 layout-section--spaced">
                 <Panel title="Recent enrollments" subtitle="Latest 10 enrollment requests">
                   <div className="table-wrap">
                     <table>
@@ -610,7 +610,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                             <td>
                               <Badge tone={getStatusTone(row.status)}>{row.status}</Badge>
                             </td>
-                            <td className="mono" style={{ whiteSpace: "nowrap" }}>
+                            <td className="mono table-cell--nowrap">
                               {formatShortDate(row.requested_at || row.created_at || "") || "—"}
                             </td>
                           </tr>
@@ -632,19 +632,19 @@ export default function SuperAdminPage({ session, onLogout }) {
                     <table>
                       <thead>
                         <tr>
-                          <th style={{ width: 60, textAlign: "center" }}>Rank</th>
+                          <th className="table-cell--rank">Rank</th>
                           <th>Learner</th>
-                          <th style={{ textAlign: "right" }}>PAL</th>
+                          <th className="table-cell--right">PAL</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(dashboard.leaderboard || []).slice(0, 5).map((user, idx) => (
                           <tr key={user.id || `${user.full_name}-${idx}`}>
-                            <td style={{ textAlign: "center", fontWeight: 700, color: getRankColor(idx + 1) }}>
+                            <td className="table-cell--rank leaderboard-rank-cell" style={{ color: getRankColor(idx + 1) }}>
                               #{idx + 1}
                             </td>
                             <td>
-                              <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+                              <div className="leaderboard-row leaderboard-row--compact">
                                 <Avatar
                                   initials={user.avatar_initials || getInitials(user.full_name)}
                                   gradient={user.avatar_gradient || ["#2563EB", "#7C3AED"]}
@@ -656,7 +656,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                                 </div>
                               </div>
                             </td>
-                            <td className="mono" style={{ textAlign: "right", fontWeight: 700, color: getScoreColor(user.pal_score) }}>
+                            <td className="mono table-cell--right leaderboard-score-cell" style={{ color: getScoreColor(user.pal_score) }}>
                               {formatPercent(user.pal_score)}
                             </td>
                           </tr>
@@ -729,7 +729,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                         navigate(`/categories/${category.slug}/admin`);
                       }}
                     >
-                      View dashboard →
+                      View dashboard
                     </button>
                   </div>
                   {categoryDeleteId === category.id ? (
@@ -788,7 +788,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                         gradient={user.avatar_gradient}
                         size={26}
                       />
-                      <div style={{ flex: 1 }}>
+                      <div className="flex-fill">
                         <div className="row-title">{user.full_name}</div>
                         <div className="row-subtitle">{user.category_scope}</div>
                       </div>
@@ -800,7 +800,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                           />
                         </div>
                       </div>
-                      <div className="mono" style={{ color: getScoreColor(user.pal_score), fontWeight: 700 }}>
+                      <div className="mono leaderboard-score-cell" style={{ color: getScoreColor(user.pal_score) }}>
                         {formatPercent(user.pal_score)}
                       </div>
                     </div>
@@ -808,8 +808,8 @@ export default function SuperAdminPage({ session, onLogout }) {
                 )}
               </div>
 
-              <div style={{ marginTop: 18 }}>
-                <div className="row-title" style={{ marginBottom: 12 }}>
+              <div className="layout-section--spaced">
+                <div className="row-title row-title--spaced">
                   {isMoodleSource ? "Courses per managed category" : "PAL Score Distribution by Category"}
                 </div>
                 <ChartCanvas
@@ -1070,7 +1070,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                     ))}
                     {verifications.length === 0 && (
                       <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', padding: '32px 0' }}>
+                        <td colSpan="5" className="table-empty-cell">
                           <div className="row-subtitle">No pending verifications</div>
                         </td>
                       </tr>
@@ -1079,7 +1079,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                 </table>
               </div>
               {bulkResult && (
-                <div className="soft-card" style={{ marginTop: 16 }}>
+                <div className="soft-card soft-card--spaced">
                   <div className="row-title">Bulk Result: {bulkResult.approved_count} approved, {bulkResult.ignored_count} ignored</div>
                 </div>
               )}
@@ -1100,7 +1100,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                 ) : null
               }
             >
-              <div className="search-toolbar" style={{ marginBottom: 16 }}>
+              <div className="search-toolbar search-toolbar--spaced">
                 <div className="toolbar">
                   <label className="chip">
                     <input type="radio" defaultChecked name="auditFilter" /> All
@@ -1115,7 +1115,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                     <input type="radio" name="auditFilter" /> Verification
                   </label>
                 </div>
-                <label className="field" style={{ flex: 1, maxWidth: 300 }}>
+                <label className="field field--search">
                   <input className="field__input" type="text" placeholder="Search users or actions..." />
                 </label>
               </div>
@@ -1135,7 +1135,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                     <tbody>
                       {visibleAudit.map((entry) => (
                         <tr key={entry.id}>
-                          <td className="mono" style={{ whiteSpace: "nowrap" }}>
+                          <td className="mono table-cell--nowrap">
                             {formatDateTime(entry.created_at)}
                           </td>
                           <td>
@@ -1147,7 +1147,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                             </Badge>
                           </td>
                           <td>
-                            <div className="row-subtitle" style={{ color: "var(--text-primary)" }}>{entry.message}</div>
+                            <div className="row-subtitle row-subtitle--primary">{entry.message}</div>
                             <div className="row-subtitle muted">{entry.result}</div>
                           </td>
                           <td className="mono">{entry.ip_address || "192.168.1.1"}</td>
@@ -1160,7 +1160,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                 <EmptyState title="Audit log unavailable" body={dashboard.notes?.audit || "No audit data available."} />
               )}
               {!isMoodleSource && visibleAudit.length ? (
-                <div style={{ marginTop: 16 }}>
+                <div className="action-row--spaced">
                   <Button tone="ghost" className="btn--block" onClick={() => setExpandedAudit((value) => !value)}>
                     {expandedAudit ? "Hide extra entries" : "Load more entries"}
                   </Button>
@@ -1208,8 +1208,8 @@ export default function SuperAdminPage({ session, onLogout }) {
                 </div>
               }
             >
-              <div className="search-toolbar" style={{ marginBottom: 16 }}>
-                <label className="field" style={{ flex: 1 }}>
+              <div className="search-toolbar search-toolbar--spaced">
+                <label className="field field--fluid">
                   <span className="field__label">{isMoodleSource ? "Search Moodle users" : "Search users"}</span>
                   <input
                     className="field__input"
@@ -1236,7 +1236,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                     {filteredUsers.map((user) => (
                       <tr key={user.id}>
                         <td>
-                          <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+                          <div className="leaderboard-row leaderboard-row--compact">
                             <Avatar
                               initials={user.avatar_initials || getInitials(user.full_name)}
                               gradient={user.avatar_gradient || ["#2563EB", "#7C3AED"]}

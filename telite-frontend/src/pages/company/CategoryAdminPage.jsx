@@ -936,7 +936,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
               </Panel>
 
               <Panel title="Manual Enrollment form" subtitle="Create learner access and enrol them into courses">
-                {manualSuccess ? <div className="form-alert" style={{ background: "var(--emerald-light)", border: "1px solid var(--emerald-mid)", color: "var(--emerald)" }}>{manualSuccess}</div> : null}
+                {manualSuccess ? <div className="form-alert" style={{ background: "var(--success-light)", border: "1px solid var(--success-mid)", color: "var(--success)" }}>{manualSuccess}</div> : null}
                 <form
                   className="form-stack"
                   onSubmit={async (event) => {
@@ -1053,9 +1053,9 @@ function CategoryAdminPageContent({ session, onLogout }) {
                           <div className="stat-card__label">Total Processed</div>
                           <div className="stat-card__value">{bulkResult.total_processed}</div>
                         </div>
-                        <div className="stat-card" style={{ borderLeft: '4px solid var(--emerald)' }}>
+                        <div className="stat-card" style={{ borderLeft: '4px solid var(--success)' }}>
                           <div className="stat-card__label">Approved</div>
-                          <div className="stat-card__value" style={{ color: 'var(--emerald)' }}>{bulkResult.approved_count}</div>
+                          <div className="stat-card__value" style={{ color: 'var(--success)' }}>{bulkResult.approved_count}</div>
                         </div>
                         <div className="stat-card">
                           <div className="stat-card__label">Ignored/Failed</div>

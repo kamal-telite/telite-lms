@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Avatar, Badge, Button, EmptyState, StatCard, Panel, useToast } from "../common/ui";
+import { Icon } from "../common/icons";
 import { TaskBoardKanban } from "./TaskBoard";
 import { ChartCanvas } from "../common/charts";
 import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent } from "../../utils/formatters";
@@ -607,6 +608,14 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
   );
 }
 
+const SETTINGS_TABS = [
+  { id: "general", label: "General", icon: "profile" },
+  { id: "notifications", label: "Notifications", icon: "bell" },
+  { id: "personalization", label: "Personalization", icon: "palette" },
+  { id: "security", label: "Security", icon: "shield" },
+  { id: "account", label: "Account", icon: "settings" },
+];
+
 export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
   const tabs = [
     { id: "general", label: "General", icon: "👤" },
@@ -617,21 +626,20 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
   ];
 
   return (
-    <div className="grid-3" style={{ gridTemplateColumns: "240px 1fr" }}>
+    <div className="settings-layout">
       <div className="panel">
-        <div className="panel-body" style={{ padding: "16px 8px" }}>
+        <div className="panel-body settings-nav-panel">
           <div className="sidebar-nav__items">
-            {tabs.map((tab) => (
+            {SETTINGS_TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
-                className={`nav-item ${activeTab === tab.id ? "is-active" : ""}`}
+                className={`nav-item settings-nav-item ${activeTab === tab.id ? "is-active" : ""}`}
                 onClick={() => setActiveTab(tab.id)}
-                style={{ padding: "10px 16px", borderRadius: 8, textAlign: "left" }}
               >
                 <span className="nav-item__left">
-                  <span>{tab.icon}</span>
-                  <span style={{ marginLeft: 8 }}>{tab.label}</span>
+                  <Icon name={tab.icon} size={16} />
+                  <span>{tab.label}</span>
                 </span>
               </button>
             ))}
@@ -641,18 +649,18 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
 
       <div className="panel">
         <div className="panel-header">
-          <h2 className="panel-title">{tabs.find(t => t.id === activeTab)?.label || "Settings"}</h2>
+          <h2 className="panel-title">{SETTINGS_TABS.find(t => t.id === activeTab)?.label || "Settings"}</h2>
           <p className="panel-subtitle">Manage your profile preferences and account settings.</p>
         </div>
         
         <div className="panel-body">
           {activeTab === "general" && (
             <div className="dashboard-stack">
-              <div style={{ display: "flex", gap: 24, alignItems: "center", marginBottom: 24 }}>
+              <div className="settings-avatar-row">
                 <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "#059669"]} size={80} />
                 <div>
-                  <Button tone="ghost" style={{ marginBottom: 8 }}>Upload new photo</Button>
-                  <div className="muted" style={{ fontSize: 12 }}>JPG, GIF or PNG. Max size of 800K</div>
+                  <Button tone="ghost">Upload new photo</Button>
+                  <div className="field__help settings-avatar-help">JPG, GIF or PNG. Max size of 800K</div>
                 </div>
               </div>
               <div className="grid-2">
@@ -669,7 +677,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
                 <span className="field__label">Role</span>
                 <input className="field__input" defaultValue="Category Admin" disabled />
               </label>
-              <div className="panel-footer" style={{ marginTop: 24, padding: "16px 0 0", borderTop: "1px solid var(--border)", textAlign: "right" }}>
+              <div className="settings-form-footer">
                 <Button tone="primary">Save Changes</Button>
               </div>
             </div>
@@ -683,7 +691,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
                 { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
                 { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." }
               ].map((item, idx) => (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--border)" }}>
+                <div key={idx} className="settings-preference-row">
                   <div>
                     <div className="row-title">{item.title}</div>
                     <div className="row-subtitle">{item.desc}</div>
@@ -703,7 +711,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
                 <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
               </div>
 
-              <div className="row-title" style={{ marginTop: 24 }}>Dashboard Density</div>
+              <div className="row-title settings-section-title">Dashboard Density</div>
               <div className="toolbar">
                 <label className="chip"><input type="radio" name="density" /> Compact</label>
                 <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
@@ -715,7 +723,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
             <div className="dashboard-stack">
               <label className="field">
                 <span className="field__label">Current Password</span>
-                <input type="password" className="field__input" placeholder="••••••••" />
+                <input type="password" className="field__input" placeholder="Current password" />
               </label>
               <div className="grid-2">
                 <label className="field">
@@ -727,7 +735,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
                   <input type="password" className="field__input" />
                 </label>
               </div>
-              <div style={{ marginTop: 16 }}>
+              <div className="settings-action-row">
                 <Button tone="primary">Update Password</Button>
               </div>
             </div>
@@ -735,9 +743,9 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
 
           {activeTab === "account" && (
             <div className="dashboard-stack">
-              <div className="soft-card" style={{ background: "var(--red-light)", border: "1px solid var(--red-mid)" }}>
-                <div className="row-title" style={{ color: "var(--red)" }}>Danger Zone</div>
-                <div className="row-subtitle" style={{ marginBottom: 16 }}>Permanently delete your account and all associated data.</div>
+              <div className="soft-card settings-danger-card">
+                <div className="row-title settings-danger-title">Danger Zone</div>
+                <div className="row-subtitle settings-danger-copy">Permanently delete your account and all associated data.</div>
                 <Button tone="danger">Delete Account</Button>
               </div>
             </div>

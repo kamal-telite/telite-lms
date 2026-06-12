@@ -230,3 +230,280 @@
 .platform-admin-root .duration-300 {
   animation-duration: 300ms;
 }
+
+/* Scoped consistency layer */
+.platform-admin-root {
+  --pa-bg: #f8f9fb;
+  --pa-surface: #ffffff;
+  --pa-surface-muted: #f2f4f8;
+  --pa-border: #e4e7ef;
+  --pa-border-strong: #cdd2e0;
+  --pa-primary: #2563eb;
+  --pa-primary-soft: #eff4ff;
+  --pa-secondary: #7c3aed;
+  --pa-success: #059669;
+  --pa-success-soft: #ecfdf5;
+  --pa-warning: #d97706;
+  --pa-warning-soft: #fffbeb;
+  --pa-danger: #dc2626;
+  --pa-danger-soft: #fef2f2;
+  --pa-text: #0f172a;
+  --pa-text-muted: #64748b;
+  --pa-radius-sm: 6px;
+  --pa-radius-md: 8px;
+  --pa-radius-lg: 12px;
+  --pa-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --pa-shadow-md: 0 8px 20px rgba(15, 23, 42, 0.10);
+  --pa-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(248, 249, 251, 0.94)),
+    var(--pa-bg);
+  color: var(--pa-text);
+  font-family: "Inter", sans-serif;
+}
+
+.platform-admin-root aside {
+  background: #172033 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 4px 0 18px rgba(15, 23, 42, 0.10);
+}
+
+.platform-admin-root header {
+  border-bottom-color: var(--pa-border) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  box-shadow: var(--pa-shadow-sm);
+}
+
+.platform-admin-root button,
+.platform-admin-root a,
+.platform-admin-root input,
+.platform-admin-root select,
+.platform-admin-root textarea {
+  font: inherit;
+}
+
+.platform-admin-root button {
+  border-radius: var(--pa-radius-md);
+}
+
+.platform-admin-root button:focus-visible,
+.platform-admin-root a:focus-visible,
+.platform-admin-root input:focus-visible,
+.platform-admin-root select:focus-visible,
+.platform-admin-root textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--pa-focus-ring);
+}
+
+.platform-admin-root input,
+.platform-admin-root select,
+.platform-admin-root textarea {
+  border: 1px solid var(--pa-border) !important;
+  background: var(--pa-surface) !important;
+  color: var(--pa-text) !important;
+  border-radius: var(--pa-radius-md) !important;
+}
+
+.platform-admin-root input::placeholder,
+.platform-admin-root textarea::placeholder {
+  color: #94a3b8;
+}
+
+.platform-admin-root table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.platform-admin-root th {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.platform-admin-root td {
+  border-top: 1px solid var(--pa-border);
+  vertical-align: middle;
+}
+
+.platform-admin-root tbody tr:hover {
+  background: rgba(37, 99, 235, 0.035);
+}
+
+.platform-admin-root .glass-panel,
+.platform-admin-root .glass,
+.platform-admin-root .neumorphic-card,
+.platform-admin-root .neu {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--pa-border);
+  box-shadow: var(--pa-shadow-sm);
+}
+
+.platform-admin-root .neumorphic-button {
+  border: 1px solid var(--pa-border);
+  box-shadow: var(--pa-shadow-sm);
+}
+
+.platform-admin-root .rounded-lg,
+.platform-admin-root .rounded-xl,
+.platform-admin-root .rounded-2xl,
+.platform-admin-root .rounded-\[1\.5rem\],
+.platform-admin-root .rounded-\[2rem\],
+.platform-admin-root .rounded-\[32px\] {
+  border-radius: var(--pa-radius-md) !important;
+}
+
+.platform-admin-root .hover-lift:hover,
+.platform-admin-root .tilt-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--pa-shadow-md);
+}
+
+.platform-admin-root .recessed-input,
+.platform-admin-root .inset-input {
+  box-shadow: none;
+}
+
+.platform-admin-root .tog {
+  background: var(--pa-border-strong);
+}
+
+.platform-admin-root .tog.on {
+  background: var(--pa-primary);
+}
+
+.platform-admin-root .material-symbols-outlined {
+  line-height: 1;
+}
+
+@media (max-width: 1180px) {
+  .platform-admin-root .grid-cols-5,
+  .platform-admin-root .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .platform-admin-root .grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .platform-admin-root {
+    min-height: 100vh;
+    height: auto !important;
+    flex-direction: column;
+    overflow: visible !important;
+  }
+
+  .platform-admin-root aside {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .platform-admin-root aside > nav {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .platform-admin-root aside > nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .platform-admin-root aside > nav > div {
+    min-width: max-content;
+  }
+
+  .platform-admin-root aside .border-t {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .platform-admin-root .ml-64 {
+    margin-left: 0 !important;
+  }
+
+  .platform-admin-root .h-screen {
+    height: auto !important;
+  }
+
+  .platform-admin-root header {
+    position: sticky;
+    top: 0;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 16px !important;
+  }
+
+  .platform-admin-root header > div:first-child,
+  .platform-admin-root header > div:last-child {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .platform-admin-root header input {
+    width: min(100%, 280px) !important;
+  }
+
+  .platform-admin-root #pwrap {
+    overflow: visible !important;
+  }
+
+  .platform-admin-root #pwrap > div {
+    padding: 20px 16px 32px !important;
+  }
+
+  .platform-admin-root .grid-cols-5,
+  .platform-admin-root .grid-cols-4,
+  .platform-admin-root .grid-cols-3,
+  .platform-admin-root .grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .platform-admin-root .fixed.bottom-lg.right-lg {
+    bottom: 16px !important;
+    right: 16px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .platform-admin-root aside > div:first-child {
+    padding: 16px !important;
+  }
+
+  .platform-admin-root aside > nav {
+    padding: 10px 12px;
+  }
+
+  .platform-admin-root header {
+    padding: 12px !important;
+  }
+
+  .platform-admin-root header > div:first-child {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .platform-admin-root header input {
+    width: 100% !important;
+  }
+
+  .platform-admin-root table {
+    min-width: 680px;
+  }
+
+  .platform-admin-root .overflow-x-auto,
+  .platform-admin-root .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}

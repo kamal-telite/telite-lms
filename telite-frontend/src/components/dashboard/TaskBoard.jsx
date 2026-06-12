@@ -1,21 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { Badge, Button } from "../common/ui";
-import { 
-  DndContext, 
-  closestCorners, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
-  useSensors 
+import React, { useEffect, useState } from "react";
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
 } from "@dnd-kit/core";
-import { 
-  SortableContext, 
-  sortableKeyboardCoordinates, 
-  useSortable, 
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
   verticalListSortingStrategy,
-  arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Badge, Button, IconButton } from "../common/ui";
+import { Icon } from "../common/icons";
 
 function SortableTaskCard({ task, onEdit, onDelete }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -31,47 +32,33 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    cursor: "grab",
-    background: "var(--surface)", 
-    padding: 12, 
-    borderRadius: 8, 
-    marginBottom: 8, 
-    boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.15)" : "0 1px 3px rgba(0,0,0,0.1)",
-    textDecoration: task.status === "completed" ? "line-through" : "none",
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div
+      ref={setNodeRef}
+      className={`kanban-task-card ${isDragging ? "is-dragging" : ""} ${task.status === "completed" ? "is-complete" : ""}`}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      <div className="kanban-task-card__header">
         <div>
-          <div className="row-title" style={{textDecoration: task.status === "completed" ? "line-through" : "none"}}>{task.title}</div>
-          <div className="row-subtitle" style={{ marginTop: 4 }}>{task.assigned_label}</div>
+          <div className="row-title kanban-task-card__title">{task.title}</div>
+          <div className="row-subtitle kanban-task-card__assignee">{task.assigned_label}</div>
         </div>
-        <div style={{ display: "flex", gap: 4 }} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="kanban-task-card__actions" onPointerDown={(event) => event.stopPropagation()}>
           {onEdit ? (
-            <button
-              onClick={() => onEdit(task)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
-              type="button"
-            >
-              ✏️
-            </button>
+            <IconButton label="Edit task" icon="pencil" size="sm" onClick={() => onEdit(task)} />
           ) : null}
           {onDelete ? (
-            <button
-              onClick={() => setConfirmingDelete(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
-              type="button"
-            >
-              🗑️
-            </button>
+            <IconButton label="Delete task" icon="trash" size="sm" onClick={() => setConfirmingDelete(true)} />
           ) : null}
         </div>
       </div>
 
       {onDelete && confirmingDelete ? (
-        <div style={{ marginTop: 10 }} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="kanban-task-card__confirm" onPointerDown={(event) => event.stopPropagation()}>
           <div className="inline-confirm">
             <span>Delete this task?</span>
             <div className="split-actions">
@@ -86,24 +73,29 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
         </div>
       ) : null}
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+      <div className="kanban-task-card__meta">
         <Badge tone={task.status === "in_progress" ? "warn" : task.status === "completed" ? "success" : "neutral"}>
           {task.status === "in_progress" ? "In Progress" : task.status === "completed" ? "Done" : "To Do"}
         </Badge>
-        <span className="mono muted" style={{ fontSize: 10 }}>{task.due_at || 'soon'}</span>
+        <span className="mono muted kanban-task-card__date">{task.due_at || "soon"}</span>
       </div>
     </div>
   );
 }
 
-function TaskColumn({ id, title, tasks, onEdit, onDelete }) {
+function TaskColumn({ id, title, icon, tasks, onEdit, onDelete }) {
   return (
-    <div className="soft-card" style={{ background: "var(--surface-alt)", display: "flex", flexDirection: "column", minHeight: 300 }}>
-      <div className="row-title" style={{ marginBottom: 12 }}>{title} ({tasks.length})</div>
-      <SortableContext id={id} items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-        <div style={{ flex: 1 }}>
-          {tasks.map(t => <SortableTaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />)}
-          {tasks.length === 0 && <div className="muted" style={{ fontSize: 12, textAlign: "center", padding: 16 }}>No tasks here.</div>}
+    <div className="soft-card kanban-column">
+      <div className="row-title kanban-column__title">
+        <Icon name={icon} size={14} />
+        <span>{title} ({tasks.length})</span>
+      </div>
+      <SortableContext id={id} items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+        <div className="kanban-column__body">
+          {tasks.map((task) => (
+            <SortableTaskCard key={task.id} task={task} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+          {tasks.length === 0 ? <div className="kanban-column__empty">No tasks here.</div> : null}
         </div>
       </SortableContext>
     </div>
@@ -114,14 +106,14 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
   const [columns, setColumns] = useState({
     pending: [],
     in_progress: [],
-    completed: []
+    completed: [],
   });
 
   useEffect(() => {
     setColumns({
-      pending: allTasks.filter(t => !t.status || t.status === "pending"),
-      in_progress: allTasks.filter(t => t.status === "in_progress"),
-      completed: allTasks.filter(t => t.status === "completed")
+      pending: allTasks.filter((task) => !task.status || task.status === "pending"),
+      in_progress: allTasks.filter((task) => task.status === "in_progress"),
+      completed: allTasks.filter((task) => task.status === "completed"),
     });
   }, [allTasks]);
 
@@ -133,10 +125,10 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
   function handleDragOver(event) {
     const { active, over } = event;
     if (!over) return;
-    
+
     const activeId = active.id;
     const overId = over.id;
-    
+
     if (activeId === overId) return;
 
     const activeContainer = active.data.current?.sortable?.containerId;
@@ -149,22 +141,22 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
     setColumns((prev) => {
       const activeItems = [...prev[activeContainer]];
       const overItems = [...prev[overContainer]];
-      
-      const activeIndex = activeItems.findIndex(t => t.id === activeId);
-      const overIndex = overItems.findIndex(t => t.id === overId);
-      
-      let newIndex = overIndex >= 0 ? overIndex : overItems.length;
+
+      const activeIndex = activeItems.findIndex((task) => task.id === activeId);
+      const overIndex = overItems.findIndex((task) => task.id === overId);
+
+      const newIndex = overIndex >= 0 ? overIndex : overItems.length;
 
       const item = activeItems[activeIndex];
       activeItems.splice(activeIndex, 1);
-      
+
       const updatedItem = { ...item, status: overContainer };
       overItems.splice(newIndex, 0, updatedItem);
 
       return {
         ...prev,
         [activeContainer]: activeItems,
-        [overContainer]: overItems
+        [overContainer]: overItems,
       };
     });
   }
@@ -172,35 +164,35 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
   function handleDragEnd(event) {
     const { active, over } = event;
     if (!over) return;
-    
+
     const activeContainer = active.data.current?.sortable?.containerId;
     const overContainer = over.data.current?.sortable?.containerId || over.id;
 
     if (activeContainer && overContainer && activeContainer !== overContainer) {
-       onTaskStatusChange(active.id, overContainer);
+      onTaskStatusChange(active.id, overContainer);
     } else if (activeContainer && overContainer && activeContainer === overContainer) {
-       const activeIndex = columns[activeContainer].findIndex(t => t.id === active.id);
-       const overIndex = columns[overContainer].findIndex(t => t.id === over.id);
-       if (activeIndex !== overIndex) {
-         setColumns((prev) => ({
-           ...prev,
-           [activeContainer]: arrayMove(prev[activeContainer], activeIndex, overIndex)
-         }));
-       }
+      const activeIndex = columns[activeContainer].findIndex((task) => task.id === active.id);
+      const overIndex = columns[overContainer].findIndex((task) => task.id === over.id);
+      if (activeIndex !== overIndex) {
+        setColumns((prev) => ({
+          ...prev,
+          [activeContainer]: arrayMove(prev[activeContainer], activeIndex, overIndex),
+        }));
+      }
     }
   }
 
   return (
-    <DndContext 
-      sensors={sensors} 
-      collisionDetection={closestCorners} 
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="grid-3">
-        <TaskColumn id="pending" title="📋 To Do" tasks={columns.pending} onEdit={onEdit} onDelete={onDelete} />
-        <TaskColumn id="in_progress" title="🔄 In Progress" tasks={columns.in_progress} onEdit={onEdit} onDelete={onDelete} />
-        <TaskColumn id="completed" title="✅ Done" tasks={columns.completed} onEdit={onEdit} onDelete={onDelete} />
+        <TaskColumn id="pending" title="To Do" icon="task" tasks={columns.pending} onEdit={onEdit} onDelete={onDelete} />
+        <TaskColumn id="in_progress" title="In Progress" icon="reports" tasks={columns.in_progress} onEdit={onEdit} onDelete={onDelete} />
+        <TaskColumn id="completed" title="Done" icon="check" tasks={columns.completed} onEdit={onEdit} onDelete={onDelete} />
       </div>
     </DndContext>
   );
