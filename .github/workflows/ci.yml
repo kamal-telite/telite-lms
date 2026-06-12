@@ -225,12 +225,13 @@ jobs:
         run: docker load --input /tmp/backend-image.tar
 
       - name: Scan backend image with Trivy
-        uses: aquasecurity/trivy-action@v0.34.2
-        with:
-          version: v0.69.2
-          image-ref: ${{ env.DOCKER_IMAGE_NAME }}
-          format: table
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.70.0 image \
+            --format table \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --vuln-type os,library \
+            --severity CRITICAL,HIGH \
+            ${{ env.DOCKER_IMAGE_NAME }}
