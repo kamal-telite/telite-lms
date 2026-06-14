@@ -101,7 +101,16 @@ class OrgRepository(BaseRepository[Organization]):
         Return the public (published) branding payload for a tenant slug.
         Reads from the organization_branding table via the relationship.
         """
-        org = self.get_by_slug(slug)
+        normalized_slug = slug.lower().strip()
+        org = self.get_by_slug(normalized_slug)
+        if org is None:
+            from app.models.category import Category
+
+            category = self.session.execute(
+                select(Category).where(Category.slug == normalized_slug)
+            ).scalar_one_or_none()
+            if category is not None:
+                org = self.get_by_id(category.org_id)
         if org is None:
             return None
         b = org.branding  # OrganizationBranding or None
@@ -212,7 +221,7 @@ class OrgRepository(BaseRepository[Organization]):
         # Update organization_branding (published cache)
         org = self.get_by_id(org_id)
         if org.branding is None:
-            org.branding = OrganizationBranding(organization_id=org_id)
+            org.branding = OrganizationBranding(org_id=org_id, organization_id=org_id)
             self.session.add(org.branding)
             
         org.branding.primary_color = config.get("primary_color")
@@ -264,7 +273,7 @@ class OrgRepository(BaseRepository[Organization]):
         # Update published cache
         org = self.get_by_id(org_id)
         if org.branding is None:
-            org.branding = OrganizationBranding(organization_id=org_id)
+            org.branding = OrganizationBranding(org_id=org_id, organization_id=org_id)
             self.session.add(org.branding)
             
         org.branding.primary_color = config.get("primary_color")
@@ -315,7 +324,7 @@ class OrgRepository(BaseRepository[Organization]):
             return None
 
         if org.branding is None:
-            org.branding = OrganizationBranding(organization_id=org.id)
+            org.branding = OrganizationBranding(org_id=org.id, organization_id=org.id)
             self.session.add(org.branding)
 
         for key, value in kwargs.items():

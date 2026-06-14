@@ -13,5 +13,6 @@ class RubricCriteria(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     rubric_id = Column(Integer, ForeignKey("grading_rubrics.id"), nullable=False, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     max_points = Column(Float, nullable=False)

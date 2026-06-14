@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
 from fastapi import HTTPException, status
 
+from app.core.runtime import is_production_like
 
 # JWT Configuration
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -26,14 +27,11 @@ AUTH_SECRET = os.getenv("TELITE_AUTH_SECRET", "")
 
 # Validate secret in production
 if not AUTH_SECRET:
-    # Check if we're in a production-like environment
-    env = os.getenv("ENVIRONMENT", "development").lower()
-    if env in ("production", "prod", "staging"):
+    if is_production_like():
         raise RuntimeError(
             "CRITICAL SECURITY ERROR: TELITE_AUTH_SECRET must be set in production. "
             "Generate a secure secret with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
         )
-    # Development fallback with clear warning
     AUTH_SECRET = "INSECURE-DEV-SECRET-DO-NOT-USE-IN-PRODUCTION"
     print("WARNING: Using insecure development secret. Set TELITE_AUTH_SECRET for production!")
 
@@ -62,7 +60,7 @@ def create_access_token(payload: dict[str, Any]) -> str:
             raise RuntimeError("Cannot create tokens without secure AUTH_SECRET in production")
     
     # Add standard JWT claims
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token_payload = {
         **payload,
         "iat": now,  # Issued at
@@ -89,7 +87,7 @@ def create_refresh_token(payload: dict[str, Any]) -> str:
         if env in ("production", "prod", "staging"):
             raise RuntimeError("Cannot create tokens without secure AUTH_SECRET in production")
     
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token_payload = {
         **payload,
         "iat": now,
@@ -153,13 +151,13 @@ def decode_token(token: str, token_type: str = "access") -> dict[str, Any]:
         ) from exc
 
 
-def create_access_payload(user: dict[str, Any]) -> dict[str, Any]:
+def create_access_payload(user: dict[str, Any], db: Any | None = None) -> dict[str, Any]:
     """
     Create the payload for an access token.
     Phase 4: includes full permissions list in JWT.
     """
     from app.core.permissions import build_jwt_claims
-    return build_jwt_claims(user)
+    return build_jwt_claims(user, db)
 
 
 def create_refresh_payload(user: dict[str, Any]) -> dict[str, Any]:

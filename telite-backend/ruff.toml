@@ -1,0 +1,13 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"app/db/migrations/**" = ["E501", "F401"]
+"tests/conftest.py" = ["E402"]
+"app/db/init_db.py" = ["UP038"]
+"app/core/permissions.py" = ["E712"]
+"app/main.py" = ["F401", "I001"]

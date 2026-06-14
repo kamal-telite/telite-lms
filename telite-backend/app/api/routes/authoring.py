@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import copy
+import json
 import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -11,7 +12,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.api.auth import get_current_user, require_admin, TokenData
+from app.core.permissions import require_capability
 from app.db.engine import db_session
+from app.models.builder_activity_log import BuilderActivityLog
 from app.models.course import Course
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
@@ -21,10 +24,28 @@ from app.models.media_asset import MediaAsset
 from app.models.quiz_models import QuizDefinition, QuizSettings
 from app.services.storage import storage_service
 from app.models.learning_path import LearningPath, LearningPathCourse
+from app.services.audit_service import AuditService
 
 logger = logging.getLogger("telite.authoring")
 
 authoring_router = APIRouter(prefix="/authoring", tags=["Authoring Gateway"])
+
+
+def _log_builder_activity(
+    db: Session,
+    course_id: str,
+    user_id: str,
+    org_id: int,
+    action: str,
+    payload: dict | None = None,
+) -> None:
+    db.add(BuilderActivityLog(
+        course_id=course_id,
+        user_id=user_id,
+        org_id=org_id,
+        action=action,
+        payload=json.dumps(payload or {}),
+    ))
 
 # -----------------------------------------------------------------------------
 # 1. Course Versioning & Publishing
@@ -94,7 +115,7 @@ class CreateSectionRequest(BaseModel):
 class UpdateSectionRequest(BaseModel):
     title: str
 
-@authoring_router.post("/courses/{course_id}/sections", dependencies=[Depends(require_admin)])
+@authoring_router.post("/courses/{course_id}/sections", dependencies=[Depends(require_admin), Depends(require_capability("section.create"))])
 def create_section(
     course_id: str,
     request: CreateSectionRequest,
@@ -112,11 +133,14 @@ def create_section(
         sort_order=request.sort_order
     )
     db.add(section)
+    db.flush()
+    payload = section.to_dict()
+    _log_builder_activity(db, course_id, current_user.id, current_user.org_id, "SECTION_CREATED", {"section_id": section.id, "title": section.title})
+    AuditService.log(db, current_user.org_id, current_user.id, "section", section.id, "create", course_id, after_dict=payload)
     db.commit()
-    db.refresh(section)
-    return section.to_dict()
+    return payload
 
-@authoring_router.patch("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
+@authoring_router.patch("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin), Depends(require_capability("section.edit"))])
 def update_section(
     course_id: str,
     section_id: int,
@@ -137,12 +161,15 @@ def update_section(
     if not title:
         raise HTTPException(status_code=400, detail="Section title is required")
 
+    before_dict = section.to_dict()
     section.title = title
+    payload = section.to_dict()
+    _log_builder_activity(db, course_id, current_user.id, current_user.org_id, "SECTION_UPDATED", {"section_id": section.id, "title": section.title})
+    AuditService.log(db, current_user.org_id, current_user.id, "section", section.id, "update", course_id, before_dict=before_dict, after_dict=payload)
     db.commit()
-    db.refresh(section)
-    return section.to_dict()
+    return payload
 
-@authoring_router.delete("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
+@authoring_router.delete("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin), Depends(require_capability("section.delete"))])
 def delete_section(
     course_id: str,
     section_id: int,
@@ -166,12 +193,15 @@ def delete_section(
     if module_count:
         raise HTTPException(status_code=400, detail="Move or delete modules before deleting this section")
 
+    before_dict = section.to_dict()
     section.deleted_at = datetime.now(timezone.utc)
     section.deleted_by = current_user.id
+    _log_builder_activity(db, course_id, current_user.id, current_user.org_id, "SECTION_DELETED", {"section_id": section.id, "title": section.title})
+    AuditService.log(db, current_user.org_id, current_user.id, "section", section.id, "delete", course_id, before_dict=before_dict)
     db.commit()
     return {"success": True}
 
-@authoring_router.post("/courses/{course_id}/sections/{section_id}/duplicate", dependencies=[Depends(require_admin)])
+@authoring_router.post("/courses/{course_id}/sections/{section_id}/duplicate", dependencies=[Depends(require_admin), Depends(require_capability("section.create"))])
 def duplicate_section(
     course_id: str,
     section_id: int,
@@ -242,13 +272,11 @@ def duplicate_section(
                 metadata_json=copy.deepcopy(source_block.metadata_json),
             ))
 
-    db.commit()
-    db.refresh(new_section)
-    for module in new_modules:
-        db.refresh(module)
-
     payload = new_section.to_dict()
     payload["modules"] = [module.to_dict() for module in new_modules]
+    _log_builder_activity(db, course_id, current_user.id, current_user.org_id, "SECTION_DUPLICATED", {"section_id": section.id, "new_section_id": new_section.id})
+    AuditService.log(db, current_user.org_id, current_user.id, "section", new_section.id, "duplicate", course_id, before_dict=section.to_dict(), after_dict=payload)
+    db.commit()
     return {"success": True, "section": payload}
 
 class ModuleStructureUpdate(BaseModel):
@@ -257,6 +285,7 @@ class ModuleStructureUpdate(BaseModel):
 
 class SectionStructureUpdate(BaseModel):
     section_id: int
+    sort_order: Optional[int] = None
     modules: List[ModuleStructureUpdate]
 
 class SaveStructureRequest(BaseModel):
@@ -301,7 +330,7 @@ def list_course_quizzes(
 
     return {"quizzes": [_quiz_to_response(quiz, module) for quiz, module in rows]}
 
-@authoring_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin)])
+@authoring_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin), Depends(require_capability("section.edit")), Depends(require_capability("module.edit"))])
 def update_course_structure(
     course_id: str,
     request: SaveStructureRequest,
@@ -334,6 +363,10 @@ def update_course_structure(
     for sec_update in request.updates:
         section_id = None if sec_update.section_id == 0 else sec_update.section_id
         section = sections_by_id.get(section_id)
+        if section and sec_update.sort_order is not None and section.sort_order != sec_update.sort_order:
+            before_dict = section.to_dict()
+            section.sort_order = sec_update.sort_order
+            AuditService.log(db, current_user.org_id, current_user.id, "section", section.id, "update", course_id, before_dict=before_dict, after_dict=section.to_dict())
             
         for mod_update in sec_update.modules:
             module = db.query(CourseModule).filter(
@@ -344,10 +377,14 @@ def update_course_structure(
             ).first()
             if not module:
                 raise HTTPException(status_code=404, detail=f"Module {mod_update.module_id} not found")
+            before_dict = module.to_dict()
             module.section_id = section.id if section else None
             module.section = section.sort_order if section else -1
             module.sort_order = mod_update.sort_order
+            if before_dict != module.to_dict():
+                AuditService.log(db, current_user.org_id, current_user.id, "module", module.id, "update", course_id, before_dict=before_dict, after_dict=module.to_dict())
                 
+    _log_builder_activity(db, course_id, current_user.id, current_user.org_id, "STRUCTURE_UPDATED", {"updates": [u.dict() for u in request.updates]})
     db.commit()
     return {"success": True}
 
@@ -385,9 +422,10 @@ def create_lesson_block(
         sort_order=request.sort_order
     )
     db.add(block)
+    db.flush()
+    payload = block.to_dict()
     db.commit()
-    db.refresh(block)
-    return block.to_dict()
+    return payload
 
 class BlockOrderUpdate(BaseModel):
     block_id: int
@@ -554,7 +592,7 @@ class UpdateModuleRequest(BaseModel):
     title: str
     content_url: str | None = None
 
-@authoring_router.post("/modules", dependencies=[Depends(require_admin)])
+@authoring_router.post("/modules", dependencies=[Depends(require_admin), Depends(require_capability("module.create"))])
 def create_module(
     request: CreateModuleRequest,
     db: Session = Depends(db_session),
@@ -563,6 +601,9 @@ def create_module(
     course = db.query(Course).filter(Course.id == request.course_id, Course.org_id == current_user.org_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Module title is required")
     # Create native interactive module record
     # Note: Moodle proxy sync has been retired.
     
@@ -576,18 +617,22 @@ def create_module(
         if not section:
             raise HTTPException(status_code=404, detail="Section not found")
 
-    max_order = db.query(CourseModule).filter(
+    module_order_query = db.query(CourseModule).filter(
         CourseModule.course_id == request.course_id, 
         CourseModule.org_id == current_user.org_id,
         CourseModule.deleted_at.is_(None),
-        CourseModule.section_id == request.section_id if request.section_id else CourseModule.section == request.section
-    ).count()
+    )
+    if section:
+        module_order_query = module_order_query.filter(CourseModule.section_id == section.id)
+    else:
+        module_order_query = module_order_query.filter(CourseModule.section_id.is_(None), CourseModule.section == request.section)
+    max_order = module_order_query.count()
 
     new_module = CourseModule(
         course_id=course.id,
         section=section.sort_order if section else request.section,
         section_id=section.id if section else None,
-        title=request.title,
+        title=title,
         module_type=request.module_type,
         sort_order=max_order,
         content_url=request.content_url,
@@ -602,15 +647,17 @@ def create_module(
             org_id=current_user.org_id,
             module_id=new_module.id,
             title=new_module.title,
-        )
+            )
         db.add(quiz)
 
+    payload = new_module.to_dict()
+    _log_builder_activity(db, course.id, current_user.id, current_user.org_id, "MODULE_CREATED", {"module_id": new_module.id, "title": new_module.title})
+    AuditService.log(db, current_user.org_id, current_user.id, "module", new_module.id, "create", course.id, after_dict=payload)
     db.commit()
-    db.refresh(new_module)
     
-    return {"success": True, "module": new_module.to_dict()}
+    return {"success": True, "module": payload}
 
-@authoring_router.put("/modules/{module_id}", dependencies=[Depends(require_admin)])
+@authoring_router.put("/modules/{module_id}", dependencies=[Depends(require_admin), Depends(require_capability("module.edit"))])
 def update_module(
     module_id: int,
     request: UpdateModuleRequest,
@@ -623,16 +670,19 @@ def update_module(
     # Update module in the database
     # Note: Moodle module update sync is retired.
 
+    before_dict = module.to_dict()
     module.title = request.title
     if request.content_url is not None:
         module.content_url = request.content_url
-        
-    db.commit()
-    db.refresh(module)
-    
-    return {"success": True, "module": module.to_dict()}
 
-@authoring_router.post("/modules/{module_id}/duplicate", dependencies=[Depends(require_admin)])
+    payload = module.to_dict()
+    _log_builder_activity(db, module.course_id, current_user.id, current_user.org_id, "MODULE_UPDATED", {"module_id": module.id, "title": module.title})
+    AuditService.log(db, current_user.org_id, current_user.id, "module", module.id, "update", module.course_id, before_dict=before_dict, after_dict=payload)
+    db.commit()
+    
+    return {"success": True, "module": payload}
+
+@authoring_router.post("/modules/{module_id}/duplicate", dependencies=[Depends(require_admin), Depends(require_capability("module.create"))])
 def duplicate_module(
     module_id: int,
     db: Session = Depends(db_session),
@@ -715,12 +765,14 @@ def duplicate_module(
             metadata_json=copy.deepcopy(source_block.metadata_json),
         ))
 
+    payload = new_module.to_dict()
+    _log_builder_activity(db, source_module.course_id, current_user.id, current_user.org_id, "MODULE_DUPLICATED", {"module_id": source_module.id, "new_module_id": new_module.id})
+    AuditService.log(db, current_user.org_id, current_user.id, "module", new_module.id, "duplicate", source_module.course_id, before_dict=source_module.to_dict(), after_dict=payload)
     db.commit()
-    db.refresh(new_module)
 
-    return {"success": True, "module": new_module.to_dict()}
+    return {"success": True, "module": payload}
 
-@authoring_router.delete("/modules/{module_id}", dependencies=[Depends(require_admin)])
+@authoring_router.delete("/modules/{module_id}", dependencies=[Depends(require_admin), Depends(require_capability("module.delete"))])
 def delete_module(
     module_id: int,
     db: Session = Depends(db_session),
@@ -734,6 +786,7 @@ def delete_module(
     if not module:
         raise HTTPException(status_code=404, detail="Module not found")
 
+    before_dict = module.to_dict()
     now = datetime.now(timezone.utc)
     module.deleted_at = now
     module.deleted_by = current_user.id
@@ -755,6 +808,8 @@ def delete_module(
     for quiz in quiz_definitions:
         quiz.deleted_at = now
         quiz.deleted_by = current_user.id
+    _log_builder_activity(db, module.course_id, current_user.id, current_user.org_id, "MODULE_DELETED", {"module_id": module.id, "title": module.title})
+    AuditService.log(db, current_user.org_id, current_user.id, "module", module.id, "delete", module.course_id, before_dict=before_dict)
     db.commit()
     return {"success": True}
 

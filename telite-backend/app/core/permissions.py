@@ -2,14 +2,79 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
+
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, TokenData
+from app.api.auth import TokenData, get_current_user
+from app.core.rbac import ROLE_PERMISSIONS
 from app.db.engine import db_session
 from app.models.role_permission import RolePermission
 from app.services.audit_service import AuditService
+
+
+def resolve_permissions(
+    role: str,
+    is_platform_admin: bool = False,
+    category_scope: str | None = None,
+    org_id: int | None = None,
+    db: Session | None = None,
+) -> list[str]:
+    """Merge role defaults with per-organization permission overrides."""
+    _ = category_scope
+
+    if is_platform_admin:
+        return sorted(ROLE_PERMISSIONS.get("platform_admin", set()))
+
+    effective_role = role or "learner"
+    permissions = set(ROLE_PERMISSIONS.get(effective_role, set()))
+
+    if db is not None and org_id is not None:
+        overrides = (
+            db.query(RolePermission)
+            .filter(
+                RolePermission.org_id == org_id,
+                RolePermission.role == effective_role,
+            )
+            .all()
+        )
+        for override in overrides:
+            if override.enabled:
+                permissions.add(override.permission_key)
+            else:
+                permissions.discard(override.permission_key)
+
+    return sorted(permissions)
+
+
+def build_jwt_claims(user: dict[str, Any], db: Session | None = None) -> dict[str, Any]:
+    """Build JWT claims, including resolved permissions, for an authenticated user."""
+    role = user.get("role") or "learner"
+    is_platform_admin = bool(user.get("is_platform_admin", False))
+    category_scope = user.get("category_scope")
+    org_id = user.get("org_id") or user.get("organization_id")
+
+    permissions = resolve_permissions(
+        role,
+        is_platform_admin,
+        category_scope,
+        org_id,
+        db,
+    )
+
+    return {
+        "sub": user["id"],
+        "email": user["email"],
+        "role": role,
+        "name": user["full_name"],
+        "org_id": org_id,
+        "category_scope": category_scope,
+        "is_platform_admin": is_platform_admin,
+        "permissions": permissions,
+    }
+
 
 def require_capability(permission_key: str) -> Callable:
     """

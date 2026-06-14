@@ -23,40 +23,64 @@ logger = logging.getLogger("telite.db.rls")
 
 # Tables that require tenant isolation via RLS
 TENANT_SCOPED_TABLES = [
-    "users",
+    "activity_log",
+    "alert_rules",
+    "audit_log",
+    "auth_sessions",
+    "branding_assets",
+    "branding_audit_logs",
+    "branding_versions",
+    "builder_activity_log",
     "categories",
+    "course_edit_locks",
+    "course_modules",
+    "course_progress",
+    "course_reviews",
+    "course_sections",
+    "course_versions",
     "courses",
     "enrollment_requests",
-    "tasks",
-    "audit_log",
-    "activity_log",
+    "grading_events",
+    "grading_rubrics",
+    "interactive_tracking",
+    "learner_activity_log",
+    "learner_events",
+    "learning_path_courses",
+    "learning_path_progress",
+    "learning_paths",
+    "lesson_block_progress",
+    "lesson_blocks",
+    "media_assets",
+    "memberships",
+    "module_progress",
+    "moodle_sync_logs",
+    "moodle_tenants",
     "notifications",
-    "auth_sessions",
-    "password_reset_tokens",
-    "org_feature_flags",
     "org_invitations",
+    "organization_branding",
     "pal_quiz_scores",
     "pal_recommendations",
     "pal_topic_performance",
+    "password_reset_tokens",
+    "pending_verifications",
+    "question_banks",
+    "question_versions",
+    "questions",
+    "quiz_answers",
+    "quiz_attempt_events",
+    "quiz_attempt_questions",
+    "quiz_attempts",
+    "quiz_definitions",
+    "quiz_settings",
+    "role_permissions",
+    "rubric_criteria",
+    "tasks",
+    "users",
 ]
 
 # Column name used for tenant isolation per table
 TABLE_ORG_COLUMN = {
-    "users": "org_id",
-    "categories": "organization_id",
-    "courses": "org_id",
-    "enrollment_requests": "org_id",
-    "tasks": "org_id",
-    "audit_log": "org_id",
-    "activity_log": "org_id",
-    "notifications": "org_id",
-    "auth_sessions": "org_id",
-    "password_reset_tokens": "org_id",
-    "org_feature_flags": "org_id",
-    "org_invitations": "org_id",
-    "pal_quiz_scores": "org_id",
-    "pal_recommendations": "org_id",
-    "pal_topic_performance": "org_id",
+    table: "org_id" for table in TENANT_SCOPED_TABLES
 }
 
 
@@ -93,9 +117,6 @@ def apply_rls_policies(session: Session) -> None:
             # Enable RLS on the table
             session.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
 
-            # Force RLS even for table owner (prevents accidental bypass)
-            session.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
-
             # Drop existing policy if present (idempotent)
             session.execute(text(f"DROP POLICY IF EXISTS {policy_name} ON {table}"))
 
@@ -107,8 +128,12 @@ def apply_rls_policies(session: Session) -> None:
                     f"""
                     CREATE POLICY {policy_name} ON {table}
                     USING (
-                        {org_col} = current_setting('app.current_org_id', true)::INTEGER
-                        OR current_setting('app.bypass_rls', true) = 'on'
+                        current_setting('app.bypass_rls', true) = 'on'
+                        OR {org_col} = NULLIF(current_setting('app.current_org_id', true), '')::INTEGER
+                    )
+                    WITH CHECK (
+                        current_setting('app.bypass_rls', true) = 'on'
+                        OR {org_col} = NULLIF(current_setting('app.current_org_id', true), '')::INTEGER
                     )
                     """
                 )

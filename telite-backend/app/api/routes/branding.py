@@ -63,9 +63,19 @@ def branding_health(tenant_slug: str) -> dict[str, Any]:
     if org is None:
         raise HTTPException(status_code=404, detail="Tenant not found.")
 
+    branding = org.branding
     return {
         "slug": org.slug,
         "name": org.name,
         "status": org.status,
-        "has_branding": bool(org.primary_color or org.logo_url),
+        "has_branding": bool(
+            branding
+            and (
+                branding.primary_color
+                or branding.secondary_color
+                or branding.logo_url
+                or branding.favicon_url
+                or branding.login_banner_url
+            )
+        ),
     }

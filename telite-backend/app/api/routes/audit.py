@@ -1,23 +1,23 @@
 import csv
+import json
 from datetime import datetime
 from io import StringIO
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import desc
 
 from app.api.auth import get_current_user, TokenData
 from app.db.engine import db_session
-from app.models.audit_log import AuditLog
-from app.models.user import User
+from app.models.audit import AuditLog
 from app.core.permissions import require_capability
 
 audit_router = APIRouter(prefix="/api/v1/audit-logs", tags=["Audit Logs"])
 
 def _generate_summary(log: AuditLog) -> str:
     action = log.action.lower()
-    entity = log.entity_type.replace("_", " ").title()
+    entity = (log.target_type or "record").replace("_", " ").title()
     
     # Format action to be human readable
     if action == "create":
@@ -44,19 +44,28 @@ def _generate_summary(log: AuditLog) -> str:
         
     return f"{action_str} {entity}"
 
+def _metadata(log: AuditLog) -> dict:
+    if not log.metadata_json:
+        return {}
+    try:
+        value = json.loads(log.metadata_json)
+        return value if isinstance(value, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
 def _build_audit_query(db: Session, current_user: TokenData, course_id: str = None, action: str = None, user_id: str = None, entity_type: str = None, start_date: str = None, end_date: str = None):
-    query = db.query(AuditLog, User).outerjoin(User, User.id == AuditLog.user_id).filter(
+    query = db.query(AuditLog).filter(
         AuditLog.org_id == current_user.org_id
     )
 
     if course_id:
-        query = query.filter(AuditLog.course_id == course_id)
+        query = query.filter(AuditLog.metadata_json.ilike(f'%"course_id": "{course_id}"%'))
     if action:
         query = query.filter(AuditLog.action.ilike(f"%{action}%"))
     if user_id:
-        query = query.filter(AuditLog.user_id == user_id)
+        query = query.filter(AuditLog.actor_user_id == user_id)
     if entity_type:
-        query = query.filter(AuditLog.entity_type == entity_type)
+        query = query.filter(AuditLog.target_type == entity_type)
         
     if start_date:
         try:
@@ -94,19 +103,20 @@ def list_audit_logs(
     results = query.offset(offset).limit(page_size).all()
     
     items = []
-    for log, user in results:
-        actor_name = f"{user.first_name} {user.last_name}".strip() if user else log.user_id
+    for log in results:
+        metadata = _metadata(log)
         items.append({
             "id": log.id,
             "created_at": log.created_at.isoformat() if log.created_at else None,
-            "actor_name": actor_name,
-            "user_id": log.user_id,
+            "actor_name": log.actor_name,
+            "user_id": log.actor_user_id,
             "action": log.action,
-            "entity_type": log.entity_type,
-            "entity_id": log.entity_id,
-            "summary": _generate_summary(log),
-            "before_json": log.before_json,
-            "after_json": log.after_json
+            "entity_type": log.target_type,
+            "entity_id": log.target_id,
+            "summary": log.message or _generate_summary(log),
+            "course_id": metadata.get("course_id"),
+            "before_json": metadata.get("before_json"),
+            "after_json": metadata.get("after_json")
         })
         
     return {
@@ -134,16 +144,15 @@ def export_audit_logs(
     writer = csv.writer(output)
     writer.writerow(["ID", "Date", "Actor", "Action", "Entity Type", "Entity ID", "Summary"])
     
-    for log, user in results:
-        actor_name = f"{user.first_name} {user.last_name}".strip() if user else log.user_id
+    for log in results:
         writer.writerow([
             log.id,
             log.created_at.isoformat() if log.created_at else "",
-            actor_name,
+            log.actor_name,
             log.action,
-            log.entity_type,
-            log.entity_id,
-            _generate_summary(log)
+            log.target_type,
+            log.target_id,
+            log.message or _generate_summary(log)
         ])
         
     return Response(

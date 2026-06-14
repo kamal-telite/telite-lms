@@ -12,7 +12,7 @@ from app.core.rbac import validate_enrollment_access
 from sqlalchemy.orm import Session
 from app.db.engine import db_session
 from app.repositories.enrollment_repo import EnrollmentRepository
-from app.repositories.user_repo import UserRepository
+from app.repositories.user_repo import UserRepository, fetch_user_by_id
 from app.repositories.course_repo import CourseRepository
 from app.repositories.audit_repo import AuditRepository
 from app.core.password_utils import hash_password, get_default_learner_password
@@ -23,6 +23,9 @@ import json
 
 
 enrol_router = APIRouter(prefix="/enrol", tags=["Enrollment"])
+
+def is_category_admin_role(role: str) -> bool:
+    return role == "category_admin"
 
 def _default_progress(courses):
     return [
@@ -203,8 +206,9 @@ def get_enrollment_requests(
     scoped_org_id = resolve_org_scope(current_user, org_id)
     if is_category_admin_role(current_user.role):
         category_slug = current_user.category_scope
-    statuses = [status] if status else None
-    return {"requests": list_enrollment_requests(category_slug=category_slug, statuses=statuses, org_id=scoped_org_id)}
+    repo = EnrollmentRepository(db)
+    rows = repo.list_by_org(scoped_org_id, status=status, category_slug=category_slug)
+    return {"requests": [row.to_dict() for row in rows]}
 
 
 @enrol_router.post("/requests/{request_id}/approve")

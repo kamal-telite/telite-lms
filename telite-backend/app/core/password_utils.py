@@ -7,9 +7,14 @@ replacing hardcoded passwords with environment-based or generated passwords.
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 import string
+
+from app.core.runtime import is_production_like
+
+logger = logging.getLogger("telite.password")
 
 
 def generate_secure_password(length: int = 16) -> str:
@@ -139,9 +144,22 @@ def generate_reset_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def _password_salt() -> bytes:
+    salt_value = os.getenv("TELITE_PASSWORD_SALT", "").strip()
+    if salt_value:
+        return salt_value.encode("utf-8")
+    if is_production_like():
+        raise RuntimeError(
+            "CRITICAL SECURITY ERROR: TELITE_PASSWORD_SALT must be set in production."
+        )
+    logger.warning("TELITE_PASSWORD_SALT not set — using development-only salt")
+    return b"telite-dev-salt"
+
+
 def hash_password(password: str) -> str:
     import hashlib
-    salt = os.getenv("TELITE_PASSWORD_SALT", "telite-dev-salt").encode("utf-8")
+
+    salt = _password_salt()
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120_000).hex()
 
 

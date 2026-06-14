@@ -36,7 +36,7 @@ from app.core.rate_limiter import clear_attempts, is_limited, record_attempt
 from app.services.email import send_password_reset_email
 from app.core.password_utils import verify_password
 from sqlalchemy.orm import Session
-from app.db.engine import db_session
+from app.db.engine import apply_platform_context, apply_tenant_context, db_session, platform_db_session
 from app.repositories.user_repo import UserRepository, fetch_user_by_id
 from app.repositories.auth_repo import AuthRepository
 
@@ -262,6 +262,11 @@ def get_current_user(
         )
 
     payload = decode_token(token, token_type="access")
+    if payload.get("is_platform_admin"):
+        apply_platform_context(db)
+    elif payload.get("org_id") is not None:
+        apply_tenant_context(db, int(payload["org_id"]))
+
     repo = UserRepository(db)
     user = repo.get_by_id(payload["sub"])
     if not user or not user.is_active:
@@ -359,7 +364,7 @@ def ensure_org_access(current_user: TokenData, target_org_id: int | None) -> int
 
 def _build_token_response(user: dict[str, Any], refresh_token: str, db: Session | None = None) -> TokenResponse:
     from app.core.permissions import resolve_permissions
-    access_token = create_access_token(create_access_payload(user))
+    access_token = create_access_token(create_access_payload(user, db))
     permissions = resolve_permissions(
         user["role"],
         bool(user.get("is_platform_admin")),
@@ -439,7 +444,7 @@ def login(
     request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(db_session),
+    db: Session = Depends(platform_db_session),
 ) -> TokenResponse:
     client_ip = _client_ip(request)
     ip_key = _rate_key("auth-login-ip", client_ip)
@@ -467,7 +472,7 @@ def refresh(
     response: Response,
     body: RefreshRequest | None = None,
     cookie_refresh: str | None = Cookie(default=None, alias="telite_refresh_token"),
-    db: Session = Depends(db_session),
+    db: Session = Depends(platform_db_session),
 ) -> TokenResponse:
     # Prefer cookie, fall back to body
     refresh_token = cookie_refresh or (body.refresh_token if body else None)
@@ -573,18 +578,17 @@ def reset_password(body: ResetPasswordRequest, request: Request) -> dict[str, st
 
 @auth_router.get("/me")
 def get_me(current_user: TokenData = Depends(get_current_user)) -> dict[str, Any]:
-    user = fetch_user_by_id(current_user.id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
     return {
-        "user_id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "name": user.full_name,
-        "role": user.role,
-        "category_scope": user.category_scope,
-        "org_id": user.org_id,
-        "is_platform_admin": bool(user.is_platform_admin),
-        "is_active": user.is_active,
+        "user_id": current_user.id,
+        "id": current_user.id,
+        "username": current_user.email.split("@", 1)[0],
+        "email": current_user.email,
+        "name": current_user.full_name,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "category_scope": current_user.category_scope,
+        "org_id": current_user.org_id,
+        "is_platform_admin": bool(current_user.is_platform_admin),
+        "is_active": True,
         "permissions": current_user.permissions,
     }

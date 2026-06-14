@@ -78,11 +78,18 @@ export function LearnerPlayer({ courseId, onExit }) {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          events: [{
-            event_type: "MODULE_STARTED",
-            course_id: courseId,
-            module_id: activeModule.id
-          }]
+          events: [
+            {
+              event_type: "MODULE_STARTED",
+              course_id: courseId,
+              module_id: activeModule.id
+            },
+            {
+              event_type: "MODULE_VIEWED",
+              course_id: courseId,
+              module_id: activeModule.id
+            }
+          ]
         })
       }).catch(() => {});
     }

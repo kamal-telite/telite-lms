@@ -15,7 +15,7 @@ from app.core.utils import slugify
 import sqlalchemy
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.db.engine import db_session
+from app.db.engine import db_session, platform_db_session
 from app.repositories.user_repo import UserRepository
 from app.repositories.org_repo import OrgRepository
 from app.repositories.signup_repo import SignupRepository
@@ -91,20 +91,28 @@ class RejectPayload(BaseModel):
 
 
 @signup_router.get("/signup/organizations")
-def get_organizations(type: str | None = Query(default=None), db: Session = Depends(db_session)):
+def get_organizations(type: str | None = Query(default=None), db: Session = Depends(platform_db_session)):
     org_repo = OrgRepository(db)
     orgs = org_repo.list_all(org_type=type)
-    return [
-        {
+    payload: list[dict[str, Any]] = []
+    for org in orgs:
+        branding = org.branding
+        payload.append(
+            {
             "id": org.id,
             "name": org.name,
+            "slug": org.slug,
             "domain": org.domain,
             "type": org.type,
             "status": org.status,
-            "branding_colors": org.branding_colors,
+            "branding_colors": {
+                "primary": (branding.primary_color if branding else None) or "#2563EB",
+                "secondary": (branding.secondary_color if branding else None) or "#111827",
+            },
+            "branding": branding.to_dict() if branding else None,
         }
-        for org in orgs
-    ]
+        )
+    return payload
 
 
 @signup_router.get("/signup/roles/{domain_type}")

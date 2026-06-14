@@ -33,38 +33,46 @@ function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDe
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    padding: "8px 12px",
-    margin: "4px 0",
-    background: isActive ? "#eff6ff" : "#fff",
-    border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
-    borderRadius: "6px",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    cursor: "pointer",
-    opacity: isDragging ? 0.5 : 1,
-    boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.1)" : "none",
-    position: "relative",
-    zIndex: isDragging ? 1 : 0,
+    ...(isDragging ? { zIndex: 1 } : {}),
   };
 
+  const className = `syllabus-module ${isActive ? "syllabus-module--active" : ""} ${isDragging ? "syllabus-module--dragging" : ""}`;
+
   return (
-    <div ref={setNodeRef} style={style} onClick={() => onClick(module.id)}>
+    <div ref={setNodeRef} style={style} className={className} onClick={() => onClick(module.id)}>
       <div 
         {...attributes} 
         {...listeners} 
-        style={{ cursor: "grab", color: "#94a3b8", display: "flex", alignItems: "center" }}
+        className="syllabus-module__drag"
         onClick={(e) => e.stopPropagation()}
       >
-        ⋮⋮
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9" cy="5" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="19" r="1" />
+          <circle cx="15" cy="5" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="19" r="1" />
+        </svg>
       </div>
-      <div style={{ flex: 1, fontSize: "13px", color: isActive ? "#1e3a8a" : "#334155", fontWeight: isActive ? 500 : 400 }}>
+      <div className="syllabus-module__icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+        </svg>
+      </div>
+      <div className="syllabus-module__title">
         {module.title}
       </div>
+      <div className="syllabus-module__meta">
+        <div className="syllabus-module__count">{module.blocks?.length || 0}</div>
+        <div className={`syllabus-module__status syllabus-module__status--${module.validationStatus || 'empty'}`} />
+      </div>
       {canEdit && (
-        <>
+        <div className="syllabus-module__actions">
           <IconButton
             icon="pencil"
+            size="small"
             label={`Rename ${module.title}`}
             onClick={(event) => {
               event.stopPropagation();
@@ -73,6 +81,7 @@ function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDe
           />
           <IconButton
             icon="copy"
+            size="small"
             label={`Duplicate ${module.title}`}
             onClick={(event) => {
               event.stopPropagation();
@@ -81,13 +90,14 @@ function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDe
           />
           <IconButton
             icon="trash"
+            size="small"
             label={`Delete ${module.title}`}
             onClick={(event) => {
               event.stopPropagation();
               onDelete(module);
             }}
           />
-        </>
+        </div>
       )}
     </div>
   );
@@ -122,30 +132,35 @@ function SyllabusSection({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    marginBottom: "24px",
-    borderRadius: "8px",
-    opacity: isDragging ? 0.5 : 1,
-    boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.1)" : "none",
-    position: "relative",
-    zIndex: isDragging ? 1 : 0,
-    background: "#fff",
+    ...(isDragging ? { opacity: 0.5, boxShadow: "var(--shadow-lg)", zIndex: 1 } : {}),
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-          <span {...attributes} {...listeners} style={{ cursor: "grab", color: "#94a3b8", padding: "4px" }}>⋮⋮</span>
+    <div ref={setNodeRef} style={style} className="syllabus-section">
+      <div className="syllabus-section__header">
+        <div className="syllabus-section__title">
+          <span {...attributes} {...listeners} className="syllabus-module__drag" style={{ padding: "4px" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="5" r="1" />
+              <circle cx="9" cy="12" r="1" />
+              <circle cx="9" cy="19" r="1" />
+              <circle cx="15" cy="5" r="1" />
+              <circle cx="15" cy="12" r="1" />
+              <circle cx="15" cy="19" r="1" />
+            </svg>
+          </span>
           <IconButton
             icon={isCollapsed ? "chevronRight" : "chevronDown"}
+            size="small"
             label={isCollapsed ? `Expand ${section.title}` : `Collapse ${section.title}`}
             onClick={() => onToggleCollapsed(section.id)}
           />
-          <div style={{ fontWeight: 600, fontSize: "14px", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="syllabus-section__name">
             {section.title}
           </div>
+          <div className="syllabus-section__count">{modules.length}</div>
         </div>
-        <div style={{ display: "flex", gap: "4px" }}>
+        <div className="syllabus-section__actions">
           {canEdit && (
             <>
               <IconButton icon="pencil" size="small" label={`Rename ${section.title}`} onClick={() => onRenameSection(section)} />
@@ -176,7 +191,7 @@ function SyllabusSection({
               />
             ))}
             {modules.length === 0 && (
-              <div style={{ padding: "12px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "6px", fontSize: "12px", color: "#64748b", textAlign: "center" }}>
+              <div className="syllabus-empty">
                 No modules in this section.
               </div>
             )}

@@ -12,6 +12,9 @@ class OrganizationBranding(Base, TimestampMixin):
     __tablename__ = "organization_branding"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    org_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     organization_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False
     )
@@ -38,12 +41,15 @@ class OrganizationBranding(Base, TimestampMixin):
 
     # Relationships
     organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
-        "Organization", back_populates="branding"
+        "Organization",
+        back_populates="branding",
+        foreign_keys=[organization_id],
     )
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "org_id": self.org_id,
             "organization_id": self.organization_id,
             "logo_url": self.logo_url,
             "favicon_url": self.favicon_url,

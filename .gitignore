@@ -107,6 +107,10 @@ output/
 /.cursor/
 /.agents/
 /.jetro/
+/.mcp.json
+/.windsurfrules
+/AGENT.md
+/CLAUDE.md
 *.swp
 *.swo
 *~
@@ -122,3 +126,5 @@ Project_docs/
 commit_*.txt
 context.md
 *.patch
+*.rej
+*.orig

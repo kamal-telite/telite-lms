@@ -32,12 +32,10 @@ export function BuilderInspectorPanel({
   activeModule,
   activeBlock,
   onBlockSettingChange,
-  validationStatus,
   lockState,
   onOpenHistory,
 }) {
   const moduleCount = (activeSection?.modules || []).length;
-  const errors = validationStatus?.errors || [];
   const blockSettings = activeBlock?.settings || {};
   
   const InspectorComponent = activeBlock ? inspectorRegistry[activeBlock.block_type] : null;
@@ -128,21 +126,6 @@ export function BuilderInspectorPanel({
           ) : (
             <div style={{ color: "#64748b", fontSize: "13px" }}>No section selected.</div>
           )}
-        </SectionCard>
-
-        <SectionCard title="Readiness">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ color: "#64748b", fontSize: "13px" }}>Validation</span>
-            <Badge tone={errors.length ? "danger" : "success"}>{errors.length ? `${errors.length} issues` : "Ready"}</Badge>
-          </div>
-          {errors.slice(0, 4).map((error, index) => (
-            <div key={`${error}-${index}`} style={{ color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", padding: "8px", fontSize: "12px" }}>
-              {error}
-            </div>
-          ))}
-          {errors.length > 4 ? (
-            <div style={{ color: "#64748b", fontSize: "12px" }}>{errors.length - 4} more issue(s)</div>
-          ) : null}
         </SectionCard>
 
         <SectionCard title="Lock">

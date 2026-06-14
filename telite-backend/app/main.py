@@ -5,13 +5,14 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.auth import auth_router
+from app.api.auth import TokenData, auth_router, get_current_user
 from app.api.routes.dashboard import dashboard_router
 from app.api.routes.enrolments import enrol_router
 from app.api.routes.management import management_router
@@ -29,25 +30,19 @@ from app.api.routes.media import media_router
 from app.api.routes.permissions import permissions_router
 from app.api.routes.learning_paths import learning_paths_router
 from app.api.routes.audit import audit_router
-from app.core.request_context import reset_request_id, set_request_id
 from app.core.domain_context import resolve_domain_context
+from app.core.logging_config import configure_logging
 from app.core.rate_limiter import close_redis_connection
+from app.core.request_context import reset_request_id, set_request_id
+from app.core.runtime import is_production_like
 from app.db.engine import dispose_engine, db_session
 from sqlalchemy.orm import Session
-from app.repositories.course_repo import CategoryRepository
-from app.repositories.user_repo import UserRepository
-from app.repositories.org_repo import OrgRepository
-from app.repositories.invite_repo import InviteRepository
 from app.db.init_db import run_phase3_init
 
-# ── Structured logging ───────────────────────────────────────────────────────
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+configure_logging()
 logger = logging.getLogger("telite.api")
+
+_metrics = {"http_requests_total": 0, "http_errors_total": 0}
 
 
 # ── App lifecycle ────────────────────────────────────────────────────────────
@@ -65,11 +60,15 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
+    _prod = is_production_like()
     app = FastAPI(
         title="Telite LMS API",
-        description="Role-aware backend for the Telite Systems LMS mockups",
+        description="Role-aware backend for the Telite Systems LMS",
         version="5.1.0",
         lifespan=lifespan,
+        docs_url=None if _prod else "/docs",
+        redoc_url=None if _prod else "/redoc",
+        openapi_url=None if _prod else "/openapi.json",
     )
 
     _default_origins = [
@@ -130,6 +129,9 @@ def create_app() -> FastAPI:
             )
         else:
             elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+            _metrics["http_requests_total"] += 1
+            if response.status_code >= 500:
+                _metrics["http_errors_total"] += 1
             logger.info(
                 "[%s] %s %s from %s -> %d (%.1fms)",
                 request_id,
@@ -174,19 +176,44 @@ def create_app() -> FastAPI:
     app.include_router(learning_paths_router)
     app.include_router(audit_router)
 
-    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+    uploads_dir = Path(__file__).resolve().parents[1] / "uploads"
+    media_dir = uploads_dir / "media"
+    branding_dir = uploads_dir / "branding"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    branding_dir.mkdir(parents=True, exist_ok=True)
+
+    @app.get("/uploads/media/{org_id}/{filename:path}", include_in_schema=False)
+    def secure_local_media(
+        org_id: int,
+        filename: str,
+        current_user: TokenData = Depends(get_current_user),
+    ):
+        if not current_user.is_platform_admin and current_user.org_id != org_id:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        org_dir = (media_dir / str(org_id)).resolve()
+        candidate = (org_dir / filename).resolve()
+        try:
+            candidate.relative_to(org_dir)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Media not found") from exc
+        if not candidate.is_file():
+            raise HTTPException(status_code=404, detail="Media not found")
+        return FileResponse(candidate)
+
+    app.mount("/uploads/branding", StaticFiles(directory=branding_dir), name="branding_uploads")
 
     @app.get("/")
     def root():
-        return {
+        payload = {
             "status": "ok",
             "message": "Telite LMS API",
             "version": "5.1.0",
-            "docs": "/docs",
             "health": "/health",
         }
+        if not is_production_like():
+            payload["docs"] = "/docs"
+        return payload
 
     @app.get("/health")
     def health(db: Session = Depends(db_session)):
@@ -207,6 +234,57 @@ def create_app() -> FastAPI:
             "api": "running",
             "version": "5.1.0",
         }
+
+    @app.get("/health/readiness")
+    def readiness(db: Session = Depends(db_session)):
+        from sqlalchemy import text
+
+        checks: dict[str, str] = {}
+        try:
+            db.execute(text("SELECT 1"))
+            checks["database"] = "ok"
+        except Exception:
+            logger.exception("Readiness check failed: database")
+            checks["database"] = "error"
+
+        redis_status = "skipped"
+        if os.getenv("REDIS_ENABLED", "true").lower() in ("true", "1", "yes"):
+            try:
+                from app.core.rate_limiter import _get_redis_client
+
+                client = _get_redis_client()
+                if client is None:
+                    redis_status = "unavailable"
+                else:
+                    client.ping()
+                    redis_status = "ok"
+            except Exception:
+                logger.exception("Readiness check failed: redis")
+                redis_status = "error"
+        checks["redis"] = redis_status
+
+        ready = checks["database"] == "ok" and redis_status in ("ok", "skipped")
+        return JSONResponse(
+            status_code=200 if ready else 503,
+            content={
+                "status": "ok" if ready else "degraded",
+                "api": "running",
+                "version": "5.1.0",
+                "checks": checks,
+            },
+        )
+
+    @app.get("/metrics")
+    def metrics():
+        lines = [
+            "# HELP telite_http_requests_total Total HTTP requests handled by the API.",
+            "# TYPE telite_http_requests_total counter",
+            f"telite_http_requests_total {_metrics['http_requests_total']}",
+            "# HELP telite_http_errors_total Total HTTP 5xx responses.",
+            "# TYPE telite_http_errors_total counter",
+            f"telite_http_errors_total {_metrics['http_errors_total']}",
+        ]
+        return PlainTextResponse("\n".join(lines) + "\n")
 
     return app
 

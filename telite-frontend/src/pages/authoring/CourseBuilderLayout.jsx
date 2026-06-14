@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, IconButton, Badge, Modal, useToast } from "../../components/common/ui";
 import { LessonBlockEditor } from "./LessonBlockEditor";
-import { PublishToolbar } from "./PublishToolbar";
+import { PublishStatusBar } from "./PublishStatusBar";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { CoursePreviewModal } from "./CoursePreviewModal";
 import { SyllabusTree } from "./SyllabusTree";
-import { BuilderInspectorPanel } from "./BuilderInspectorPanel";
+import { BuilderDrawer } from "./BuilderDrawer";
+import { BlockInspectorContent } from "./BlockInspectorContent";
+import "./builder.css";
 import { ProfileDropdown } from "../../layouts/DashboardLayout";
 import { getInitials } from "../../utils/formatters";
 import { api, getErrorMessage } from "../../services/client";
@@ -46,6 +48,7 @@ export function CourseBuilderLayout({
   const [renameTitle, setRenameTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [activeBlock, setActiveBlock] = useState(null);
+  const [showInspector, setShowInspector] = useState(false);
   const [blockSettingsUpdater, setBlockSettingsUpdater] = useState(null);
 
   const activeContext = useMemo(() => {
@@ -358,46 +361,30 @@ export function CourseBuilderLayout({
   }, [course?.id, sections, editorSaveState.state]);
 
   return (
-    <div className="builder-layout" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc' }}>
+    <div className="builder-layout">
       {/* Top Navbar */}
-      <header style={{ 
-        height: '60px', 
-        borderBottom: '1px solid #e2e8f0', 
-        display: 'flex', 
-        alignItems: 'center', 
-        padding: '0 20px', 
-        background: '#fff',
-        justifyContent: 'space-between'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <header className="builder-header">
+        <div className="builder-header__left">
           <IconButton icon="arrow-left" label="Back to Admin" onClick={onBack} />
           <div>
-            <div style={{ fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="builder-header__title">
               {course?.name} 
               <Badge tone={courseStatus === "published" ? "success" : courseStatus === "review" ? "warning" : "accent"}>
                 {courseStatus ? `${courseStatus.toUpperCase()} Mode` : "DRAFT Mode"}
               </Badge>
             </div>
-            <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px" }}>
+            <div className="builder-header__subtitle">
               {course?.id}
             </div>
           </div>
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="builder-header__right">
           {canViewAudit && (
             <Button tone="neutral" icon="list" onClick={() => setShowAuditLogModal(true)}>Audit Log</Button>
           )}
           <Button tone="neutral" icon="clock" onClick={() => setShowVersionHistory(!showVersionHistory)}>History</Button>
-          <div style={{ fontSize: '12px', marginRight: '16px', textAlign: "right", lineHeight: 1.35, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: editorSaveState.state === "saving" ? "#d97706" : editorSaveState.state === "conflict" ? "#dc2626" : "#64748b" }}>
-              {editorSaveState.state === "saving" && <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b", animation: "pulse 1.5s infinite" }} />}
-              {saveLabel}
-            </div>
-            <div style={{ color: lockState === "lost" ? "#dc2626" : "#64748b" }}>{lockLabel}</div>
-          </div>
-          <Button tone="neutral" icon="eye" onClick={() => setShowPreviewModal(true)}>Preview</Button>
-          <div style={{ width: '1px', height: '24px', background: '#e2e8f0', margin: '0 8px' }} />
+          <div className="builder-header__divider" />
           <ProfileDropdown 
             profile={{
               initials: getInitials(session?.user?.name || "Author"),
@@ -410,29 +397,15 @@ export function CourseBuilderLayout({
         </div>
       </header>
       
-      <PublishToolbar 
-        courseId={course?.id} 
-        courseStatus={courseStatus} 
-        onStatusChanged={setCourseStatus} 
-        validationStatus={validationStatus} 
-        onFixValidation={handleFixValidation}
-      />
-      
-      {/* 3-Pane Body */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      {/* 2-Pane Body */}
+      <div className="builder-body">
         
         {/* Left Pane: Syllabus */}
-        <div style={{ 
-          width: '320px', 
-          borderRight: '1px solid #e2e8f0', 
-          background: '#fff',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 600 }}>
+        <div className="builder-syllabus">
+          <div className="builder-syllabus__header">
             Syllabus
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+          <div className="builder-syllabus__body">
             <SyllabusTree 
               courseId={course?.id}
               sections={sections} 
@@ -450,7 +423,7 @@ export function CourseBuilderLayout({
             />
           </div>
           {canEditStructure && (
-            <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0' }}>
+            <div className="builder-syllabus__footer">
               <Button tone="neutral" style={{ width: '100%', justifyContent: 'center' }} icon="plus" onClick={openSectionModal}>
                 Add Section
               </Button>
@@ -458,8 +431,8 @@ export function CourseBuilderLayout({
           )}
         </div>
         
-        {/* Center Pane: Editor (Stage 2) */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '40px', background: '#f8fafc' }}>
+        {/* Main Pane: Editor (Stage 2) */}
+        <div className="builder-editor">
           {activeModuleId ? (
             <LessonBlockEditor
               courseId={course?.id}
@@ -468,48 +441,55 @@ export function CourseBuilderLayout({
               highlightBlockId={highlightBlockId}
               onHighlightClear={() => setHighlightBlockId(null)}
               onActiveBlockChange={handleActiveBlockChange}
+              onOpenInspector={() => setShowInspector(true)}
               onRegisterBlockSettingsUpdater={registerBlockSettingsUpdater}
               onSaveStateChange={setEditorSaveState}
             />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.2 }}>📄</div>
+            <div className="builder-editor__empty">
+              <div className="builder-editor__empty-icon">📄</div>
               <h3>Select a module to edit</h3>
               <p>Or add a new module to the syllabus on the left.</p>
             </div>
           )}
         </div>
-        {/* Right Pane: Inspector / Version History */}
-        {showVersionHistory ? (
-          <div style={{ width: '320px', background: '#fff', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 700, color: "#0f172a" }}>History</div>
-              <Button tone="neutral" onClick={() => setShowVersionHistory(false)}>Inspector</Button>
-            </div>
-            <VersionHistoryPanel 
-              courseId={course?.id} 
-              currentVersion={{ id: 1, version_number: 1 }} // dummy 
-              onVersionChanged={() => {
-                setActiveModuleId(null);
-                setActiveBlock(null);
-                onReloadStructure?.();
-              }}
-            />
-          </div>
-        ) : (
-          <BuilderInspectorPanel
-            course={course}
-            activeSection={activeContext.section}
-            activeModule={activeContext.module}
-            activeBlock={activeBlock}
-            onBlockSettingChange={handleBlockSettingChange}
-            validationStatus={validationStatus}
-            lockState={lockLabel}
-            onOpenHistory={() => setShowVersionHistory(true)}
-          />
-        )}
-        
       </div>
+
+      <BuilderDrawer 
+        open={showInspector && !!activeBlock} 
+        onClose={() => setShowInspector(false)} 
+        title="Block Inspector"
+      >
+        <BlockInspectorContent
+          activeBlock={activeBlock}
+          onBlockSettingChange={handleBlockSettingChange}
+        />
+      </BuilderDrawer>
+
+      <BuilderDrawer 
+        open={showVersionHistory} 
+        onClose={() => setShowVersionHistory(false)} 
+        title="Version History"
+      >
+        <VersionHistoryPanel 
+          courseId={course?.id} 
+          onVersionChanged={() => {
+            setActiveModuleId(null);
+            setActiveBlock(null);
+            onReloadStructure?.();
+          }}
+        />
+      </BuilderDrawer>
+
+      <PublishStatusBar
+        courseId={course?.id}
+        courseStatus={courseStatus}
+        onStatusChanged={setCourseStatus}
+        validationStatus={validationStatus}
+        onFixValidation={handleFixValidation}
+        saveState={editorSaveState}
+        lockState={lockLabel}
+      />
 
       <CoursePreviewModal 
         open={showPreviewModal} 

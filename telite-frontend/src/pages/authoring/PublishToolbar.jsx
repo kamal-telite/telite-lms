@@ -4,6 +4,29 @@ import { api, getErrorMessage } from "../../services/client";
 import { validateCourseForPublishing } from "../../services/publishValidation";
 import { useCapability } from "../../hooks/useCapability";
 
+function getFixLabel(type, fixTarget) {
+  switch (type) {
+    case "empty_module": return "Go to Module";
+    case "missing_title": return "Edit Title";
+    case "missing_media": return "Add Media";
+    case "missing_alt_text": return "Add Alt Text";
+    case "missing_content": return "Edit Content";
+    case "missing_url": return "Add URL";
+    case "missing_quiz": return "Select Quiz";
+    case "missing_instructions": return "Edit Instructions";
+    default: return fixTarget?.module_title ? `Go to ${fixTarget.module_title}` : "Go to Module";
+  }
+}
+
+function getFixIcon(type) {
+  switch (type) {
+    case "empty_module": return "arrow-right";
+    case "missing_title": return "pencil";
+    case "missing_media": return "image";
+    default: return "arrow-right";
+  }
+}
+
 export function PublishToolbar({ courseId, courseStatus, onStatusChanged, validationStatus, onFixValidation }) {
   const { canSubmit, canApprove, canReject, canPublish } = useCapability();
   const { showToast } = useToast();
@@ -87,7 +110,9 @@ export function PublishToolbar({ courseId, courseStatus, onStatusChanged, valida
         </div>
       </div>
       {result.fix_target?.module_id && onFixValidation && (
-        <Button tone="neutral" size="small" onClick={() => onFixValidation(result.fix_target.module_id, result.fix_target.block_id)}>Fix</Button>
+        <Button tone="neutral" size="small" icon={getFixIcon(result.type)} onClick={() => onFixValidation(result.fix_target.module_id, result.fix_target.block_id)}>
+          {getFixLabel(result.type, result.fix_target)}
+        </Button>
       )}
     </div>
   );

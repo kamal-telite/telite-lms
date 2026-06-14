@@ -15,6 +15,7 @@ from app.services.learning_path_unlock_service import LearningPathUnlockService
 from app.models.learner_event import LearnerEvent
 from app.models.course_progress import CourseProgress
 from app.models.module_progress import ModuleProgress
+from app.models.lesson_block_progress import LessonBlockProgress
 from app.models.course_module import CourseModule
 from app.models.lesson_block import LessonBlock
 from app.models.media_asset import MediaAsset
@@ -442,17 +443,50 @@ def record_events(
         if ev.course_id and not enrollment_repo.has_access(current_user.id, ev.course_id, current_user.org_id):
             raise HTTPException(status_code=403, detail="Not enrolled or access denied")
 
+        valid_block_id = _valid_block_id(ev.block_id, db, current_user.org_id)
         events.append(LearnerEvent(
             user_id=current_user.id,
             course_id=ev.course_id,
             module_id=ev.module_id,
-            block_id=_valid_block_id(ev.block_id, db, current_user.org_id),
+            block_id=valid_block_id,
             event_type=ev.event_type,
             schema_version="1.0",
             payload_json=ev.payload_json,
             created_at=datetime.utcnow(),
             org_id=current_user.org_id
         ))
+
+        if valid_block_id and ev.module_id and ev.event_type in ("BLOCK_VIEWED", "VIDEO_STARTED", "VIDEO_PAUSED", "VIDEO_COMPLETED"):
+            block_progress = db.query(LessonBlockProgress).filter(
+                LessonBlockProgress.user_id == current_user.id,
+                LessonBlockProgress.module_id == ev.module_id,
+                LessonBlockProgress.block_id == valid_block_id,
+                LessonBlockProgress.org_id == current_user.org_id,
+            ).first()
+            now = datetime.utcnow()
+            if not block_progress:
+                block_progress = LessonBlockProgress(
+                    user_id=current_user.id,
+                    module_id=ev.module_id,
+                    block_id=valid_block_id,
+                    org_id=current_user.org_id,
+                    status="not_started",
+                    video_position_seconds=0,
+                    completion_percentage=0.0,
+                    time_spent_seconds=0,
+                )
+
+            block_progress.last_viewed_at = now
+            if ev.event_type in ("BLOCK_VIEWED", "VIDEO_COMPLETED"):
+                block_progress.status = "completed"
+                block_progress.completion_percentage = 100.0
+                block_progress.completed_at = block_progress.completed_at or now
+            elif ev.event_type in ("VIDEO_STARTED", "VIDEO_PAUSED"):
+                if block_progress.status == "not_started":
+                    block_progress.status = "in_progress"
+                if "position_seconds" in ev.payload_json:
+                    block_progress.video_position_seconds = int(ev.payload_json.get("position_seconds") or 0)
+            db.add(block_progress)
     if events:
         db.add_all(events)
         db.commit()

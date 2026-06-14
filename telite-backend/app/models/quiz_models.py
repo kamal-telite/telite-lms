@@ -21,6 +21,7 @@ class QuizSettings(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     quiz_id = Column(Integer, ForeignKey("quiz_definitions.id"), nullable=False, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     time_limit = Column(Integer, nullable=True)
     passing_score = Column(Float, nullable=True)
     attempt_limit = Column(Integer, nullable=True)

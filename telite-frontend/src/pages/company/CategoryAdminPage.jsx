@@ -27,6 +27,7 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  Icon,
   IconButton,
   LoadingState,
   Modal,

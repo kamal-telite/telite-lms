@@ -31,11 +31,13 @@ class LearningPathCourse(Base):
     
     path_id = Column(Integer, ForeignKey("learning_paths.id"), primary_key=True)
     course_id = Column(String(50), ForeignKey("courses.id"), primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     sort_order = Column(Integer, nullable=False, default=0)
 
     def to_dict(self):
         return {
             "path_id": self.path_id,
             "course_id": self.course_id,
+            "org_id": self.org_id,
             "sort_order": self.sort_order,
         }

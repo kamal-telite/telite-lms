@@ -1,9 +1,38 @@
+"""Pytest configuration for Telite LMS backend."""
+
+from __future__ import annotations
+
 import os
+import sys
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+os.environ.setdefault("ENVIRONMENT", "development")
+os.environ.setdefault("TELITE_DB_BACKEND", "sqlite")
+os.environ.setdefault("TELITE_DB_PATH", "data/ci_test_telite_lms.db")
+os.environ.setdefault("TELITE_AUTH_SECRET", "ci-test-auth-secret-not-for-production-use")
+os.environ.setdefault("TELITE_PASSWORD_SALT", "ci-test-password-salt")
+os.environ.setdefault("REDIS_ENABLED", "false")
+os.environ.setdefault("TELITE_USE_ALEMBIC", "false")
+
 from app.models.base import Base
+
+
+@pytest.fixture
+def client():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    return TestClient(app)
+
 
 @pytest.fixture(scope="session")
 def engine():

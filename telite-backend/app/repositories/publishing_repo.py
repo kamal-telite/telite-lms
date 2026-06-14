@@ -99,16 +99,21 @@ class PublishingRepository(BaseRepository):
         blocks_by_module = {}
         for block in blocks:
             blocks_by_module.setdefault(block.module_id, []).append({
+                "id": block.id,
+                "module_id": block.module_id,
                 "block_type": block.block_type,
                 "content": block.content,
                 "media_asset_id": block.media_asset_id,
                 "sort_order": block.sort_order,
                 "settings": copy.deepcopy(block.metadata_json or {}),
+                "metadata_json": copy.deepcopy(block.metadata_json or {}),
             })
 
         modules_by_section = {}
         for module in modules:
             modules_by_section.setdefault(module.section_id, []).append({
+                "id": module.id,
+                "section_id": module.section_id,
                 "title": module.title,
                 "module_type": module.module_type,
                 "status": module.status,
@@ -127,6 +132,7 @@ class PublishingRepository(BaseRepository):
             },
             "sections": [
                 {
+                    "id": section.id,
                     "title": section.title,
                     "sort_order": section.sort_order,
                     "modules": modules_by_section.get(section.id, []),

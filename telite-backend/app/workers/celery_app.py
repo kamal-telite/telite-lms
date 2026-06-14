@@ -38,6 +38,7 @@ celery_app = Celery(
         "app.workers.reconciliation",
         "app.workers.notification_tasks",
         "app.workers.reminder_tasks",
+        "app.workers.analytics_tasks",
     ],
 )
 
@@ -128,5 +129,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.reminder_tasks.review_reminders",
         "schedule": 86400,  # every 24 hours
         "options": {"queue": "reminders"},
+    },
+    # Every 10 minutes: analytics stream rollups
+    "analytics-rollups": {
+        "task": "app.workers.analytics_tasks.process_analytics_rollups",
+        "schedule": 600,
+        "options": {"queue": "default"},
     },
 }

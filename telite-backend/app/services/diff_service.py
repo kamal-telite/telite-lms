@@ -6,6 +6,18 @@ from typing import Dict, Any, List
 
 class DiffService:
     @staticmethod
+    def _snapshot_key(item: Dict[str, Any], fallback_fields: List[str]) -> str:
+        if item.get("id") is not None:
+            return str(item["id"])
+        return "|".join(str(item.get(field, "")) for field in fallback_fields)
+
+    @staticmethod
+    def _block_settings(block: Dict[str, Any]) -> Any:
+        if "metadata_json" in block:
+            return block.get("metadata_json")
+        return block.get("settings")
+
+    @staticmethod
     def compute(source: Dict[str, Any], target: Dict[str, Any]) -> Dict[str, Any]:
         """
         Computes the structural diff between two snapshot dictionaries.
@@ -23,24 +35,32 @@ class DiffService:
         }
         
         # Flatten source
-        src_sections = {s["id"]: s for s in source.get("sections", [])}
+        src_sections = {
+            DiffService._snapshot_key(s, ["title", "sort_order"]): s
+            for s in source.get("sections", [])
+        }
         src_modules = {}
         src_blocks = {}
         for s in source.get("sections", []):
             for m in s.get("modules", []):
-                src_modules[m["id"]] = m
+                module_key = DiffService._snapshot_key(m, ["title", "section", "sort_order"])
+                src_modules[module_key] = m
                 for b in m.get("blocks", []):
-                    src_blocks[b["id"]] = b
+                    src_blocks[DiffService._snapshot_key(b, ["module_id", "block_type", "sort_order"])] = b
                     
         # Flatten target
-        tgt_sections = {s["id"]: s for s in target.get("sections", [])}
+        tgt_sections = {
+            DiffService._snapshot_key(s, ["title", "sort_order"]): s
+            for s in target.get("sections", [])
+        }
         tgt_modules = {}
         tgt_blocks = {}
         for s in target.get("sections", []):
             for m in s.get("modules", []):
-                tgt_modules[m["id"]] = m
+                module_key = DiffService._snapshot_key(m, ["title", "section", "sort_order"])
+                tgt_modules[module_key] = m
                 for b in m.get("blocks", []):
-                    tgt_blocks[b["id"]] = b
+                    tgt_blocks[DiffService._snapshot_key(b, ["module_id", "block_type", "sort_order"])] = b
                     
         # Compare Sections
         src_sec_keys = set(src_sections.keys())
@@ -141,7 +161,7 @@ class DiffService:
                 })
                 block_changed = True
                 
-            if b_src.get("metadata_json") != b_tgt.get("metadata_json"):
+            if DiffService._block_settings(b_src) != DiffService._block_settings(b_tgt):
                 b_type = b_tgt.get("block_type")
                 ev_type = "block_settings_changed"
                 if b_type == "quiz":

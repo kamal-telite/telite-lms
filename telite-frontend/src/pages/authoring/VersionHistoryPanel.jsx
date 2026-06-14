@@ -3,7 +3,7 @@ import { api, getErrorMessage } from "../../services/client";
 import { Button, Badge, LoadingState, ErrorState, Modal, useToast } from "../../components/common/ui";
 import { VersionDiffViewer } from "./VersionDiffViewer";
 
-export function VersionHistoryPanel({ courseId, currentVersion, onVersionChanged }) {
+export function VersionHistoryPanel({ courseId, onVersionChanged }) {
   const { showToast } = useToast();
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +34,7 @@ export function VersionHistoryPanel({ courseId, currentVersion, onVersionChanged
   const handleCreateVersion = async () => {
     try {
       const { data } = await api.post(`/authoring/publishing/courses/${courseId}/versions`, {
-        parent_version_id: currentVersion?.id
+        parent_version_id: versions.length > 0 ? versions[0].id : null
       });
       showToast(`Created Version ${data.version.version_number}`, "success");
       fetchVersions();
@@ -173,7 +173,7 @@ export function VersionHistoryPanel({ courseId, currentVersion, onVersionChanged
               <Button tone="neutral" size="small" disabled={comparing} onClick={() => handleCompareWithCurrent(v)}>
                 Vs Draft
               </Button>
-              {currentVersion?.id !== v.id && (
+              {versions[0]?.id !== v.id && (
                 <Button tone="neutral" size="small" onClick={() => setRollbackTarget(v)}>Rollback to this</Button>
               )}
             </div>

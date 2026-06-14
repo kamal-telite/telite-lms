@@ -92,6 +92,7 @@ def execute_workflow_action(
         reviewed_at=datetime.now(timezone.utc),
     )
     db.add(review)
+    db.flush()
 
     version = None
     if action == "publish":
@@ -111,14 +112,15 @@ def execute_workflow_action(
         log_action, 
         json.dumps({"notes": request.notes})
     )
+    review_payload = review.to_dict()
+    version_payload = version.to_dict() if version else None
     db.commit()
-    db.refresh(review)
 
     return {
         "success": True,
         "status": new_status,
-        "version": version.to_dict() if version else None,
-        "review": review.to_dict(),
+        "version": version_payload,
+        "review": review_payload,
     }
 
 

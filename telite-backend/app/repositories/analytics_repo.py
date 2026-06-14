@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from app.models.category import Category
 from app.models.course import Course
 from app.models.course_module import CourseModule
+from app.models.organization import Organization
+from app.models.session import AuthSession
 from app.models.user import User
 from app.models.learner_event import LearnerEvent
 from app.models.course_progress import CourseProgress
@@ -138,9 +140,43 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
                 "total_completions": total_completions,
             },
             "categories": [{"name": c.name, "slug": c.slug} for c in categories],
+            "learners": {"total": total_learners, "rows": []},
             "leaderboard": self.get_cohort_rankings(org_id=org_id, limit=6),
             "audit_log": audit_entries,
             "tasks": tasks,
+        }
+
+    def get_platform_overview(self) -> dict[str, Any]:
+        """Return the strict platform overview contract consumed by admin UI."""
+        total_orgs = self.session.execute(select(func.count(Organization.id))).scalar() or 0
+        total_users = self.session.execute(select(func.count(User.id))).scalar() or 0
+        active_sessions = (
+            self.session.execute(
+                select(func.count(AuthSession.id)).where(AuthSession.revoked_at.is_(None))
+            ).scalar()
+            or 0
+        )
+        recent_events = (
+            self.session.execute(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(10))
+            .scalars()
+            .all()
+        )
+
+        return {
+            "total_orgs": total_orgs,
+            "total_users": total_users,
+            "active_sessions": active_sessions,
+            "recent_activity": [
+                {
+                    "id": event.id,
+                    "action": event.action,
+                    "actor_name": event.actor_name,
+                    "message": event.message,
+                    "created_at": self._iso(event.created_at),
+                    "org_id": event.org_id,
+                }
+                for event in recent_events
+            ],
         }
 
     def get_category_metrics(self, category_slug: str, org_id: int | None = None) -> dict[str, Any]:
@@ -460,6 +496,78 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             raise ValueError("User not found.")
             
         progress = self.session.execute(select(CourseProgress).where(CourseProgress.user_id == user_id)).scalars().all()
+        progress_by_course = {row.course_id: row for row in progress}
+        legacy_progress = {
+            item.get("course_id"): item
+            for item in self._safe_json_list(user.course_progress_json)
+            if item.get("course_id")
+        }
+
+        course_stmt = select(Course).where(
+            Course.org_id == user.org_id,
+            Course.status.in_(("active", "published")),
+        )
+        if user.role == "learner" and user.category_scope:
+            course_stmt = course_stmt.where(Course.category_slug == user.category_scope)
+        courses = list(self.session.execute(course_stmt.order_by(Course.name)).scalars().all())
+
+        approved_enrollments = self.session.execute(
+            select(EnrollmentRequest.category_slug).where(
+                EnrollmentRequest.email == user.email,
+                EnrollmentRequest.org_id == user.org_id,
+                EnrollmentRequest.status == "approved",
+            )
+        ).scalars().all()
+        approved_categories = {slug for slug in approved_enrollments if slug}
+        if approved_categories:
+            courses = [
+                course for course in courses
+                if course.category_slug in approved_categories or course.category_slug == user.category_scope
+            ]
+
+        def course_progress_payload(course: Course) -> dict[str, Any]:
+            row = progress_by_course.get(course.id)
+            legacy = legacy_progress.get(course.id, {})
+            if row:
+                learner_status = row.status
+                completion_pct = self._round(row.completion_percentage, 0)
+                time_spent_seconds = row.time_spent_seconds
+                last_active = row.last_viewed_at.isoformat() if row.last_viewed_at else None
+            else:
+                learner_status = legacy.get("status", "not_started")
+                completion_pct = self._round(legacy.get("progress", 0), 0)
+                time_spent_seconds = 0
+                last_active = None
+            return {
+                "id": course.id,
+                "course_id": course.id,
+                "name": course.name,
+                "description": course.description,
+                "slug": course.slug,
+                "tier": course.tier,
+                "status": learner_status,
+                "course_status": course.status,
+                "progress": completion_pct,
+                "completion_pct": completion_pct,
+                "completion_percentage": completion_pct,
+                "time_spent_seconds": time_spent_seconds,
+                "modules_count": course.module_count,
+                "module_count": course.module_count,
+                "hours": course.hours,
+                "last_active": last_active,
+            }
+
+        course_rows = [course_progress_payload(course) for course in courses]
+        course_by_id = {course.id: course for course in courses}
+        current_course = None
+        if user.current_course_id and user.current_course_id in course_by_id:
+            current_course = course_progress_payload(course_by_id[user.current_course_id])
+        elif progress:
+            latest_progress = max(progress, key=lambda row: row.last_viewed_at or row.updated_at or row.created_at)
+            if latest_progress.course_id in course_by_id:
+                current_course = course_progress_payload(course_by_id[latest_progress.course_id])
+        elif course_rows:
+            current_course = course_rows[0]
         
         # Determine stats from events
         quiz_submit_stmt = select(func.count(LearnerEvent.id)).where(LearnerEvent.user_id == user_id, LearnerEvent.event_type == "QUIZ_SUBMITTED")
@@ -479,9 +587,10 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
                 "pal_score": getattr(user, 'pal_score', 0),
                 "time_spent_hours": round(total_time_seconds / 3600, 1),
                 "streak_days": user.streak_days,
+                "current_course": current_course,
             },
             "stats": {"courses_completed": max(user.courses_completed, len([p for p in progress if p.status == 'completed'])), "quizzes_submitted": quizzes_submitted},
-            "courses": [{"course_id": p.course_id, "status": p.status, "progress": p.completion_percentage} for p in progress],
+            "courses": course_rows,
             "leaderboard": self.get_cohort_rankings(category_slug=user.category_scope, org_id=user.org_id, limit=5),
         }
 

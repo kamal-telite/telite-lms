@@ -1,5 +1,4 @@
 from typing import List
-from sqlalchemy.orm import Session
 from app.services.validation.base_validator import BaseValidator
 from app.services.validation.schemas import ValidationResultItem, FixTarget
 
@@ -22,28 +21,40 @@ class CourseValidator(BaseValidator):
                 message="Course is missing a description.",
                 fix_target=FixTarget(section_title="Course Settings")
             ))
-            
-        if not course.thumbnail_asset_id and not course.thumbnail_url:
+
+        thumbnail_asset_id = getattr(course, "thumbnail_asset_id", None)
+        thumbnail_url = getattr(course, "thumbnail_url", None)
+        if (hasattr(course, "thumbnail_asset_id") or hasattr(course, "thumbnail_url")) and not thumbnail_asset_id and not thumbnail_url:
             results.append(ValidationResultItem(
                 type="no_thumbnail",
                 severity="warning",
                 message="Course is missing a thumbnail.",
                 fix_target=FixTarget(section_title="Course Settings")
             ))
-            
-        if not course.tags:
+
+        tags = getattr(course, "tags", None)
+        if hasattr(course, "tags") and not tags:
             results.append(ValidationResultItem(
                 type="no_tags",
                 severity="info",
                 message="Adding tags helps learners discover this course.",
                 fix_target=FixTarget(section_title="Course Settings")
             ))
-            
-        if not course.estimated_duration:
+
+        estimated_duration = getattr(course, "estimated_duration", None)
+        hours = getattr(course, "hours", None)
+        if hasattr(course, "estimated_duration") and not estimated_duration:
             results.append(ValidationResultItem(
                 type="no_estimated_duration",
                 severity="info",
                 message="Providing an estimated duration helps set learner expectations.",
+                fix_target=FixTarget(section_title="Course Settings")
+            ))
+        elif hasattr(course, "hours") and not hours:
+            results.append(ValidationResultItem(
+                type="no_estimated_duration",
+                severity="info",
+                message="Providing course hours helps set learner expectations.",
                 fix_target=FixTarget(section_title="Course Settings")
             ))
             

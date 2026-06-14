@@ -303,10 +303,11 @@ def api_list_admins(
     
     is_active = True if status == "active" else (False if status == "suspended" else None)
     role_filter = role if role != "all" else None
-    
-    users = user_repo.list_by_org(
-        org_id=org_id if org_id else 0, # Hack for cross-org
-        role=role_filter,
+    admin_roles = [role_filter] if role_filter else ["super_admin", "category_admin", "platform_admin"]
+
+    users = user_repo.list_admins_by_org(
+        org_id=org_id,
+        roles=admin_roles,
         is_active=is_active,
         search=query,
         limit=limit,

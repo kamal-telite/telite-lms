@@ -82,6 +82,18 @@ class ValidationEngine:
                 message="Course has very few modules. Consider adding more content."
             ))
 
+        # Deduplicate results
+        unique_results = []
+        seen = set()
+        for r in results:
+            fix_target = getattr(r, 'fix_target', None)
+            block_id = getattr(fix_target, 'block_id', None) if fix_target else None
+            key = (r.type, r.message, r.section_id, r.module_id, block_id)
+            if key not in seen:
+                seen.add(key)
+                unique_results.append(r)
+        results = unique_results
+
         # Summarize
         errors = sum(1 for r in results if r.severity == "error")
         warnings = sum(1 for r in results if r.severity == "warning")

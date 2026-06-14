@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Integer, String
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -16,6 +16,9 @@ class PendingVerification(Base, TimestampMixin):
     domain_type: Mapped[str] = mapped_column(String, nullable=False)
     organization_name: Mapped[str] = mapped_column(String, nullable=False)
     organization_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    org_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     phone: Mapped[str | None] = mapped_column(String, nullable=True)
     employee_id: Mapped[str | None] = mapped_column(String, nullable=True)
     department: Mapped[str | None] = mapped_column(String, nullable=True)

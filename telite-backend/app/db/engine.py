@@ -148,6 +148,28 @@ def get_db_session() -> Generator[Session, None, None]:
         session.close()
 
 
+def is_postgres_dsn() -> bool:
+    return not _build_dsn().startswith("sqlite")
+
+
+def apply_tenant_context(session: Session, org_id: int) -> None:
+    """Apply tenant RLS context to an existing transactional session."""
+    if not is_postgres_dsn():
+        return
+    session.execute(
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
+        {"org_id": str(org_id)},
+    )
+    session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+
+
+def apply_platform_context(session: Session) -> None:
+    """Apply platform RLS bypass context to an existing transactional session."""
+    if not is_postgres_dsn():
+        return
+    session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+
+
 @contextmanager
 def get_tenant_session(org_id: int) -> Generator[Session, None, None]:
     """
@@ -163,17 +185,9 @@ def get_tenant_session(org_id: int) -> Generator[Session, None, None]:
     """
     factory = get_session_factory()
     session: Session = factory()
-    is_postgres = not _build_dsn().startswith("sqlite")
 
     try:
-        if is_postgres:
-            # Set RLS context for this transaction using set_config
-            session.execute(
-                text("SELECT set_config('app.current_org_id', :org_id, true)"),
-                {"org_id": str(org_id)},
-            )
-            session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
-
+        apply_tenant_context(session, org_id)
         yield session
         session.commit()
     except Exception:
@@ -193,12 +207,9 @@ def get_platform_session() -> Generator[Session, None, None]:
     """
     factory = get_session_factory()
     session: Session = factory()
-    is_postgres = not _build_dsn().startswith("sqlite")
 
     try:
-        if is_postgres:
-            session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
-
+        apply_platform_context(session)
         yield session
         session.commit()
     except Exception:
@@ -220,6 +231,15 @@ def db_session():
             ...
     """
     with get_db_session() as session:
+        yield session
+
+
+def platform_db_session():
+    """
+    FastAPI dependency for public/platform lookups that must see across tenants.
+    Auth, invitation, and platform-admin endpoints should use this explicitly.
+    """
+    with get_platform_session() as session:
         yield session
 
 

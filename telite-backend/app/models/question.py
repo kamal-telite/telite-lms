@@ -14,6 +14,7 @@ class QuestionVersion(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     version_number = Column(Integer, nullable=False, default=1)
     question_type = Column(String(50), nullable=False) # multiple_choice, true_false, essay
     question_text = Column(Text, nullable=False)

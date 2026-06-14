@@ -1,4 +1,4 @@
-"""
+﻿"""
 Database initialisation for Phase 3.
 
 Runs on application startup:
@@ -13,13 +13,14 @@ Existing tables managed by store.py are left untouched during migration.
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import os
 
 from sqlalchemy import Boolean, Float, Integer, inspect, text
 from sqlalchemy.sql.sqltypes import BigInteger, Numeric, String, Text
 
+from app.core.runtime import is_production_like
 from app.db.engine import get_db_session, get_engine
 from app.models.base import Base
 
@@ -201,30 +202,31 @@ def ensure_default_organization() -> None:
         logger.info("Created missing default organization with id=1.")
 
 
+def _use_alembic_migrations() -> bool:
+    if is_production_like():
+        return True
+    return os.getenv("TELITE_USE_ALEMBIC", "").lower() in ("true", "1", "yes")
+
+
 def run_phase3_init() -> None:
     """
     Full Phase 3 database initialisation sequence.
     Called from app lifespan alongside the existing store.init_db().
     """
-    logger.info("Phase 3 DB init starting…")
+    logger.info("Phase 3 DB init startingâ€¦")
 
-    # 1. Create new ORM tables
-    create_all_tables()
-
-    # 2. Repair older tables that predate shared ORM mixins
-    repair_shared_columns()
-
-    # 3. Apply RLS (PostgreSQL only)
-    apply_rls_if_postgres()
-
-    # 4. Ensure legacy seed rows have their parent organization
-    ensure_default_organization()
-
-    # 5. Backfill native course modules for existing seed databases
-    backfill_course_modules_from_courses()
+    use_alembic = _use_alembic_migrations()
+    if not use_alembic:
+        create_all_tables()
+        repair_shared_columns()
+        apply_rls_if_postgres()
+        ensure_default_organization()
+        backfill_course_modules_from_courses()
+    else:
+        logger.info("Skipping schema repair and legacy backfills; schema managed by Alembic.")
 
     # 6. Verify connectivity
     if verify_connection():
-        logger.info("Phase 3 DB init complete — database healthy.")
+        logger.info("Phase 3 DB init complete â€” database healthy.")
     else:
-        logger.error("Phase 3 DB init — database connectivity FAILED.")
+        logger.error("Phase 3 DB init â€” database connectivity FAILED.")

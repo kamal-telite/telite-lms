@@ -27,10 +27,13 @@ export default function PlatformAdminPage({ session, onLogout }) {
     sidebarCollapsed, toggleSidebar,
     searchQuery, setSearchQuery,
     notifications, markAllRead,
-    organizations, loadOrganizations,
-    admins, loadAdmins,
-    syncTenants, triggerGlobalSync, settingsState
+    organizations: storeOrganizations, loadOrganizations,
+    admins: storeAdmins, loadAdmins,
+    syncTenants: storeSyncTenants, triggerGlobalSync, settingsState
   } = useAdminStore();
+  const organizations = Array.isArray(storeOrganizations) ? storeOrganizations : [];
+  const admins = Array.isArray(storeAdmins) ? storeAdmins : [];
+  const syncTenants = Array.isArray(storeSyncTenants) ? storeSyncTenants : [];
 
   useEffect(() => {
     loadOrganizations();
@@ -1268,7 +1271,16 @@ export function InviteAdminModal({ open, onClose, onInvited }) {
     setForm({ org_id: "", email: "", role: "super_admin", name: "" });
     setLoadingOrgs(true);
     platformApi.listOrganizations({ limit: 100 })
-      .then(res => setOrgs(res.data.orgs))
+      .then(res => {
+        const nextOrgs = Array.isArray(res.data?.organizations)
+          ? res.data.organizations
+          : Array.isArray(res.data?.orgs)
+            ? res.data.orgs
+            : Array.isArray(res.data)
+              ? res.data
+              : [];
+        setOrgs(nextOrgs);
+      })
       .catch(() => showToast("Failed to load organizations", "error"))
       .finally(() => setLoadingOrgs(false));
   }, [open, showToast]);

@@ -1,0 +1,44 @@
+# Production overlay — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# Internal services are not published to the host. Set ENVIRONMENT=production in .env.
+
+services:
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  backend:
+    environment:
+      REDIS_ENABLED: "true"
+      ENVIRONMENT: production
+      COOKIE_SECURE: "true"
+      COOKIE_SAMESITE: strict
+      TELITE_USE_ALEMBIC: "true"
+      LOG_FORMAT: json
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/readiness', timeout=5)",
+        ]
+
+  seed_permissions:
+    environment:
+      ENVIRONMENT: production
+      TELITE_USE_ALEMBIC: "true"
+
+  celery_worker:
+    environment:
+      ENVIRONMENT: production
+      TELITE_USE_ALEMBIC: "true"
+      LOG_FORMAT: json
+
+  celery_beat:
+    environment:
+      ENVIRONMENT: production
+      LOG_FORMAT: json

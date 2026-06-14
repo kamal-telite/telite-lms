@@ -63,18 +63,27 @@ class UserRepository(BaseRepository[User]):
 
     def list_by_org(
         self,
-        org_id: int,
+        org_id: int | None,
         *,
         role: str | None = None,
+        roles: Sequence[str] | None = None,
+        exclude_platform_admins: bool = False,
         is_active: bool | None = None,
         search: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[User]:
-        stmt = select(User).where(User.org_id == org_id)
+        stmt = select(User)
+
+        if org_id is not None:
+            stmt = stmt.where(User.org_id == org_id)
 
         if role is not None:
             stmt = stmt.where(User.role == role)
+        if roles is not None:
+            stmt = stmt.where(User.role.in_(list(roles)))
+        if exclude_platform_admins:
+            stmt = stmt.where(User.is_platform_admin.is_(False), User.role != "platform_admin")
         if is_active is not None:
             stmt = stmt.where(User.is_active == is_active)
         if search:
@@ -90,14 +99,34 @@ class UserRepository(BaseRepository[User]):
         stmt = stmt.order_by(User.full_name).limit(limit).offset(offset)
         return self.session.execute(stmt).scalars().all()
 
-    def list_admins_by_org(self, org_id: int) -> Sequence[User]:
-        stmt = (
-            select(User)
-            .where(User.org_id == org_id)
-            .where(User.role.in_(["super_admin", "category_admin"]))
-            .where(User.is_active.is_(True))
-            .order_by(User.full_name)
-        )
+    def list_admins_by_org(
+        self,
+        org_id: int | None,
+        *,
+        roles: Sequence[str] | None = None,
+        is_active: bool | None = True,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Sequence[User]:
+        stmt = select(User)
+        if org_id is not None:
+            stmt = stmt.where(User.org_id == org_id)
+        stmt = stmt.where(User.role.in_(list(roles or ["super_admin", "category_admin"])))
+        if is_active is not None:
+            stmt = stmt.where(User.is_active.is_(is_active))
+        if search:
+            term = f"%{search.lower()}%"
+            stmt = stmt.where(
+                or_(
+                    User.full_name.ilike(term),
+                    User.email.ilike(term),
+                    User.username.ilike(term),
+                )
+            )
+        stmt = stmt.order_by(User.full_name).offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return self.session.execute(stmt).scalars().all()
 
     def count_active_learners(self, org_id: int | None = None) -> int:

@@ -17,6 +17,22 @@ export function TextInput({ label, value, onChange, placeholder = "", type = "te
   );
 }
 
+export function TextAreaInput({ label, value, onChange, placeholder = "", disabled = false }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", color: "#334155" }}>
+      <span>{label}</span>
+      <textarea
+        className="field__input"
+        style={{ padding: "6px", fontSize: "13px", minHeight: "84px", resize: "vertical" }}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+    </label>
+  );
+}
+
 export function CheckboxInput({ label, checked, onChange, disabled = false }) {
   return (
     <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "#334155" }}>

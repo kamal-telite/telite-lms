@@ -15,7 +15,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, IconButton, Badge, LoadingState, Modal } from "../../components/common/ui";
+import { Button, IconButton, Badge, LoadingState, Modal, useToast } from "../../components/common/ui";
 import { api, getErrorMessage } from "../../services/client";
 import { useAutosave } from "../../hooks/useAutosave";
 import { validateBlocks } from "../../services/validationEngine";
@@ -29,11 +29,13 @@ function blockKey(block) {
 function SortableBlock({
   block,
   isSelected,
+  isHighlighted,
   onSelect,
   onChange,
   onDelete,
   onDuplicate,
   onOpenMedia,
+  onOpenInspector,
   quizOptions = [],
   quizLoading = false,
   quizError = null,
@@ -53,16 +55,10 @@ function SortableBlock({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    background: "#fff",
-    border: `1px solid ${isSelected ? "#2563eb" : "#e2e8f0"}`,
-    borderRadius: "8px",
-    padding: "16px",
-    marginBottom: "16px",
-    opacity: isDragging ? 0.5 : 1,
-    boxShadow: isDragging ? "0 8px 24px rgba(0,0,0,0.1)" : isSelected ? "0 0 0 3px rgba(37, 99, 235, 0.12)" : "0 1px 3px rgba(0,0,0,0.05)",
-    position: "relative",
-    zIndex: isDragging ? 1 : 0,
+    ...(isDragging ? { zIndex: 1 } : {}),
   };
+
+  const className = `builder-block ${isSelected ? "builder-block--selected" : ""} ${isDragging ? "builder-block--dragging" : ""} ${isHighlighted ? "builder-block--highlight" : ""}`;
 
   const handleContentChange = (e) => {
     onChange(blockKey(block), { content: e.target.value });
@@ -84,20 +80,57 @@ function SortableBlock({
     });
   };
 
+  const inputRef = React.useRef(null);
+
+  const handleContainerClick = (e) => {
+    onSelect(block);
+    const targetTag = e.target.tagName.toLowerCase();
+    if (targetTag !== 'input' && targetTag !== 'textarea' && targetTag !== 'button' && targetTag !== 'svg' && targetTag !== 'path') {
+      inputRef.current?.focus();
+    }
+  };
+
   return (
-    <div id={`editor-block-${blockKey(block)}`} ref={setNodeRef} style={style} onClick={() => onSelect(block)}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+    <div 
+      id={`editor-block-${blockKey(block)}`} 
+      ref={setNodeRef} 
+      style={style} 
+      className={className} 
+      onClick={handleContainerClick}
+      onDoubleClick={() => {
+        onSelect(block);
+        if (onOpenInspector) onOpenInspector();
+      }}
+    >
+      <div className="builder-block__header">
         <div 
           {...attributes} 
           {...listeners} 
-          style={{ cursor: "grab", color: "#94a3b8", display: "flex", alignItems: "center", gap: "8px" }}
+          className="builder-block__drag"
         >
-          <span style={{ fontSize: "16px" }}>⋮⋮</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="9" cy="5" r="1" />
+            <circle cx="9" cy="12" r="1" />
+            <circle cx="9" cy="19" r="1" />
+            <circle cx="15" cy="5" r="1" />
+            <circle cx="15" cy="12" r="1" />
+            <circle cx="15" cy="19" r="1" />
+          </svg>
           <Badge tone="neutral">{block.block_type.toUpperCase()}</Badge>
           {settings.hidden ? <Badge tone="warning">Hidden</Badge> : null}
           {isLocked ? <Badge tone="danger">Locked</Badge> : null}
         </div>
-        <div style={{ display: "flex", gap: "6px" }}>
+        <div className="builder-block__actions">
+          <IconButton
+            icon="settings"
+            size="small"
+            label="Block Settings"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect(block);
+              if (onOpenInspector) onOpenInspector();
+            }}
+          />
           <IconButton
             icon="copy"
             size="small"
@@ -123,6 +156,7 @@ function SortableBlock({
       <div style={{ paddingLeft: "24px" }}>
         {block.block_type === "heading" && (
           <input
+            ref={inputRef}
             className="field__input"
             style={{ fontSize: "20px", fontWeight: 600, padding: "12px", border: "none", borderBottom: "2px solid #e2e8f0", borderRadius: 0 }}
             placeholder="Heading Title..."
@@ -134,6 +168,7 @@ function SortableBlock({
 
         {(block.block_type === "text" || block.block_type === "paragraph") && (
           <textarea
+            ref={inputRef}
             className="field__input"
             style={{ minHeight: "100px", resize: "vertical" }}
             placeholder="Enter text content..."
@@ -185,6 +220,7 @@ function SortableBlock({
               </div>
             </div>
             <input
+              ref={inputRef}
               className="field__input"
               placeholder="Embed title..."
               value={block.content || ""}
@@ -210,6 +246,7 @@ function SortableBlock({
               </div>
             </div>
             <input
+              ref={inputRef}
               className="field__input"
               placeholder="Assignment title..."
               value={block.content || ""}
@@ -291,6 +328,7 @@ export function LessonBlockEditor({
   highlightBlockId,
   onHighlightClear,
   onActiveBlockChange,
+  onOpenInspector,
   onRegisterBlockSettingsUpdater,
   onSaveStateChange,
 }) {
@@ -616,11 +654,13 @@ export function LessonBlockEditor({
               key={`block-${block.id || block._tempId}`}
               block={block}
               isSelected={activeBlock ? blockKey(activeBlock) === blockKey(block) : false}
+              isHighlighted={highlightBlockId === blockKey(block)}
               onSelect={selectBlock}
               onChange={updateBlock}
               onDelete={deleteBlock}
               onDuplicate={duplicateBlock}
               onOpenMedia={handleOpenMedia}
+              onOpenInspector={onOpenInspector}
               quizOptions={quizOptions}
               quizLoading={quizLoading}
               quizError={quizError}

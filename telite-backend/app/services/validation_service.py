@@ -1,3 +1,11 @@
+"""
+LEGACY VALIDATION SERVICE - DO NOT USE FOR COURSE BUILDER READINESS.
+
+The active Course Builder readiness route uses app.services.validation.engine.
+This older service is retained only for historical reference and still contains
+pre-schema-alignment assumptions. Do not import it from routes or new code.
+"""
+
 from sqlalchemy.orm import Session
 from app.repositories.course_repo import CourseRepository
 from app.repositories.builder_repo import BuilderRepository

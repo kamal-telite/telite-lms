@@ -138,7 +138,7 @@ export function Modal({ open, title, description, children, footer, onClose, wid
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        style={{ maxWidth: width }}
+        style={{ width: "100%", maxWidth: width }}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-card__top">

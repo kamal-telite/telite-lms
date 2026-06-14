@@ -31,7 +31,11 @@ class Organization(Base, TimestampMixin):
 
     # ── Branding (Phase 7 isolated table) ───────────────────────
     branding: Mapped["OrganizationBranding"] = relationship(  # type: ignore[name-defined]
-        "OrganizationBranding", back_populates="organization", uselist=False, cascade="all, delete-orphan"
+        "OrganizationBranding",
+        back_populates="organization",
+        foreign_keys="OrganizationBranding.organization_id",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
     # Relationships

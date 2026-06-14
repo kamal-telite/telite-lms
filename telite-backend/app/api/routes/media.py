@@ -185,11 +185,11 @@ async def upload_asset(
         json.dumps({"asset_id": asset.id, "filename": asset.filename})
     )
     AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.uploaded")
+    response = _asset_response(db, asset)
     db.commit()
-    db.refresh(asset)
 
     return {
-        "asset": _asset_response(db, asset)
+        "asset": response
     }
 
 @media_router.get("", dependencies=[Depends(require_admin)])
@@ -279,15 +279,16 @@ def update_asset_metadata(
 
     asset.folder = _clean_folder(request.folder)
     asset.tags_json = json.dumps(_clean_tags(request.tags))
+    response = _asset_response(db, asset)
     media_repo.log_activity(
         current_user.id,
         current_user.org_id,
         "MEDIA_METADATA_UPDATED",
         json.dumps({"asset_id": asset.id, "folder": asset.folder, "tags": _tag_list(asset)})
     )
+    AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.updated")
     db.commit()
-    db.refresh(asset)
-    return {"asset": _asset_response(db, asset)}
+    return {"asset": response}
 
 @media_router.post("/{asset_id}/replace", dependencies=[Depends(require_admin), Depends(require_capability("media.replace"))])
 async def replace_asset_file(
@@ -327,9 +328,9 @@ async def replace_asset_file(
         json.dumps({"asset_id": asset.id, "filename": asset.filename, "asset_version": asset.asset_version})
     )
     AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.replaced")
+    response = _asset_response(db, asset)
     db.commit()
-    db.refresh(asset)
-    return {"asset": _asset_response(db, asset)}
+    return {"asset": response}
 
 @media_router.delete("/{asset_id}", dependencies=[Depends(require_admin), Depends(require_capability("media.delete"))])
 def delete_asset(

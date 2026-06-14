@@ -18,9 +18,17 @@ export const useAdminStore = create((set, get) => ({
   loadOrganizations: async () => {
     try {
       const res = await platformApi.listOrganizations({ limit: 100 });
-      set({ organizations: res.data.orgs });
+      const organizations = Array.isArray(res.data?.organizations)
+        ? res.data.organizations
+        : Array.isArray(res.data?.orgs)
+          ? res.data.orgs
+          : Array.isArray(res.data)
+            ? res.data
+            : [];
+      set({ organizations });
     } catch (err) {
       console.error("Failed to load organizations:", err);
+      set({ organizations: [] });
     }
   },
   updateOrgStatus: async (id, status) => {
@@ -39,9 +47,13 @@ export const useAdminStore = create((set, get) => ({
   loadAdmins: async () => {
     try {
       const res = await platformApi.listAdmins();
-      set({ admins: res.data.admins, pendingInvitations: res.data.pending_invitations });
+      set({
+        admins: Array.isArray(res.data?.admins) ? res.data.admins : [],
+        pendingInvitations: Array.isArray(res.data?.pending_invitations) ? res.data.pending_invitations : [],
+      });
     } catch (err) {
       console.error("Failed to load admins:", err);
+      set({ admins: [], pendingInvitations: [] });
     }
   },
   updateAdminStatus: async (id, status) => {

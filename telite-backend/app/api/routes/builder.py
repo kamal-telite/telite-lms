@@ -329,9 +329,24 @@ def validate_course(
     current_user: TokenData = Depends(get_current_user)
 ):
     from app.services.validation.engine import ValidationEngine
-    val_engine = ValidationEngine(db)
-    result = val_engine.run(course_id, current_user.org_id)
-    return result.dict()
+    from app.services.validation.schemas import ValidationResult, ValidationSummary, ValidationResultItem
+
+    try:
+        val_engine = ValidationEngine(db)
+        result = val_engine.run(course_id, current_user.org_id)
+        return result.model_dump() if hasattr(result, "model_dump") else result.dict()
+    except Exception as exc:
+        fallback = ValidationResult(
+            summary=ValidationSummary(errors=1, warnings=0, infos=0, score=0),
+            results=[
+                ValidationResultItem(
+                    type="validation_failed",
+                    severity="error",
+                    message=f"Course validation failed: {exc}",
+                )
+            ],
+        )
+        return fallback.model_dump() if hasattr(fallback, "model_dump") else fallback.dict()
 
 @builder_router.get("/courses/{course_id}/audit-logs", dependencies=[Depends(require_admin)])
 def get_audit_logs(
@@ -339,10 +354,34 @@ def get_audit_logs(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
-    from app.models.audit_log import AuditLog
-    logs = db.query(AuditLog).filter(
-        AuditLog.course_id == course_id,
-        AuditLog.org_id == current_user.org_id
-    ).order_by(AuditLog.created_at.desc()).all()
-    
-    return {"audit_logs": [log.to_dict() for log in logs]}
+    import json
+
+    from app.models.builder_activity_log import BuilderActivityLog
+
+    logs = db.query(BuilderActivityLog).filter(
+        BuilderActivityLog.course_id == course_id,
+        BuilderActivityLog.org_id == current_user.org_id
+    ).order_by(BuilderActivityLog.created_at.desc()).all()
+
+    audit_logs = []
+    for log in logs:
+        try:
+            payload = json.loads(log.payload or "{}")
+        except json.JSONDecodeError:
+            payload = {"raw": log.payload}
+        entity_type = str(payload.get("type") or log.action.split("_", 1)[0] or "activity").lower()
+        entity_id = payload.get("block_id") or payload.get("module_id") or payload.get("section_id") or course_id
+        audit_logs.append({
+            "id": log.id,
+            "org_id": log.org_id,
+            "user_id": log.user_id,
+            "course_id": log.course_id,
+            "entity_type": entity_type,
+            "entity_id": str(entity_id),
+            "action": log.action.lower(),
+            "before_json": None,
+            "after_json": payload,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        })
+
+    return {"audit_logs": audit_logs}

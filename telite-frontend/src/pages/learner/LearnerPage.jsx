@@ -187,6 +187,16 @@ export default function LearnerPage({ session, onLogout }) {
     return <ErrorState body={error || "Your learner dashboard did not return any data."} action={<Button tone="primary" onClick={load}>Retry</Button>} />;
   }
 
+  const hero = data.hero || {};
+  const stats = data.stats || {};
+  const courses = Array.isArray(data.courses) ? data.courses : [];
+  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+  const leaderboard = Array.isArray(data.recommendation?.leaderboard) ? data.recommendation.leaderboard : [];
+  const rankLabel = hero.rank == null ? "-" : `#${hero.rank}`;
+  const cohortRankLabel = stats.cohort_rank == null ? "-" : `#${stats.cohort_rank}`;
+  const avgQuizScore = Number.isFinite(Number(stats.avg_quiz_score)) ? Math.round(Number(stats.avg_quiz_score)) : 0;
+
   const navGroups = [
     {
       label: "Learning",
@@ -194,7 +204,7 @@ export default function LearnerPage({ session, onLogout }) {
         { id: "section-dashboard", label: "Dashboard", icon: "dashboard" },
         { id: "section-courses", label: "My Courses", icon: "course" },
         { id: "section-pal", label: "PAL Progress", icon: "leaderboard" },
-        { id: "section-tasks", label: "Tasks", icon: "task", badge: String(data.tasks?.filter(t => t.status === "pending" || t.status === "overdue").length || 0), badgeTone: "warn" },
+        { id: "section-tasks", label: "Tasks", icon: "task", badge: String(tasks.filter(t => t.status === "pending" || t.status === "overdue").length || 0), badgeTone: "warn" },
       ],
     },
     {
@@ -233,14 +243,14 @@ export default function LearnerPage({ session, onLogout }) {
       subtitle={`${data.profile.category_scope?.toUpperCase()} category · Telite Systems`}
       topbarActions={
         <>
-          <Badge tone="accent">PAL {formatPercent(data.hero.pal_score)}</Badge>
+          <Badge tone="accent">PAL {formatPercent(hero.pal_score)}</Badge>
           <Button
             tone="primary"
             icon="external"
-            onClick={() => handleLaunch(data.hero.current_course?.id)}
-            disabled={launchingCourseId === data.hero.current_course?.id}
+            onClick={() => handleLaunch(hero.current_course?.id)}
+            disabled={launchingCourseId === hero.current_course?.id}
           >
-            {launchingCourseId === data.hero.current_course?.id ? "Launching..." : "Resume Course"}
+            {launchingCourseId === hero.current_course?.id ? "Launching..." : "Resume Course"}
           </Button>
           <button className="icon-btn" title="Notifications" onClick={() => setShowNotifications(true)}>
             <span role="img" aria-label="bell">🔔</span>
@@ -255,7 +265,7 @@ export default function LearnerPage({ session, onLogout }) {
       }
       scrollRef={scrollRef}
     >
-      <NotificationDrawer open={showNotifications} onClose={() => setShowNotifications(false)} notifications={data.notifications} />
+      <NotificationDrawer open={showNotifications} onClose={() => setShowNotifications(false)} notifications={notifications} />
       
       {activeCourseId && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: "#fff" }}>
@@ -272,30 +282,30 @@ export default function LearnerPage({ session, onLogout }) {
               <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0, justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div className="eyebrow" style={{ margin: 0, color: "rgba(255,255,255,0.8)" }}>Learner workspace</div>
-                  <h2>{data.hero.headline}</h2>
-                  <p>{data.hero.subtext}</p>
+                  <h2>{hero.headline}</h2>
+                  <p>{hero.subtext}</p>
                 </div>
                 <div className="summary-chip" style={{ background: "rgba(255,255,255,0.14)", borderColor: "rgba(255,255,255,0.24)" }}>
                   <div className="summary-chip__label" style={{ color: "rgba(255,255,255,0.75)" }}>PAL score</div>
-                  <div className="summary-chip__value" style={{ color: "#fff" }}>{formatPercent(data.hero.pal_score)}</div>
+                  <div className="summary-chip__value" style={{ color: "#fff" }}>{formatPercent(hero.pal_score)}</div>
                 </div>
               </div>
               <div className="hero-banner__metrics">
                 <div className="hero-metric">
                   <span>Rank</span>
-                  <strong>#{data.hero.rank}</strong>
+                  <strong>{rankLabel}</strong>
                 </div>
                 <div className="hero-metric">
                   <span>Streak</span>
-                  <strong>{data.hero.streak_days}d</strong>
+                  <strong>{hero.streak_days || 0}d</strong>
                 </div>
                 <div className="hero-metric">
                   <span>Hours logged</span>
-                  <strong>{Math.round(data.hero.pal_time_spent_hours || 0)}h</strong>
+                  <strong>{Math.round(hero.pal_time_spent_hours || hero.time_spent_hours || 0)}h</strong>
                 </div>
               </div>
               <div className="hero-actions" style={{ marginTop: 18 }}>
-                <Button tone="primary" icon="external" onClick={() => handleLaunch(data.hero.current_course?.id)}>
+                <Button tone="primary" icon="external" onClick={() => handleLaunch(hero.current_course?.id)}>
                   Resume Course
                 </Button>
                 <Button tone="ghost" onClick={() => changeSection({ id: "section-pal" })}>
@@ -305,16 +315,16 @@ export default function LearnerPage({ session, onLogout }) {
             </div>
 
             <div className="grid-4">
-              <StatCard accent="#059669" label="Courses Completed" value={data.stats.courses_completed} meta="Completed and archived" />
-              <StatCard accent="#D97706" label="Courses Remaining" value={data.stats.courses_remaining} meta="Keep pushing the modules" />
-              <StatCard accent="#2563EB" label="Avg Quiz Score" value={Math.round(data.stats.avg_quiz_score)} suffix="%" meta="Assessment consistency" />
-              <StatCard accent="#7C3AED" label="Cohort Rank" value={`#${data.stats.cohort_rank}`} meta="You lead the cohort" />
+              <StatCard accent="#059669" label="Courses Completed" value={stats.courses_completed ?? 0} meta="Completed and archived" />
+              <StatCard accent="#D97706" label="Courses Remaining" value={stats.courses_remaining ?? Math.max(0, courses.length - (stats.courses_completed ?? 0))} meta="Keep pushing the modules" />
+              <StatCard accent="#2563EB" label="Avg Quiz Score" value={avgQuizScore} suffix="%" meta="Assessment consistency" />
+              <StatCard accent="#7C3AED" label="Cohort Rank" value={cohortRankLabel} meta="You lead the cohort" />
             </div>
 
             <Panel title="Recent Courses" subtitle="Resume where you left off" action={<button className="panel-link" onClick={() => changeSection({ id: 'section-courses' })}>View all →</button>}>
               <div className="grid-3">
-                {data.courses.slice(0,3).map((course) => (
-                  <article className={`course-card ${data.hero.current_course?.id === course.id ? "is-active" : ""}`} key={course.id}>
+                {courses.slice(0,3).map((course) => (
+                  <article className={`course-card ${hero.current_course?.id === course.id ? "is-active" : ""}`} key={course.id}>
                     <div className="course-card__header">
                       <div className="course-card__title">{course.name}</div>
                       <Badge tone={course.status === "completed" ? "success" : "neutral"}>
@@ -359,7 +369,7 @@ export default function LearnerPage({ session, onLogout }) {
                 ))}
               </div>
               <div className="grid-3">
-                {data.courses.filter(c => courseFilter === "all" ? true : c.status === courseFilter).map((course) => (
+                {courses.filter(c => courseFilter === "all" ? true : c.status === courseFilter).map((course) => (
                   <article className="course-card" key={course.id}>
                     <div className="course-card__header">
                       <div className="course-card__title">{course.name}</div>
@@ -398,7 +408,7 @@ export default function LearnerPage({ session, onLogout }) {
           <section id="section-pal">
             <div className="hero-banner" style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", padding: "40px 20px" }}>
               <div style={{ textAlign: "center", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
-                <PalRing score={Math.round(data.hero.pal_score)} />
+                <PalRing score={Math.round(Number(hero.pal_score) || 0)} />
                 <div>
                   <h2 style={{ fontSize: "1.5rem", margin: 0 }}>PAL Score Analysis</h2>
                   <p style={{ margin: "4px 0 0", opacity: 0.9 }}>Your holistic performance rating across all modules.</p>
@@ -452,7 +462,7 @@ export default function LearnerPage({ session, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).map((task) => (
+                    {tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).map((task) => (
                       <tr key={task.id}>
                         <td>
                           <div className="row-title">{task.title}</div>
@@ -478,7 +488,7 @@ export default function LearnerPage({ session, onLogout }) {
                         </td>
                       </tr>
                     ))}
-                    {data.tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).length === 0 && (
+                    {tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).length === 0 && (
                       <tr>
                         <td colSpan="4"><EmptyState title="No tasks" body="You have no tasks matching this filter." /></td>
                       </tr>
@@ -493,7 +503,7 @@ export default function LearnerPage({ session, onLogout }) {
         {/* LEADERBOARD PAGE */}
         {activeNav === "section-leaderboard" && (
           <section id="section-leaderboard">
-            <Panel title="Cohort Leaderboard" subtitle={`You are currently #${data.hero.rank} in your cohort`}>
+            <Panel title="Cohort Leaderboard" subtitle={`You are currently ${rankLabel} in your cohort`}>
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -505,7 +515,7 @@ export default function LearnerPage({ session, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.recommendation?.leaderboard?.map((row, idx) => (
+                    {leaderboard.map((row, idx) => (
                       <tr key={row.id || idx} className={row.id === data.profile.id ? "is-highlighted" : ""}>
                         <td style={{ textAlign: "center", fontWeight: 700, color: getRankColor(row.rank) }}>
                           #{row.rank}
@@ -536,7 +546,7 @@ export default function LearnerPage({ session, onLogout }) {
           <section id="section-certificates">
             <Panel title="Certificates" subtitle="Earned credentials">
               <div className="grid-3">
-                {data.courses.filter(c => c.status === "completed").map(course => (
+                {courses.filter(c => c.status === "completed").map(course => (
                   <div className="soft-card" key={course.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <div style={{ background: "var(--brand-gradient, linear-gradient(135deg, #0ea5e9, #6366f1))", height: 100, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold" }}>
                       Certificate
@@ -550,7 +560,7 @@ export default function LearnerPage({ session, onLogout }) {
                     </Button>
                   </div>
                 ))}
-                {data.courses.filter(c => c.status === "completed").length === 0 && (
+                {courses.filter(c => c.status === "completed").length === 0 && (
                   <EmptyState title="No certificates yet" body="Complete your first course to earn a certificate." style={{ gridColumn: "1 / -1" }} />
                 )}
               </div>

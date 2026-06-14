@@ -7,6 +7,7 @@ class QuizAnswer(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     attempt_id = Column(Integer, ForeignKey("quiz_attempts.id"), nullable=False, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     question_version_id = Column(Integer, ForeignKey("question_versions.id"), nullable=False)
     response_json = Column(JSON, nullable=True)
     is_correct = Column(Boolean, nullable=True)

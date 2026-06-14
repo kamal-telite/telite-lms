@@ -30,6 +30,9 @@ def is_learner_role(role: str) -> bool:
 def is_tenant_super_admin_role(role: str) -> bool:
     return role == "super_admin"
 
+SUPER_ADMIN_VISIBLE_ROLES = ("super_admin", "category_admin", "instructor", "learner")
+CATEGORY_ADMIN_VISIBLE_ROLES = ("category_admin", "instructor", "learner")
+
 def _org_id(record: Any) -> int | None:
     if not record:
         return None
@@ -192,7 +195,14 @@ def get_admins(
 ):
     scoped_org_id = resolve_org_scope(current_user, org_id)
     user_repo = UserRepository(db)
-    admins = user_repo.list_admins_by_org(scoped_org_id)
+    if is_category_admin_role(current_user.role):
+        admins = [
+            admin
+            for admin in user_repo.list_admins_by_org(scoped_org_id, roles=["category_admin"])
+            if admin.category_scope == current_user.category_scope
+        ]
+    else:
+        admins = user_repo.list_admins_by_org(scoped_org_id, roles=["super_admin", "category_admin"])
     return {"admins": [a.to_dict() for a in admins]}
 
 @management_router.post("/admins")
@@ -220,12 +230,25 @@ def post_admin(
                 user_repo.update_password(existing, body.password)
             user = existing
         else:
+            if not body.password:
+                from app.core.password_utils import generate_secure_password
+                from app.core.runtime import is_production_like
+
+                if is_production_like():
+                    raise HTTPException(
+                        status_code=400,
+                        detail="password is required when creating a user",
+                    )
+                create_password = generate_secure_password(16)
+            else:
+                create_password = body.password
+
             user = user_repo.create_user(
                 email=body.email,
                 full_name=body.full_name,
                 role=body.role,
                 org_id=scoped_org_id,
-                password=body.password or "ChangeMe123!",
+                password=create_password,
                 category_scope=body.category_scope,
                 username=body.username
             )
@@ -457,14 +480,28 @@ def get_users(
 ):
     scoped_org_id = resolve_org_scope(current_user, org_id)
     user_repo = UserRepository(db)
+    visible_roles = None
     
     if is_category_admin_role(current_user.role):
         category_slug = current_user.category_scope
-        if role and is_tenant_super_admin_role(role):
-            raise HTTPException(status_code=403, detail="Category admins cannot view super admin users.")
+        visible_roles = CATEGORY_ADMIN_VISIBLE_ROLES
+        if role and role not in visible_roles:
+            raise HTTPException(status_code=403, detail="Category admins cannot view that user role.")
+    elif not current_user.is_platform_admin:
+        visible_roles = SUPER_ADMIN_VISIBLE_ROLES
+        if role and role not in visible_roles:
+            raise HTTPException(status_code=403, detail="Super admins cannot view platform admin users.")
             
     offset = (page - 1) * page_size
-    users = user_repo.list_by_org(scoped_org_id, role=role, search=query, limit=page_size, offset=offset)
+    users = user_repo.list_by_org(
+        scoped_org_id,
+        role=role,
+        roles=visible_roles if role is None else None,
+        exclude_platform_admins=not current_user.is_platform_admin,
+        search=query,
+        limit=page_size,
+        offset=offset,
+    )
     
     # Optional category filtering
     if category_slug:
@@ -478,9 +515,13 @@ def _can_access_user(viewer: TokenData, target: Any) -> bool:
     if viewer.org_id is None or _org_id(target) != viewer.org_id:
         return False
     if is_tenant_super_admin_role(viewer.role):
-        return True
+        return not getattr(target, "is_platform_admin", False) and getattr(target, "role", None) != "platform_admin"
     if is_category_admin_role(viewer.role):
-        return target.category_scope == viewer.category_scope or is_admin_role(target.role)
+        return (
+            target.category_scope == viewer.category_scope
+            and getattr(target, "role", None) in CATEGORY_ADMIN_VISIBLE_ROLES
+            and not getattr(target, "is_platform_admin", False)
+        )
     return viewer.id == target.id
 
 @management_router.get("/users/{user_id}")
