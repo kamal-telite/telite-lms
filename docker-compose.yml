@@ -10,8 +10,8 @@ x-backend-env: &backend-env
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
   COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
   COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
-  TELITE_APP_URL: ${TELITE_APP_URL:-http://localhost:3000}
-  TELITE_CORS_ORIGINS: ${TELITE_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+  TELITE_APP_URL: ${TELITE_APP_URL:-http://localhost:${FRONTEND_PORT:-3000}}
+  TELITE_CORS_ORIGINS: ${TELITE_CORS_ORIGINS:-http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}}
   SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
   SMTP_PORT: ${SMTP_PORT:-587}
   SMTP_USER: ${SMTP_USER:-}
@@ -27,6 +27,7 @@ x-backend-env: &backend-env
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-text}
   MOODLE_TOKEN: ${MOODLE_TOKEN:-}
+  BACKEND_INTERNAL_PORT: ${BACKEND_INTERNAL_PORT:-8001}
 
 services:
   postgres:
@@ -139,7 +140,7 @@ services:
       MOODLE_WWWROOT: ${MOODLE_WWWROOT:-http://localhost:8082}
       MOODLE_MODE: ${MOODLE_MODE:-mock}
     ports:
-      - "${BACKEND_PORT:-8001}:8001"
+      - "${BACKEND_PORT:-8001}:${BACKEND_INTERNAL_PORT:-8001}"
     volumes:
       - telite-lms_uploads:/app/uploads
     healthcheck:
@@ -148,7 +149,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/readiness', timeout=5)",
+          "import os, urllib.request; port=os.getenv('BACKEND_INTERNAL_PORT','8001'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health/readiness', timeout=5)",
         ]
       interval: 15s
       timeout: 5s
@@ -266,7 +267,10 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
-        VITE_APP_URL: ${TELITE_APP_URL:-http://localhost:3000}
+        VITE_APP_URL: ${TELITE_APP_URL:-http://localhost:${FRONTEND_PORT:-3000}}
+    environment:
+      BACKEND_SERVICE_HOST: ${BACKEND_SERVICE_HOST:-backend}
+      BACKEND_INTERNAL_PORT: ${BACKEND_INTERNAL_PORT:-8001}
     container_name: telite_frontend
     restart: unless-stopped
     ports:

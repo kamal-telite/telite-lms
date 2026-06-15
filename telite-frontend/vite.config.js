@@ -1,26 +1,34 @@
 // vite.config.js
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 3000,
-    host: true, // Listen on all local IPs
-    strictPort: true,
-    hmr: {
-      clientPort: 3000,
-    },
-    proxy: {
-      "^/(api|auth|authoring|categories|users|dashboard|enrol|tasks|pal|notifications|settings|admin|signup|courses|health|moodle)": {
-        target: "http://127.0.0.1:8000",
-        changeOrigin: true,
-        bypass: (req, res, options) => {
-          if (req.headers.accept && req.headers.accept.includes("text/html")) {
-            return "/index.html"; // Return index.html for page navigation
-          }
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const frontendPort = Number(env.VITE_FRONTEND_DEV_PORT || env.FRONTEND_PORT || 3000);
+  const backendHost = env.VITE_BACKEND_HOST || "127.0.0.1";
+  const backendPort = env.VITE_BACKEND_PORT || env.BACKEND_PORT || 8001;
+  const backendUrl = env.VITE_BACKEND_URL || `http://${backendHost}:${backendPort}`;
+
+  return {
+    plugins: [react()],
+    server: {
+      port: frontendPort,
+      host: true,
+      strictPort: true,
+      hmr: {
+        clientPort: frontendPort,
+      },
+      proxy: {
+        "^/(api|auth|authoring|categories|users|dashboard|enrol|tasks|pal|notifications|settings|admin|signup|courses|health|moodle)": {
+          target: backendUrl,
+          changeOrigin: true,
+          bypass: (req) => {
+            if (req.headers.accept && req.headers.accept.includes("text/html")) {
+              return "/index.html";
+            }
+          },
         },
       },
     },
-  },
+  };
 });

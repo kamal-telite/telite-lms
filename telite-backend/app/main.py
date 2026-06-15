@@ -71,17 +71,13 @@ def create_app() -> FastAPI:
         openapi_url=None if _prod else "/openapi.json",
     )
 
+    frontend_port = os.getenv("FRONTEND_PORT") or os.getenv("VITE_FRONTEND_DEV_PORT", "3000")
+    frontend_dev_port = os.getenv("VITE_DEV_SERVER_PORT", "5173")
     _default_origins = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:8080",
-        "http://localhost:8082",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://127.0.0.1:8080",
-        "http://127.0.0.1:8082",
+        f"http://localhost:{frontend_port}",
+        f"http://127.0.0.1:{frontend_port}",
+        f"http://localhost:{frontend_dev_port}",
+        f"http://127.0.0.1:{frontend_dev_port}",
     ]
     _env_origins = os.getenv("TELITE_CORS_ORIGINS", "").strip()
     cors_origins = (

@@ -1,7 +1,8 @@
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    BACKEND_INTERNAL_PORT=8001
 
 WORKDIR /app
 
@@ -25,7 +26,7 @@ RUN sed -i 's/\r$//' /app/scripts/docker-entrypoint.sh \
     && mkdir -p /app/uploads \
     && chown -R telite:telite /app
 
-EXPOSE 8001
+EXPOSE ${BACKEND_INTERNAL_PORT}
 
 ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_INTERNAL_PORT:-8001}"]

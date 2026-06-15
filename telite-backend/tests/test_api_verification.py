@@ -1,7 +1,8 @@
 import requests
 import pytest
+import os
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("TELITE_LIVE_API_BASE_URL") or f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '8001')}"
 
 def get_learner_token():
     response = requests.post(

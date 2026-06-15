@@ -1,9 +1,10 @@
 import requests
 import pytest
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("TELITE_LIVE_API_BASE_URL") or f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '8001')}"
 
 def get_token(username, password):
     response = requests.post(

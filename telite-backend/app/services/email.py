@@ -14,7 +14,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 FROM_NAME = os.getenv("FROM_NAME", "Telite LMS")
-APP_URL = os.getenv("TELITE_APP_URL", "http://localhost:5173").rstrip("/")
+APP_URL = os.getenv("TELITE_APP_URL", f"http://localhost:{os.getenv('FRONTEND_PORT', '3000')}").rstrip("/")
 
 
 def send_welcome_email(

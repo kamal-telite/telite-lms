@@ -24,7 +24,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/readiness', timeout=5)",
+          "import os, urllib.request; port=os.getenv('BACKEND_INTERNAL_PORT','8001'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health/readiness', timeout=5)",
         ]
 
   seed_permissions:

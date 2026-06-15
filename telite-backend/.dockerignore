@@ -4,7 +4,12 @@
 
 data/
 tests/
+archive/
+Project_docs/
+scratch/
+uploads/
 .pytest_cache/
+.ruff_cache/
 __pycache__/
 *.py[cod]
 *.db

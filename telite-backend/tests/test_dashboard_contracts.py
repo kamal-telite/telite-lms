@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-BASE_URL = os.getenv("TELITE_CONTRACT_BASE_URL", "http://localhost:8001")
+BASE_URL = os.getenv("TELITE_CONTRACT_BASE_URL") or f"http://localhost:{os.getenv('BACKEND_PORT', '8001')}"
 
 
 class PlatformOverviewResponse(BaseModel):

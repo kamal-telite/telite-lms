@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 import httpx
 import statistics
@@ -6,7 +7,7 @@ import statistics
 # Load Test Configuration
 CONCURRENT_USERS = 100
 REQUESTS_PER_USER = 10
-BASE_URL = "http://localhost:8001"
+BASE_URL = os.getenv("TELITE_LOAD_TEST_BASE_URL") or f"http://localhost:{os.getenv('BACKEND_PORT', '8001')}"
 
 # In a real environment, we'd authenticate. For the load test, we assume testing mock auth.
 HEADERS = {"Authorization": "Bearer TEST_TOKEN"}

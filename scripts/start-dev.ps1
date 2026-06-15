@@ -1,6 +1,6 @@
 param(
-    [int]$BackendPort = 8001,
-    [int]$FrontendPort = 3000
+    [int]$BackendPort = $(if ($env:BACKEND_PORT) { [int]$env:BACKEND_PORT } elseif ($env:BACKEND_INTERNAL_PORT) { [int]$env:BACKEND_INTERNAL_PORT } else { 8001 }),
+    [int]$FrontendPort = $(if ($env:FRONTEND_PORT) { [int]$env:FRONTEND_PORT } elseif ($env:VITE_FRONTEND_DEV_PORT) { [int]$env:VITE_FRONTEND_DEV_PORT } else { 3000 })
 )
 
 $ErrorActionPreference = "Stop"

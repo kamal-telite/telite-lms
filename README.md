@@ -102,7 +102,7 @@ cd telite-backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8001
+uvicorn app.main:app --reload --port ${BACKEND_INTERNAL_PORT:-8001}
 ```
 
 Windows helper:
@@ -111,7 +111,7 @@ Windows helper:
 .\scripts\start-dev.ps1
 ```
 
-The signup page loads roles and organizations through the Vite proxy, so the backend must be running on `127.0.0.1:8001` while the frontend runs on `localhost:3000`.
+The signup page loads roles and organizations through the Vite proxy, so the backend should be running on `127.0.0.1:${BACKEND_PORT:-8001}` while the frontend runs on `localhost:${FRONTEND_PORT:-3000}`.
 
 ## Environment Setup
 
@@ -185,14 +185,11 @@ The SQL it runs lives in [docker/sql/provision-existing-postgres.sql](/abs/path/
 
 ### Backend Data Migration
 
-If your local FastAPI backend has real data in SQLite that you want to preserve, switch the backend to PostgreSQL config and then run:
+The active backend schema path is PostgreSQL plus Alembic migrations. Docker startup runs the migration path automatically; for manual checks use:
 
 ```powershell
-cd telite-backend
-python scripts/migrate_backend_to_postgres.py
+docker compose exec backend alembic current
 ```
-
-That copies the SQLite records into `telite_backend`. If you do not need old local data, the backend will auto-create and seed its PostgreSQL schema on first startup.
 
 ## Docker Setup
 
@@ -203,8 +200,8 @@ docker compose up --build
 
 Default URLs:
 
-- Frontend: `http://localhost:3000`
-- Backend API docs: `http://localhost:8001/docs`
+- Frontend: `http://localhost:${FRONTEND_PORT:-3000}`
+- Backend API docs: `http://localhost:${BACKEND_PORT:-8001}/docs`
 - Moodle: `http://localhost:8082`
 - PostgreSQL host port: `55432`
 
@@ -234,9 +231,9 @@ Add production screenshots here before publishing a public portfolio or client-f
 
 Run the backend and open:
 
-- Swagger UI: `http://localhost:8001/docs`
-- ReDoc: `http://localhost:8001/redoc`
-- Health check: `http://localhost:8001/health`
+- Swagger UI: `http://localhost:${BACKEND_PORT:-8001}/docs`
+- ReDoc: `http://localhost:${BACKEND_PORT:-8001}/redoc`
+- Health check: `http://localhost:${BACKEND_PORT:-8001}/health`
 
 ## Deployment
 

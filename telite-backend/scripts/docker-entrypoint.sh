@@ -7,7 +7,7 @@ if [ "$(id -u)" -eq 0 ]; then
     exec gosu telite "$0" "$@"
 fi
 
-if [[ "${1:-}" == "uvicorn" ]]; then
+if [[ "${1:-}" == "uvicorn" || "${*:-}" == *"uvicorn app.main:app"* ]]; then
     echo "Preparing runtime database role..."
     python -m scripts.ensure_runtime_db_role
     echo "Preparing database schema..."

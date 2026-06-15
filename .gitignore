@@ -123,8 +123,10 @@ Desktop.ini
 
 # Local project notes and generated patches
 Project_docs/
+unwanted/
 commit_*.txt
 context.md
 *.patch
 *.rej
 *.orig
+/scripts/

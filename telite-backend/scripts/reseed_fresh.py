@@ -630,4 +630,5 @@ if __name__ == "__main__":
         seed_all(session)
         verify(session)
 
-    print("🎉 Done! Restart uvicorn and verify at http://localhost:3000")
+    app_url = os.getenv("TELITE_APP_URL", f"http://localhost:{os.getenv('FRONTEND_PORT', '3000')}")
+    print(f"🎉 Done! Restart uvicorn and verify at {app_url}")

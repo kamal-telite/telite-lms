@@ -1,5 +1,5 @@
 param(
-  [string]$BaseUrl = "http://localhost:3000",
+  [string]$BaseUrl = $(if ($env:TELITE_APP_URL) { $env:TELITE_APP_URL } else { "http://localhost:$(if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { '3000' })" }),
   [string]$CourseId = "course-frontend-basics",
   [string]$Username = "anika"
 )
