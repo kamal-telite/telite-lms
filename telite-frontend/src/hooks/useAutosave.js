@@ -87,7 +87,8 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
             await api.post(`/authoring/courses/${courseId}/lock`);
             await performSave(payload, true);
             return;
-          } catch {
+          } catch (lockError) {
+            console.debug("Unable to renew editor lock before autosave retry.", lockError);
           }
         }
         setSaveState("error");

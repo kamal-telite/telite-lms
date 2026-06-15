@@ -1,7 +1,13 @@
-import requests
-import pytest
 import os
+
+import pytest
+import requests
 from dotenv import load_dotenv
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("TELITE_RUN_LIVE_RLS_TESTS") != "1",
+    reason="Set TELITE_RUN_LIVE_RLS_TESTS=1 to run live cross-tenant RLS verification tests.",
+)
 
 load_dotenv()
 BASE_URL = os.getenv("TELITE_LIVE_API_BASE_URL") or f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '8001')}"

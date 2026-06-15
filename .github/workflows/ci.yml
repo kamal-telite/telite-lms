@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - Dev-Ops
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend lint and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telite-backend
+    env:
+      ENVIRONMENT: development
+      TELITE_DB_BACKEND: sqlite
+      TELITE_DB_PATH: data/ci_test_telite_lms.db
+      TELITE_DATABASE_URL: sqlite:///data/ci_test_telite_lms.db
+      TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
+      TELITE_PASSWORD_SALT: ci-test-password-salt
+      TELITE_USE_ALEMBIC: "false"
+      REDIS_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            telite-backend/requirements.txt
+            telite-backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Ruff release tooling
+        run: ruff check scripts/validate_production_env.py tests/test_health.py tests/test_api_verification.py tests/test_rls_verification.py tests/test_rls_isolation.py
+
+      - name: Pytest
+        run: |
+          mkdir -p data
+          pytest -q tests/test_health.py tests/test_course_creation.py tests/test_task_workflow.py
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telite-frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: telite-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint:ci
+
+      - name: Critical dependency audit
+        run: npm audit --audit-level=critical
+
+      - name: Build
+        run: npm run build
+
+  production-env-contract:
+    name: Production env contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telite-backend
+    env:
+      ENVIRONMENT: production
+      TELITE_AUTH_SECRET: ci-production-secret-with-more-than-32-characters
+      TELITE_PASSWORD_SALT: ci-production-salt-value
+      POSTGRES_PASSWORD: ci-postgres-password
+      TELITE_POSTGRES_DB: telite_backend
+      TELITE_POSTGRES_USER: telite_app
+      TELITE_POSTGRES_PASSWORD: ci-telite-password
+      REDIS_PASSWORD: ci-redis-password
+      TELITE_APP_URL: https://lms.example.com
+      TELITE_CORS_ORIGINS: https://lms.example.com
+      COOKIE_SECURE: "true"
+      COOKIE_SAMESITE: strict
+      MOODLE_MODE: mock
+      R2_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate production env
+        run: python -m scripts.validate_production_env
+
+  docker:
+    name: Docker compose build
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - frontend
+      - production-env-contract
+    env:
+      ENVIRONMENT: production
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ci-postgres-password
+      TELITE_POSTGRES_DB: telite_backend
+      TELITE_POSTGRES_USER: telite_app
+      TELITE_POSTGRES_PASSWORD: ci-telite-password
+      TELITE_AUTH_SECRET: ci-production-secret-with-more-than-32-characters
+      TELITE_PASSWORD_SALT: ci-production-salt-value
+      REDIS_PASSWORD: ci-redis-password
+      MOODLE_DB_NAME: moodle
+      MOODLE_DB_USER: moodleuser
+      MOODLE_DB_PASSWORD: ci-moodle-password
+      TELITE_APP_URL: https://lms.example.com
+      TELITE_CORS_ORIGINS: https://lms.example.com
+      COOKIE_SECURE: "true"
+      COOKIE_SAMESITE: strict
+      MOODLE_MODE: mock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose configuration
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+
+      - name: Build application images
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml build backend frontend
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Review dependencies
+        uses: actions/dependency-review-action@v4

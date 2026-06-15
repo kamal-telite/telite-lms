@@ -1,5 +1,9 @@
 FROM python:3.12-slim-bookworm
 
+LABEL org.opencontainers.image.title="Telite LMS Backend" \
+      org.opencontainers.image.description="FastAPI backend for Telite LMS" \
+      org.opencontainers.image.source="https://github.com/telite-systems/telite-lms"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     BACKEND_INTERNAL_PORT=8001
@@ -27,6 +31,9 @@ RUN sed -i 's/\r$//' /app/scripts/docker-entrypoint.sh \
     && chown -R telite:telite /app
 
 EXPOSE ${BACKEND_INTERNAL_PORT}
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD python -c "import os, urllib.request; port=os.getenv('BACKEND_INTERNAL_PORT','8001'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health/liveness', timeout=5)" || exit 1
 
 ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_INTERNAL_PORT:-8001}"]

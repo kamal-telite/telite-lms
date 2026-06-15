@@ -12,8 +12,8 @@ Run against Docker/local Postgres with:
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -23,8 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.platform_audit import TENANT_TABLES
-
+from app.db.rls import TENANT_SCOPED_TABLES  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TELITE_RUN_LIVE_RLS_TESTS") != "1",
@@ -61,7 +60,7 @@ def test_tenant_owned_tables_have_rls_enabled():
         ).all()
 
     rls = {row.relname: bool(row.relrowsecurity) for row in rows}
-    missing = sorted(table for table in TENANT_TABLES if table in rls and not rls[table])
+    missing = sorted(table for table in TENANT_SCOPED_TABLES if table in rls and not rls[table])
     assert missing == []
 
 

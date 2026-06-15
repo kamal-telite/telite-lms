@@ -1,6 +1,12 @@
-import requests
-import pytest
 import os
+
+import pytest
+import requests
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("TELITE_RUN_LIVE_API_TESTS") != "1",
+    reason="Set TELITE_RUN_LIVE_API_TESTS=1 to run live learner API verification tests.",
+)
 
 BASE_URL = os.getenv("TELITE_LIVE_API_BASE_URL") or f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '8001')}"
 
@@ -38,10 +44,12 @@ def test_learner_progress():
     course_a_id = next(c["id"] for c in courses_resp.json() if c["name"] == "Course A")
 
     from dotenv import load_dotenv
-    load_dotenv()
-    from app.db.engine import get_engine
     from sqlalchemy.orm import Session
+
+    from app.db.engine import get_engine
     from app.models.course_module import CourseModule
+
+    load_dotenv()
     engine = get_engine()
     with Session(engine) as session:
         mod = session.query(CourseModule).filter_by(course_id=course_a_id).first()
