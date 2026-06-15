@@ -239,6 +239,18 @@ def list_assets(
                     )
                 )
             )
+        elif type == "h5p":
+            query = query.filter(
+                MediaAsset.mime_type.in_(
+                    (
+                        "application/zip",
+                        "application/x-h5p",
+                        "application/zip-compressed",
+                        "application/octet-stream",
+                    )
+                ),
+                MediaAsset.filename.ilike("%.h5p")
+            )
         elif "/" in type:
             query = query.filter(MediaAsset.mime_type == type)
         else:

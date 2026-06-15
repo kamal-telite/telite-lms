@@ -178,7 +178,7 @@ function SortableBlock({
           />
         )}
 
-        {(block.block_type === "image" || block.block_type === "video" || block.block_type === "audio" || block.block_type === "pdf" || block.block_type === "scorm") && (
+        {(block.block_type === "image" || block.block_type === "video" || block.block_type === "audio" || block.block_type === "pdf" || block.block_type === "scorm" || block.block_type === "h5p") && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ background: "#f8fafc", padding: "32px", textAlign: "center", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
               {block.media_asset_id || block.settings?.asset_id || block.settings?.url ? (
@@ -206,6 +206,10 @@ function SortableBlock({
             {block.block_type === "scorm" ? (
               <div style={{ color: "#64748b", fontSize: "13px" }}>
                 Attach a SCORM ZIP package from the Media Library.
+              </div>
+            ) : block.block_type === "h5p" ? (
+              <div style={{ color: "#64748b", fontSize: "13px" }}>
+                Attach an H5P file (.h5p) from the Media Library.
               </div>
             ) : null}
           </div>
@@ -684,6 +688,7 @@ export function LessonBlockEditor({
         <Button tone="neutral" onClick={() => addBlock("audio")}>+ Audio</Button>
         <Button tone="neutral" onClick={() => addBlock("pdf")}>+ PDF</Button>
         <Button tone="neutral" onClick={() => addBlock("scorm")}>+ SCORM</Button>
+        <Button tone="neutral" onClick={() => addBlock("h5p")}>+ H5P</Button>
         <Button tone="neutral" onClick={() => addBlock("assignment")}>+ Assignment</Button>
         <Button tone="neutral" onClick={() => addBlock("embed")}>+ Embed</Button>
         <Button tone="neutral" onClick={() => addBlock("quiz_reference")}>+ Quiz</Button>

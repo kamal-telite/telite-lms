@@ -162,7 +162,7 @@ class ValidationService:
                             "fix_target": b_fix
                         })
                     
-                    if b_type in ["image", "video", "audio", "pdf", "scorm"]:
+                    if b_type in ["image", "video", "audio", "pdf", "scorm", "h5p"]:
                         settings = block.metadata_json or {}
                         asset_id = block.media_asset_id or settings.get("asset_id")
                         url = settings.get("url")

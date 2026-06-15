@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>H5P Player</title>
+  <script src="https://cdn.jsdelivr.net/npm/h5p-standalone@3.5.1/dist/main.bundle.js"></script>
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; }
+    #h5p-container { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="h5p-container"></div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const src = params.get('src');
+
+    if (src) {
+      const el = document.getElementById('h5p-container');
+      
+      // H5PStandalone expects the path to a folder containing h5p.json
+      // If the backend serves an unzipped structure or a virtual endpoint, `src` should point to it.
+      const options = {
+        h5pJsonPath: src,
+        frameJs: 'https://cdn.jsdelivr.net/npm/h5p-standalone@3.5.1/dist/frame.bundle.js',
+        frameCss: 'https://cdn.jsdelivr.net/npm/h5p-standalone@3.5.1/dist/styles/h5p.css',
+      };
+      
+      new H5PStandalone(el, options).then(() => {
+        // Forward xAPI events to the parent window (the React app)
+        if (window.H5P && window.H5P.externalDispatcher) {
+          window.H5P.externalDispatcher.on('xAPI', function (event) {
+            window.parent.postMessage({
+              type: 'H5P_xAPI',
+              event: event.data.statement
+            }, '*');
+          });
+        }
+      }).catch(err => {
+        console.error("H5P Initialization failed:", err);
+        el.innerHTML = '<div style="padding: 20px; color: red; font-family: sans-serif;">Failed to load H5P content. Make sure the source is a valid unzipped H5P package directory.</div>';
+      });
+    } else {
+      document.getElementById('h5p-container').innerHTML = '<div style="padding: 20px; text-align: center; font-family: sans-serif; color: #64748b;">H5P source not provided.</div>';
+    }
+  </script>
+</body>
+</html>

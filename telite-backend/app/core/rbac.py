@@ -69,6 +69,12 @@ class Permission:
     AUTHORING_ROLLBACK = "authoring.rollback"
     AUTHORING_VIEW_AUDIT_LOG = "authoring.view_audit_log"
 
+    # H5P-level
+    H5P_UPLOAD = "h5p.upload"
+    H5P_EDIT = "h5p.edit"
+    H5P_DELETE = "h5p.delete"
+    H5P_VIEW = "h5p.view"
+
 
 # ── Role → Permission matrix ──────────────────────────────────────────────────
 
@@ -100,6 +106,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_ROLLBACK,
         Permission.AUTHORING_VIEW_AUDIT_LOG,
         Permission.ORG_MANAGE_PERMISSIONS,
+        Permission.H5P_UPLOAD,
+        Permission.H5P_EDIT,
+        Permission.H5P_DELETE,
+        Permission.H5P_VIEW,
     },
     "super_admin": {
         Permission.ORG_MANAGE_USERS,
@@ -125,6 +135,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_ROLLBACK,
         Permission.AUTHORING_VIEW_AUDIT_LOG,
         Permission.ORG_MANAGE_PERMISSIONS,
+        Permission.H5P_UPLOAD,
+        Permission.H5P_EDIT,
+        Permission.H5P_DELETE,
+        Permission.H5P_VIEW,
     },
     "category_admin": {
         Permission.CAT_MANAGE_COURSES,
@@ -140,6 +154,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_MANAGE_MEDIA,
         Permission.AUTHORING_SUBMIT_REVIEW,
         Permission.AUTHORING_VIEW_AUDIT_LOG,
+        Permission.H5P_UPLOAD,
+        Permission.H5P_EDIT,
+        Permission.H5P_DELETE,
+        Permission.H5P_VIEW,
     },
     "author": {
         Permission.AUTHORING_MANAGE_BLOCKS,
@@ -150,6 +168,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,
+        Permission.H5P_UPLOAD,
+        Permission.H5P_EDIT,
+        Permission.H5P_DELETE,
+        Permission.H5P_VIEW,
     },
     "reviewer": {
         Permission.AUTHORING_APPROVE_REJECT,
@@ -157,11 +179,13 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,
+        Permission.H5P_VIEW,
     },
     "learner": {
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,
+        Permission.H5P_VIEW,
     },
 }
 

@@ -139,6 +139,67 @@ function ScormBlock({ title, src, filename }) {
   );
 }
 
+function H5PBlock({ title, src, filename, courseId, moduleId, blockId }) {
+  const [completed, setCompleted] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data?.type === 'H5P_xAPI') {
+        const stmt = event.data.event;
+        const verb = stmt?.verb?.id;
+        
+        if (verb === 'http://adlnet.gov/expapi/verbs/completed' || verb === 'http://adlnet.gov/expapi/verbs/passed') {
+          if (!completed && courseId) {
+            setCompleted(true);
+            const token = localStorage.getItem("token");
+            fetch("/api/v1/learner/events", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                events: [{
+                  event_type: "BLOCK_COMPLETED",
+                  course_id: courseId,
+                  module_id: moduleId,
+                  ...(Number.isInteger(blockId) ? { block_id: blockId } : {}),
+                  payload_json: JSON.stringify({ source: 'h5p_xapi', score: stmt.result?.score })
+                }]
+              })
+            }).catch(() => {});
+          }
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [completed, courseId, moduleId, blockId]);
+
+  if (!src) {
+    return (
+      <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)", margin: "1em 0" }}>
+        H5P content is not configured.
+      </div>
+    );
+  }
+
+  const playerUrl = `/h5p/index.html?src=${encodeURIComponent(src)}`;
+
+  return (
+    <div style={{ margin: "1em 0", border: "1px solid var(--border)", borderRadius: "8px", overflow: "hidden", background: "var(--surface)" }}>
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)", fontWeight: 700 }}>
+        {title || filename || "H5P Interactive Content"}
+      </div>
+      <iframe
+        src={playerUrl}
+        title={title || filename || "H5P Content"}
+        style={{ width: "100%", height: "600px", border: 0, display: "block", background: "#fff" }}
+        allowFullScreen
+        allow="microphone; camera; autoplay"
+      />
+    </div>
+  );
+}
+
 function PdfBlock({ title, src, filename }) {
   if (!src) {
     return (
@@ -257,6 +318,8 @@ function renderNativeBlock(block, courseId, moduleId) {
       return <PdfBlock title={block.content} src={settings.url} filename={settings.filename} />;
     case "scorm":
       return <ScormBlock title={block.content} src={settings.url} filename={settings.filename} />;
+    case "h5p":
+      return <H5PBlock title={block.content} src={settings.url} filename={settings.filename} courseId={courseId} moduleId={moduleId} blockId={block.id} />;
     case "embed":
       return <EmbedBlock title={block.content} src={settings.url} />;
     case "assignment":
