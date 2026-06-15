@@ -30,13 +30,14 @@ def upgrade() -> None:
             ORDER BY id
             LIMIT 1;
 
-            IF default_org_id IS NULL THEN
+            IF default_org_id IS NULL AND EXISTS (SELECT 1 FROM tasks WHERE org_id IS NULL) THEN
                 RAISE EXCEPTION 'Cannot normalize tasks without at least one organization';
             END IF;
 
             UPDATE tasks
             SET org_id = default_org_id
-            WHERE org_id IS NULL;
+            WHERE org_id IS NULL
+              AND default_org_id IS NOT NULL;
 
             ALTER TABLE tasks
                 ALTER COLUMN org_id SET NOT NULL;

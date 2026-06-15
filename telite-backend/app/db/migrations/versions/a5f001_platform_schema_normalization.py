@@ -190,21 +190,28 @@ def _normalize_core_org_ids() -> None:
             ORDER BY id
             LIMIT 1;
 
-            IF default_org_id IS NULL THEN
+            IF default_org_id IS NULL AND (
+                EXISTS (SELECT 1 FROM users WHERE org_id IS NULL OR organization_id IS NOT NULL)
+                OR EXISTS (SELECT 1 FROM categories WHERE org_id IS NULL OR organization_id IS NOT NULL)
+                OR EXISTS (SELECT 1 FROM courses WHERE org_id IS NULL)
+            ) THEN
                 RAISE EXCEPTION 'Cannot normalize tenant tables without at least one organization';
             END IF;
 
             UPDATE users
             SET org_id = COALESCE(org_id, organization_id, default_org_id)
-            WHERE org_id IS NULL;
+            WHERE org_id IS NULL
+              AND default_org_id IS NOT NULL;
 
             UPDATE categories
             SET org_id = COALESCE(org_id, organization_id, default_org_id)
-            WHERE org_id IS NULL;
+            WHERE org_id IS NULL
+              AND default_org_id IS NOT NULL;
 
             UPDATE courses
             SET org_id = default_org_id
-            WHERE org_id IS NULL;
+            WHERE org_id IS NULL
+              AND default_org_id IS NOT NULL;
         END $$;
         """
     )

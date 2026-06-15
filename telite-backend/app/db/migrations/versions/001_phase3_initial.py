@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "001_phase3"
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = "000_bootstrap"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -265,6 +265,24 @@ def _fk_exists(fk_name: str, table_name: str) -> bool:
     return fk_name in fks
 
 
+def _fk_on_columns_exists(
+    src_table: str,
+    src_col: str,
+    ref_table: str,
+    ref_col: str,
+) -> bool:
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    for fk in insp.get_foreign_keys(src_table):
+        if (
+            fk.get("constrained_columns") == [src_col]
+            and fk.get("referred_table") == ref_table
+            and fk.get("referred_columns") == [ref_col]
+        ):
+            return True
+    return False
+
+
 def _add_column_if_missing(
     table: str,
     column: str,
@@ -302,7 +320,11 @@ def _add_fk_if_missing(
     ref_col: str,
     ondelete: str = "SET NULL",
 ) -> None:
-    if _table_exists(src_table) and not _fk_exists(fk_name, src_table):
+    if (
+        _table_exists(src_table)
+        and not _fk_exists(fk_name, src_table)
+        and not _fk_on_columns_exists(src_table, src_col, ref_table, ref_col)
+    ):
         op.create_foreign_key(
             fk_name, src_table, ref_table, [src_col], [ref_col], ondelete=ondelete
         )

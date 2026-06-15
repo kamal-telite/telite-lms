@@ -59,23 +59,19 @@ def upgrade() -> None:
     op.create_index(op.f('ix_course_versions_org_id'), 'course_versions', ['org_id'], unique=False)
     op.create_index(op.f('ix_course_versions_status'), 'course_versions', ['status'], unique=False)
     op.create_table('learning_paths',
-    sa.Column('id', sa.String(length=50), nullable=False),
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('org_id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(length=255), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('status', sa.String(length=20), nullable=False),
-    sa.Column('created_by', sa.String(length=50), nullable=False),
+    sa.Column('settings', sa.Text(), nullable=False, server_default='{}'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('deleted_by', sa.String(length=50), nullable=True),
-    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['deleted_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['org_id'], ['organizations.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_learning_paths_org_id'), 'learning_paths', ['org_id'], unique=False)
-    op.create_index(op.f('ix_learning_paths_status'), 'learning_paths', ['status'], unique=False)
     op.create_table('media_assets',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('org_id', sa.Integer(), nullable=False),
@@ -97,16 +93,17 @@ def upgrade() -> None:
     op.create_index(op.f('ix_media_assets_id'), 'media_assets', ['id'], unique=False)
     op.create_index(op.f('ix_media_assets_org_id'), 'media_assets', ['org_id'], unique=False)
     op.create_table('learning_path_courses',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('learning_path_id', sa.String(length=50), nullable=False),
+    sa.Column('path_id', sa.Integer(), nullable=False),
     sa.Column('course_id', sa.String(length=50), nullable=False),
+    sa.Column('org_id', sa.Integer(), nullable=False),
     sa.Column('sort_order', sa.Integer(), nullable=False),
-    sa.Column('is_mandatory', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['course_id'], ['courses.id'], ),
-    sa.ForeignKeyConstraint(['learning_path_id'], ['learning_paths.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['org_id'], ['organizations.id'], ),
+    sa.ForeignKeyConstraint(['path_id'], ['learning_paths.id'], ),
+    sa.PrimaryKeyConstraint('path_id', 'course_id')
     )
-    op.create_index(op.f('ix_learning_path_courses_id'), 'learning_path_courses', ['id'], unique=False)
+    op.create_index(op.f('ix_learning_path_courses_org_id'), 'learning_path_courses', ['org_id'], unique=False)
+    op.create_index(op.f('ix_learning_path_courses_path_id'), 'learning_path_courses', ['path_id'], unique=False)
     
     with op.batch_alter_table('course_modules', schema=None) as batch_op:
         batch_op.add_column(sa.Column('section_id', sa.Integer(), nullable=True))
@@ -198,12 +195,12 @@ def downgrade() -> None:
         batch_op.drop_column('status')
         batch_op.drop_column('section_id')
         
-    op.drop_index(op.f('ix_learning_path_courses_id'), table_name='learning_path_courses')
+    op.drop_index(op.f('ix_learning_path_courses_path_id'), table_name='learning_path_courses')
+    op.drop_index(op.f('ix_learning_path_courses_org_id'), table_name='learning_path_courses')
     op.drop_table('learning_path_courses')
     op.drop_index(op.f('ix_media_assets_org_id'), table_name='media_assets')
     op.drop_index(op.f('ix_media_assets_id'), table_name='media_assets')
     op.drop_table('media_assets')
-    op.drop_index(op.f('ix_learning_paths_status'), table_name='learning_paths')
     op.drop_index(op.f('ix_learning_paths_org_id'), table_name='learning_paths')
     op.drop_table('learning_paths')
     op.drop_index(op.f('ix_course_versions_status'), table_name='course_versions')

@@ -252,8 +252,12 @@ def _require_org_id(table_name: str) -> None:
     op.execute(
         f"""
         DO $$
+        DECLARE
+            table_oid regclass;
         BEGIN
-            IF to_regclass('public.{table_name}') IS NOT NULL
+            table_oid := to_regclass('public.{table_name}');
+
+            IF table_oid IS NOT NULL
             AND EXISTS (
                 SELECT 1
                 FROM information_schema.columns
@@ -274,8 +278,12 @@ def _add_org_fk(table_name: str) -> None:
     op.execute(
         f"""
         DO $$
+        DECLARE
+            table_oid regclass;
         BEGIN
-            IF to_regclass('public.{table_name}') IS NOT NULL
+            table_oid := to_regclass('public.{table_name}');
+
+            IF table_oid IS NOT NULL
             AND EXISTS (
                 SELECT 1
                 FROM information_schema.columns
@@ -286,13 +294,13 @@ def _add_org_fk(table_name: str) -> None:
             AND NOT EXISTS (
                 SELECT 1
                 FROM pg_constraint
-                WHERE conrelid = 'public.{table_name}'::regclass
+                WHERE conrelid = table_oid
                   AND contype = 'f'
                   AND conkey = ARRAY[
                     (
                         SELECT attnum
                         FROM pg_attribute
-                        WHERE attrelid = 'public.{table_name}'::regclass
+                        WHERE attrelid = table_oid
                           AND attname = 'org_id'
                     )
                   ]::smallint[]

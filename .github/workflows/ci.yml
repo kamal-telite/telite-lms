@@ -120,6 +120,58 @@ jobs:
       - name: Validate production env
         run: python -m scripts.validate_production_env
 
+  postgres-migrations:
+    name: PostgreSQL migration chain
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telite-backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: telite_migration_ci
+          POSTGRES_USER: telite_ci
+          POSTGRES_PASSWORD: telite_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U telite_ci -d telite_migration_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: development
+      TELITE_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_migration_ci
+      TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
+      TELITE_PASSWORD_SALT: ci-test-password-salt
+      REDIS_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            telite-backend/requirements.txt
+            telite-backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Validate fresh database migrations
+        run: alembic upgrade head
+
+      - name: Validate one-step rollback and re-upgrade
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
+
   docker:
     name: Docker compose build
     runs-on: ubuntu-latest
@@ -127,6 +179,7 @@ jobs:
       - backend
       - frontend
       - production-env-contract
+      - postgres-migrations
     env:
       ENVIRONMENT: production
       POSTGRES_DB: postgres
