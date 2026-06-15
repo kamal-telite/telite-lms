@@ -53,7 +53,7 @@ export function DashboardShell({
                     title={collapsed ? item.label : undefined}
                   >
                     <span className="nav-item__left">
-                      <Icon name={item.icon} size={15} />
+                      <Icon name={item.icon} size={18} />
                       {!collapsed && <span>{item.label}</span>}
                     </span>
                     {!collapsed && item.badge ? <Badge tone={item.badgeTone}>{item.badge}</Badge> : null}

@@ -8,6 +8,7 @@ archive_course, list_categories, get_category, create_category, etc.
 from __future__ import annotations
 
 import uuid
+import json
 from typing import Any, Sequence
 
 from sqlalchemy import or_, select, update
@@ -128,6 +129,11 @@ class CourseRepository(BaseRepository[Course]):
         **extra: Any,
     ) -> Course:
         slug = extra.pop("slug", None) or slugify(name)
+        status = extra.pop("status", "active")
+        modules = extra.pop("modules", None)
+        modules_json = extra.pop("modules_json", None)
+        if modules_json is None and modules is not None:
+            modules_json = json.dumps(modules)
         course = Course(
             id=f"course-{uuid.uuid4().hex[:10]}",
             name=name.strip(),
@@ -135,8 +141,9 @@ class CourseRepository(BaseRepository[Course]):
             category_slug=category_slug,
             description=description,
             tier=tier,
-            status="active",
+            status=status,
             org_id=org_id,
+            modules_json=modules_json or "[]",
             **extra,
         )
         self.session.add(course)

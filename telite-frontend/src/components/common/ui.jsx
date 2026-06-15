@@ -97,16 +97,37 @@ export function Panel({ title, subtitle, action, children, footer, className = "
   );
 }
 
-export function StatCard({ accent, label, value, meta, pulse = false, suffix }) {
+export function StatCard({ accent, label, value, meta, pulse = false, suffix, delta, tone, icon }) {
+  // Map tone to specific colors for hierarchy
+  const toneColors = {
+    critical: "var(--red)",
+    warn: "var(--amber)",
+    success: "var(--emerald)",
+    info: "var(--brand)"
+  };
+  const finalAccent = toneColors[tone] || accent || "var(--brand)";
+
   return (
-    <article className={`stat-card ${pulse ? "is-pulse" : ""}`}>
-      <span className="stat-card__accent" style={{ background: accent }} />
-      <div className="stat-card__label">{label}</div>
-      <div className="stat-card__value">
+    <article className={`stat-card ${pulse ? "is-pulse" : ""}`} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <span className="stat-card__accent" style={{ background: finalAccent }} />
+      <div className="stat-card__label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>{label}</span>
+        {icon && <Icon name={icon} size={16} style={{ color: finalAccent, opacity: 0.8 }} />}
+      </div>
+      <div className="stat-card__value" style={{ flexGrow: 1, display: "flex", alignItems: "flex-end", gap: "8px" }}>
         <span>{value}</span>
         {suffix ? <small>{suffix}</small> : null}
       </div>
-      {meta ? <div className="stat-card__meta">{meta}</div> : null}
+      {(meta || delta !== undefined) && (
+        <div className="stat-card__meta" style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+          {delta !== undefined && delta !== 0 && (
+            <span style={{ color: delta > 0 ? "var(--emerald)" : "var(--red)", fontWeight: 600 }}>
+              {delta > 0 ? "+" : ""}{delta}%
+            </span>
+          )}
+          <span style={{ color: "var(--text-muted)" }}>{meta || (delta !== undefined ? "vs last month" : "")}</span>
+        </div>
+      )}
     </article>
   );
 }
@@ -156,11 +177,16 @@ export function Modal({ open, title, description, children, footer, onClose, wid
   );
 }
 
-export function EmptyState({ title, body }) {
+export function EmptyState({ title, body, description, icon, action }) {
+  const displayDesc = description || body;
   return (
-    <div className="empty-state">
-      <h4>{title}</h4>
-      <p>{body}</p>
+    <div className="empty-state" style={{ padding: "var(--space-48) var(--space-24)", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-16)" }}>
+      {icon && <Icon name={icon} size={48} style={{ color: "var(--text-muted)", opacity: 0.5 }} />}
+      <div style={{ maxWidth: "400px" }}>
+        <h4 style={{ margin: "0 0 var(--space-8) 0", fontSize: "var(--text-section)", color: "var(--text-primary)" }}>{title}</h4>
+        {displayDesc && <p style={{ margin: 0, color: "var(--text-secondary)", fontSize: "var(--text-body)" }}>{displayDesc}</p>}
+      </div>
+      {action && <div style={{ marginTop: "var(--space-8)" }}>{action}</div>}
     </div>
   );
 }

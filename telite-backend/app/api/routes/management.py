@@ -653,5 +653,5 @@ def remove_domain(
 @management_router.get("/notifications")
 def get_my_notifications(current_user: TokenData = Depends(get_current_user), db: Session = Depends(db_session)):
     repo = NotificationRepository(db)
-    notifs = repo.list_for_user(current_user.id)
+    notifs = repo.list_for_user(current_user.id, current_user.org_id)
     return {"notifications": [n.to_dict() for n in notifs]}

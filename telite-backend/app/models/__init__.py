@@ -9,6 +9,7 @@ from app.models.category import Category
 from app.models.course import Course
 from app.models.enrollment import EnrollmentRequest
 from app.models.task import Task
+from app.models.task_workflow import TaskAssignment, TaskSubmission, TaskReview
 from app.models.session import AuthSession
 from app.models.notification import Notification
 from app.models.audit import AuditLog, ActivityLog
@@ -54,6 +55,9 @@ __all__ = [
     "Course",
     "EnrollmentRequest",
     "Task",
+    "TaskAssignment",
+    "TaskSubmission",
+    "TaskReview",
     "AuthSession",
     "Notification",
     "AuditLog",

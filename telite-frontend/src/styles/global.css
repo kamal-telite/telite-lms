@@ -39,6 +39,23 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+
+  /* Standard Spacing Scale */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  /* Standard Typography Scale */
+  --text-page: 32px;
+  --text-section: 20px;
+  --text-card: 16px;
+  --text-body: 14px;
+
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
   --shadow-hover: 0 6px 18px rgba(37, 99, 235, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
@@ -224,32 +241,32 @@ a {
 }
 
 .sidebar-nav__group + .sidebar-nav__group {
-  margin-top: 14px;
+  margin-top: var(--space-24);
 }
 
 .sidebar-nav__label {
-  color: var(--text-placeholder);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  margin-bottom: 8px;
-  padding: 0 10px;
+  margin-bottom: var(--space-12);
+  padding: 0 var(--space-12);
 }
 
 .sidebar-nav__items {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 .nav-item {
   border: 0;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-8) var(--space-12);
+  font-size: 14px;
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -910,8 +927,8 @@ code {
   background: var(--surface);
   border-radius: 14px;
   box-shadow: var(--shadow-md);
-  padding: 24px;
   transform: scale(1);
+  overflow: hidden;
 }
 
 .modal-card__top {
@@ -919,6 +936,8 @@ code {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+  padding: 24px 24px 0 24px;
+  flex-shrink: 0;
 }
 
 .modal-card__top h2 {
@@ -933,20 +952,41 @@ code {
 
 .modal-card__content {
   margin-top: 18px;
-  overflow-y: visible;
+  padding: 0 24px;
+  overflow-y: auto;
   flex: 1;
   min-height: 0;
 }
 
 .modal-card__footer {
-  margin-top: 18px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   flex-shrink: 0;
   z-index: 10;
-  padding-top: 16px;
+  padding: 16px 24px 24px 24px;
+  background: var(--surface);
   border-top: 1px solid var(--border);
+}
+
+/* Form Sections */
+.form-section {
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.form-section:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+.form-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 16px 0;
 }
 
 .toast-stack {

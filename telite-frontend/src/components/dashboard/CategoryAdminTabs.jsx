@@ -533,13 +533,12 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
   );
 }
 
-export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModal }) {
+export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModal, onReviewTask }) {
   const [view, setView] = useState("list");
 
-  // For Kanban, we simulate "In Progress"
-  const todoTasks = pendingTasks.filter(t => !t.status || t.status === 'pending');
-  const inProgressTasks = pendingTasks.filter(t => t.status === 'in_progress');
-  const doneTasks = completedTasks;
+  const assignedTasks = pendingTasks.filter(t => !t.status || t.status === "pending" || t.status === "assigned" || t.status === "revision_requested");
+  const inProgressTasks = pendingTasks.filter(t => t.status === "in_progress");
+  const submittedTasks = pendingTasks.filter(t => t.status === "submitted");
 
   return (
     <div className="panel">
@@ -560,13 +559,19 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
         {view === "list" ? (
           <div className="grid-2">
             <div className="soft-card">
-              <div className="row-title" style={{ marginBottom: 12 }}>Pending tasks</div>
+              <div className="row-title" style={{ marginBottom: 12 }}>Assigned</div>
               <div className="activity-list">
-                {pendingTasks.map((task) => (
+                {assignedTasks.map((task) => (
                   <label className="task-row" key={task.id}>
                     <input type="checkbox" checked={false} onChange={() => toggleTask(task)} />
                     <div style={{ flex: 1 }}>
                       <div className="row-title">{task.title}</div>
+                      {task.status === "submitted" ? (
+                        <div className="split-actions" style={{ marginTop: 8 }}>
+                          <Button size="small" tone="success" onClick={() => onReviewTask?.(task, "approve")}>Approve</Button>
+                          <Button size="small" tone="ghost" onClick={() => onReviewTask?.(task, "request_revision")}>Request Revision</Button>
+                        </div>
+                      ) : null}
                       <div className="row-subtitle">{task.assigned_label} · {task.status === "overdue" ? "Overdue!" : `due ${task.due_at || 'soon'}`}</div>
                     </div>
                   </label>
@@ -574,7 +579,39 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
               </div>
             </div>
             <div className="soft-card">
-              <div className="row-title" style={{ marginBottom: 12 }}>Completed tasks</div>
+              <div className="row-title" style={{ marginBottom: 12 }}>Submitted</div>
+              <div className="activity-list">
+                {submittedTasks.map((task) => (
+                  <label className="task-row" key={task.id}>
+                    <input type="checkbox" checked={false} onChange={() => toggleTask(task)} />
+                    <div style={{ flex: 1 }}>
+                      <div className="row-title">{task.title}</div>
+                      <div className="split-actions" style={{ marginTop: 8 }}>
+                        <Button size="small" tone="success" onClick={() => onReviewTask?.(task, "approve")}>Approve</Button>
+                        <Button size="small" tone="ghost" onClick={() => onReviewTask?.(task, "request_revision")}>Request Revision</Button>
+                      </div>
+                      <div className="row-subtitle">{task.assigned_label} · due {task.due_at || "soon"}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="soft-card">
+              <div className="row-title" style={{ marginBottom: 12 }}>In Progress</div>
+              <div className="activity-list">
+                {inProgressTasks.map((task) => (
+                  <label className="task-row" key={task.id}>
+                    <input type="checkbox" checked={false} onChange={() => toggleTask(task)} />
+                    <div style={{ flex: 1 }}>
+                      <div className="row-title">{task.title}</div>
+                      <div className="row-subtitle">{task.assigned_label} · due {task.due_at || "soon"}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="soft-card">
+              <div className="row-title" style={{ marginBottom: 12 }}>Completed</div>
               <div className="activity-list">
                 {completedTasks.map((task) => (
                   <label className="task-row" key={task.id}>
@@ -631,7 +668,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel" style={{ maxWidth: "600px", margin: "0 auto" }}>
         <div className="panel-header">
           <h2 className="panel-title">{tabs.find(t => t.id === activeTab)?.label || "Settings"}</h2>
           <p className="panel-subtitle">Manage your profile preferences and account settings.</p>
@@ -659,7 +696,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
               </div>
               <label className="field">
                 <span className="field__label">Role</span>
-                <input className="field__input" defaultValue={titleize(session?.user?.role || "Category Admin")} disabled />
+                <input className="field__input" defaultValue={titleize(session?.user?.role || "Category Admin")} disabled style={{ opacity: 0.7, background: "var(--surface-2)", cursor: "not-allowed" }} />
               </label>
               <div className="panel-footer" style={{ marginTop: 24, padding: "16px 0 0", borderTop: "1px solid var(--border)", textAlign: "right" }}>
                 <Button tone="primary">Save Changes</Button>

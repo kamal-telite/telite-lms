@@ -24,6 +24,7 @@ from app.models.module_progress import ModuleProgress
 from app.models.enrollment import EnrollmentRequest
 from app.models.pending_verification import PendingVerification
 from app.models.task import Task
+from app.models.task_workflow import TaskAssignment
 from app.models.audit import AuditLog
 from app.models.pal import PalQuizScore
 from app.repositories.base_repo import BaseRepository
@@ -579,6 +580,37 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         )
         total_time_seconds = self.session.execute(heartbeat_stmt).scalar() or 0
 
+        task_stmt = (
+            select(Task, TaskAssignment, User)
+            .join(TaskAssignment, TaskAssignment.task_id == Task.id)
+            .outerjoin(User, User.id == Task.assigned_by)
+            .where(TaskAssignment.learner_id == user_id)
+            .where(Task.org_id == user.org_id)
+            .order_by(TaskAssignment.updated_at.desc().nullslast(), TaskAssignment.assigned_at.desc())
+        )
+        task_rows = []
+        for task, assignment, assigner in self.session.execute(task_stmt).all():
+            task_rows.append(
+                {
+                    "id": task.id,
+                    "assignment_id": assignment.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "instructions": task.notes or task.description or "",
+                    "assigned_by": task.assigned_by,
+                    "assigned_by_name": assigner.full_name if assigner else "Category Admin",
+                    "assigned_label": task.assigned_label,
+                    "assigned_to_user_id": task.assigned_to_user_id,
+                    "category_slug": task.category_slug,
+                    "due_at": task.due_at,
+                    "status": assignment.status,
+                    "assigned_at": assignment.assigned_at.isoformat() if assignment.assigned_at else None,
+                    "started_at": assignment.started_at.isoformat() if assignment.started_at else None,
+                    "submitted_at": assignment.submitted_at.isoformat() if assignment.submitted_at else None,
+                    "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
+                }
+            )
+
         return {
             "profile": {"full_name": user.full_name, "category_scope": user.category_scope},
             "hero": {
@@ -591,6 +623,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             },
             "stats": {"courses_completed": max(user.courses_completed, len([p for p in progress if p.status == 'completed'])), "quizzes_submitted": quizzes_submitted},
             "courses": course_rows,
+            "tasks": task_rows,
             "leaderboard": self.get_cohort_rankings(category_slug=user.category_scope, org_id=user.org_id, limit=5),
         }
 

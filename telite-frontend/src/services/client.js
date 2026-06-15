@@ -384,6 +384,18 @@ export async function submitTask(taskId) {
   return unwrap(await api.post(`/tasks/${taskId}/submit`));
 }
 
+export async function startTask(taskId) {
+  return unwrap(await api.post(`/tasks/${taskId}/start`));
+}
+
+export async function submitTaskWork(taskId, payload) {
+  return unwrap(await api.post(`/tasks/${taskId}/submit-work`, payload));
+}
+
+export async function reviewTask(taskId, payload) {
+  return unwrap(await api.post(`/tasks/${taskId}/review`, payload));
+}
+
 // ── PAL ───────────────────────────────────────────────────────────────────────
 
 export async function fetchPalUser(userId) {

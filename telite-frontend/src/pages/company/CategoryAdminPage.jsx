@@ -16,6 +16,7 @@ import {
   manualEnroll,
   rejectEnrollmentRequest,
   rejectVerification,
+  reviewTask,
   updateCourse,
   updateTask,
 } from "../../services/client";
@@ -262,7 +263,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
   }
 
   async function toggleTask(task, explicitStatus) {
-    const nextStatus = explicitStatus || (task.status === "completed" ? "pending" : "completed");
+    const nextStatus = explicitStatus || (["approved", "completed"].includes(task.status) ? "assigned" : "approved");
     updateTaskState(task.id, nextStatus); // Optimistic update
     try {
       await updateTask(task.id, {
@@ -282,6 +283,16 @@ function CategoryAdminPageContent({ session, onLogout }) {
     } catch (requestError) {
       updateTaskState(task.id, task.status); // Revert on failure
       showToast(getErrorMessage(requestError, "Unable to update task."), "error");
+    }
+  }
+
+  async function handleReviewTask(task, action) {
+    try {
+      await reviewTask(task.id, { action, review_notes: "" });
+      showToast(action === "approve" ? "Task approved." : "Revision requested.", "success");
+      await load();
+    } catch (requestError) {
+      showToast(getErrorMessage(requestError, "Unable to review task."), "error");
     }
   }
 
@@ -367,8 +378,8 @@ function CategoryAdminPageContent({ session, onLogout }) {
   ];
 
   const currentCourse = (dashboard?.courses || []).find((course) => course.id === detailLearner?.current_course_id);
-  const pendingTasks = (dashboard?.tasks || []).filter((task) => task.status !== "completed");
-  const completedTasks = (dashboard?.tasks || []).filter((task) => task.status === "completed");
+  const pendingTasks = (dashboard?.tasks || []).filter((task) => !["approved", "completed"].includes(task.status));
+  const completedTasks = (dashboard?.tasks || []).filter((task) => ["approved", "completed"].includes(task.status));
   const palCards = dashboard?.pal?.leaderboard ? [...dashboard.pal.leaderboard] : [];
   const visiblePalCards = palExpanded ? palCards : palCards.slice(0, 4);
 
@@ -600,9 +611,9 @@ function CategoryAdminPageContent({ session, onLogout }) {
 
               <div className="grid-2-wide">
                 <Panel
-                  title="Courses"
-                  subtitle="6 total"
-                  action={<button className="panel-link" type="button" onClick={() => setCourseModal({ open: true, item: null })}>+ New course</button>}
+                  title="Top Courses"
+                  subtitle={`${dashboard?.courses?.length || 0} total`}
+                  action={<button className="panel-link" type="button" onClick={() => handleTabChange("courses")}>View all</button>}
                 >
                   <div className="table-wrap">
                     <table>
@@ -617,7 +628,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {(dashboard?.courses || []).map((course) => (
+                        {(dashboard?.courses || []).slice(0, 5).map((course) => (
                           <tr key={course.id}>
                             <td>
                               <div className="row-title">{course.name}</div>
@@ -641,19 +652,8 @@ function CategoryAdminPageContent({ session, onLogout }) {
                             </td>
                             <td>
                               <div className="split-actions">
-                                <Button tone="primary" size="small" onClick={() => navigate(`/categories/${slug}/builder/${course.id}`)}>Edit in Builder</Button>
-                                <IconButton label="Edit course metadata" icon="pencil" onClick={() => setCourseModal({ open: true, item: course })} />
-                                <IconButton label="Delete course" icon="trash" onClick={() => setDeleteCourseId((value) => (value === course.id ? null : course.id))} />
+                                <Button tone="primary" size="small" onClick={() => navigate(`/categories/${slug}/builder/${course.id}`)}>Edit</Button>
                               </div>
-                              {deleteCourseId === course.id ? (
-                                <div className="inline-confirm">
-                                  <span>Archive this course?</span>
-                                  <div className="split-actions">
-                                    <Button tone="danger" onClick={() => handleDeleteCourse(course.id)}>Confirm delete</Button>
-                                    <Button tone="ghost" onClick={() => setDeleteCourseId(null)}>Cancel</Button>
-                                  </div>
-                                </div>
-                              ) : null}
                             </td>
                           </tr>
                         ))}
@@ -663,27 +663,31 @@ function CategoryAdminPageContent({ session, onLogout }) {
                 </Panel>
 
                 <Panel title="Pending enrollment" subtitle="Needs review">
-                  <div className="activity-list">
-                    {(dashboard?.pending_enrollment || []).map((request) => (
-                      <div className="activity-item" key={request.id}>
-                        <Avatar
-                          initials={getInitials(request.full_name)}
-                          gradient={request.domain_verified ? ["#7C3AED", "#2563EB"] : ["#D97706", "#92400E"]}
-                          size={32}
-                        />
-                        <div style={{ flex: 1 }}>
-                          <div className="row-title">{request.full_name}</div>
-                          <div className="row-subtitle">
-                            {request.request_type} · {formatMonthDate(request.requested_at)} · {request.company_domain}
-                            {!request.domain_verified ? " ⚠" : ""}
+                  <div className="activity-list" style={{ maxHeight: "300px", overflowY: "auto" }}>
+                    {!dashboard?.pending_enrollment?.length ? (
+                      <EmptyState title="No pending requests" description="All signups for your organization have been processed." icon="shield" />
+                    ) : (
+                      (dashboard?.pending_enrollment || []).slice(0, 3).map((request) => (
+                        <div className="activity-item" key={request.id}>
+                          <Avatar
+                            initials={getInitials(request.full_name)}
+                            gradient={request.domain_verified ? ["#7C3AED", "#2563EB"] : ["#D97706", "#92400E"]}
+                            size={32}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div className="row-title">{request.full_name}</div>
+                            <div className="row-subtitle">
+                              {request.request_type} · {formatMonthDate(request.requested_at)} · {request.company_domain}
+                              {!request.domain_verified ? " ⚠" : ""}
+                            </div>
+                          </div>
+                          <div className="split-actions">
+                            <Button tone="success" size="small" onClick={() => handleApprove(request.id)}>Approve</Button>
+                            <Button tone="danger" size="small" onClick={() => handleReject(request.id)}>Deny</Button>
                           </div>
                         </div>
-                        <div className="split-actions">
-                          <Button tone="success" onClick={() => handleApprove(request.id)}>Approve</Button>
-                          <Button tone="danger" onClick={() => handleReject(request.id)}>Deny</Button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                   <div className="soft-card soft-card--tinted" style={{ marginTop: 16 }}>
                     <div className="row-title" style={{ marginBottom: 10 }}>Manual enrollment</div>
@@ -1143,7 +1147,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
           ) : null}
 
           {activeTab === "tasks" ? (
-            <TasksTab pendingTasks={pendingTasks} completedTasks={completedTasks} toggleTask={toggleTask} setTaskModal={setTaskModal} />
+            <TasksTab pendingTasks={pendingTasks} completedTasks={completedTasks} toggleTask={toggleTask} setTaskModal={setTaskModal} onReviewTask={handleReviewTask} />
           ) : null}
           {activeTab === "activity" ? (
             <ActivityFeedTab events={dashboard?.activity || []} />
@@ -1174,6 +1178,10 @@ function CategoryAdminPageContent({ session, onLogout }) {
         open={courseModal.open}
         item={courseModal.item}
         onClose={() => setCourseModal({ open: false, item: null })}
+        onOpenBuilder={(id) => {
+          setCourseModal({ open: false, item: null });
+          navigate(`/categories/${slug}/builder/${id}`);
+        }}
         onSubmit={async (payload, isEdit) => {
           try {
             if (isEdit) {
@@ -1346,7 +1354,7 @@ function FragmentCourseRow({
   );
 }
 
-function CourseEditorModal({ open, item, onClose, onSubmit }) {
+function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
   const isEdit = Boolean(item);
   const [form, setForm] = useState(COURSE_INITIAL);
   const [errors, setErrors] = useState({});
@@ -1360,10 +1368,6 @@ function CourseEditorModal({ open, item, onClose, onSubmit }) {
             description: item.description,
             tier: item.tier,
             status: item.status,
-            module_count: item.module_count,
-            lessons_count: item.lessons_count,
-            hours: item.hours,
-            modules: item.modules.join("\n"),
           }
         : COURSE_INITIAL
     );
@@ -1391,10 +1395,6 @@ function CourseEditorModal({ open, item, onClose, onSubmit }) {
         description: form.description,
         tier: form.tier,
         status: form.status,
-        module_count: Number(form.module_count) || 0,
-        lessons_count: Number(form.lessons_count) || 0,
-        hours: Number(form.hours) || 0,
-        modules: form.modules.split("\n").map((item) => item.trim()).filter(Boolean),
       },
       isEdit
     );
@@ -1404,73 +1404,99 @@ function CourseEditorModal({ open, item, onClose, onSubmit }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? "Edit Course" : "Add Course"}
-      description="Create or update ATS course information."
+      title={isEdit ? "Course Settings" : "Create New Course"}
+      description={isEdit ? "Manage metadata and structure." : "Initialize a new course shell."}
+      width={640}
       footer={
         <>
           <Button tone="ghost" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" onClick={handleSubmit}>{isEdit ? "Save changes" : "Create Course"}</Button>
+          <Button tone="primary" onClick={handleSubmit}>{isEdit ? "Save Changes" : "Create Course"}</Button>
         </>
       }
     >
-      <form className="form-stack" onSubmit={handleSubmit}>
-        <label className="field">
-          <span className="field__label">Course name</span>
-          <input className={`field__input ${errors.name ? "is-invalid" : ""}`} value={form.name} onChange={(event) => updateField("name", event.target.value)} />
-          {errors.name ? <span className="field__error">{errors.name}</span> : null}
-        </label>
-        <label className="field">
-          <span className="field__label">Description</span>
-          <input className={`field__input ${errors.description ? "is-invalid" : ""}`} value={form.description} onChange={(event) => updateField("description", event.target.value)} />
-          {errors.description ? <span className="field__error">{errors.description}</span> : null}
-        </label>
-        <div className="field-grid">
-          <label className="field">
-            <span className="field__label">Tier</span>
-            <select className="field__select" value={form.tier} onChange={(event) => updateField("tier", event.target.value)}>
-              <option value="Basic">Basic</option>
-              <option value="Advanced">Advanced</option>
-            </select>
-          </label>
-          <label className="field">
-            <span className="field__label">Status</span>
-            <select className="field__select" value={form.status} onChange={(event) => updateField("status", event.target.value)}>
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-            </select>
-          </label>
-        </div>
-        <div className="field-grid">
-          <label className="field">
-            <span className="field__label">Module count</span>
-            <input className="field__input" type="number" min="0" value={form.module_count} onChange={(event) => updateField("module_count", event.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field__label">Lessons</span>
-            <input className="field__input" type="number" min="0" value={form.lessons_count} onChange={(event) => updateField("lessons_count", event.target.value)} />
-          </label>
-        </div>
-        <label className="field">
-          <span className="field__label">Modules</span>
-          <div style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "12px", color: "var(--text-muted)", alignSelf: "center", marginRight: "4px" }}>Add Native Block:</span>
-            {["Flashcards", "Accordion", "Timeline", "Knowledge Check", "Hotspot", "Interactive Video"].map(block => (
-              <Button 
-                key={block} 
-                size="small" 
-                tone="ghost" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  updateField("modules", form.modules ? `${form.modules}\n[Native] ${block}` : `[Native] ${block}`);
-                  updateField("module_count", (Number(form.module_count) || 0) + 1);
-                }}
-              >
-                + {block}
-              </Button>
-            ))}
+      <form onSubmit={handleSubmit}>
+        <div className="form-section">
+          <h3 className="form-section__title">1. Basic Information</h3>
+          <div className="form-stack">
+            <label className="field">
+              <span className="field__label">Course Name</span>
+              <input className={`field__input ${errors.name ? "is-invalid" : ""}`} value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="e.g. Introduction to Python" />
+              {errors.name ? <span className="field__error">{errors.name}</span> : null}
+            </label>
+            <label className="field">
+              <span className="field__label">Description</span>
+              <input className={`field__input ${errors.description ? "is-invalid" : ""}`} value={form.description} onChange={(event) => updateField("description", event.target.value)} placeholder="Short summary of the course..." />
+              {errors.description ? <span className="field__error">{errors.description}</span> : null}
+            </label>
+            <div className="field-grid">
+              <label className="field">
+                <span className="field__label">Tier</span>
+                <select className="field__select" value={form.tier} onChange={(event) => updateField("tier", event.target.value)}>
+                  <option value="Basic">Basic</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">Status</span>
+                <select className="field__select" value={form.status} onChange={(event) => updateField("status", event.target.value)}>
+                  <option value="active">Active</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </label>
+            </div>
           </div>
-          <textarea className="field__textarea" value={form.modules} onChange={(event) => updateField("modules", event.target.value)} />
-        </label>
+        </div>
+
+        {isEdit && (
+          <>
+            <div className="form-section">
+              <h3 className="form-section__title">2. Course Statistics</h3>
+              <div className="grid-4">
+                <div style={{ height: "80px" }}>
+                  <StatCard label="Modules" value={item?.module_count || 0} />
+                </div>
+                <div style={{ height: "80px" }}>
+                  <StatCard label="Lessons" value={item?.lessons_count || 0} />
+                </div>
+                <div style={{ height: "80px" }}>
+                  <StatCard label="Blocks" value={item?.blocks_count || 0} />
+                </div>
+                <div style={{ height: "80px" }}>
+                  <StatCard label="Enrollments" value={item?.enrolled_count || 0} />
+                </div>
+              </div>
+            </div>
+
+            <div className="form-section">
+              <h3 className="form-section__title">3. Builder Access</h3>
+              <div className="soft-card soft-card--tinted" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div className="row-title">Course Builder</div>
+                  <div className="row-subtitle">Manage modules, lessons, and interactive blocks.</div>
+                </div>
+                <Button tone="primary" type="button" onClick={() => onOpenBuilder(item.id)}>Open Course Builder</Button>
+              </div>
+            </div>
+
+            <div className="form-section">
+              <h3 className="form-section__title">4. Metadata</h3>
+              <div className="grid-3" style={{ fontSize: "13px" }}>
+                <div>
+                  <div style={{ color: "var(--text-muted)", marginBottom: "4px" }}>Created Date</div>
+                  <div className="mono">{item?.created_at ? formatShortDate(item.created_at) : "Just now"}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-muted)", marginBottom: "4px" }}>Updated Date</div>
+                  <div className="mono">{item?.updated_at ? formatShortDate(item.updated_at) : "Just now"}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-muted)", marginBottom: "4px" }}>Publish Status</div>
+                  <div><Badge tone={item?.status === "active" ? "success" : "neutral"}>{titleize(item?.status || "draft")}</Badge></div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </form>
     </Modal>
   );

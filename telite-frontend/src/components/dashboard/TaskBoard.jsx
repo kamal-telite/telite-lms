@@ -38,15 +38,16 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
     borderRadius: 8, 
     marginBottom: 8, 
     boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.15)" : "0 1px 3px rgba(0,0,0,0.1)",
-    textDecoration: task.status === "completed" ? "line-through" : "none",
+    textDecoration: task.status === "approved" || task.status === "completed" ? "line-through" : "none",
   };
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div className="row-title" style={{textDecoration: task.status === "completed" ? "line-through" : "none"}}>{task.title}</div>
+          <div className="row-title" style={{textDecoration: task.status === "approved" || task.status === "completed" ? "line-through" : "none"}}>{task.title}</div>
           <div className="row-subtitle" style={{ marginTop: 4 }}>{task.assigned_label}</div>
+          <div className="row-subtitle" style={{ marginTop: 2 }}>Due {task.due_at || "soon"}</div>
         </div>
         <div style={{ display: "flex", gap: 4 }} onPointerDown={(e) => e.stopPropagation()}>
           {onEdit ? (
@@ -87,8 +88,8 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
       ) : null}
 
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-        <Badge tone={task.status === "in_progress" ? "warn" : task.status === "completed" ? "success" : "neutral"}>
-          {task.status === "in_progress" ? "In Progress" : task.status === "completed" ? "Done" : "To Do"}
+        <Badge tone={task.status === "submitted" ? "brand" : task.status === "in_progress" ? "warn" : task.status === "approved" || task.status === "completed" ? "success" : "neutral"}>
+          {task.status === "submitted" ? "Submitted" : task.status === "in_progress" ? "In Progress" : task.status === "approved" || task.status === "completed" ? "Completed" : "Assigned"}
         </Badge>
         <span className="mono muted" style={{ fontSize: 10 }}>{task.due_at || 'soon'}</span>
       </div>
@@ -112,16 +113,20 @@ function TaskColumn({ id, title, tasks, onEdit, onDelete }) {
 
 export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete }) {
   const [columns, setColumns] = useState({
-    pending: [],
+    assigned: [],
     in_progress: [],
-    completed: []
+    submitted: [],
+    approved: []
   });
 
   useEffect(() => {
     setColumns({
-      pending: allTasks.filter(t => !t.status || t.status === "pending"),
+      assigned: allTasks.filter(t => !t.status || t.status === "assigned" || t.status === "pending" || t.status === "revision_requested"),
       in_progress: allTasks.filter(t => t.status === "in_progress"),
-      completed: allTasks.filter(t => t.status === "completed")
+      submitted: allTasks.filter(t => t.status === "submitted"),
+      approved: allTasks.filter(t => t.status === "approved" || t.status === "completed"),
+      pending: allTasks.filter(t => !t.status || t.status === "assigned" || t.status === "pending" || t.status === "revision_requested"),
+      completed: allTasks.filter(t => t.status === "approved" || t.status === "completed")
     });
   }, [allTasks]);
 

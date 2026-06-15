@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { launchCourse, submitTask } from "../../services/client";
+import { launchCourse, startTask, submitTaskWork } from "../../services/client";
 import { DashboardShell, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { Avatar, Badge, Button, ErrorState, LoadingState, Panel, StatCard, useToast, EmptyState, IconButton } from "../../components/common/ui";
 import { ChartCanvas } from "../../components/common/charts";
@@ -97,6 +97,8 @@ export default function LearnerPage({ session, onLogout }) {
   
   const { data, loading, error, fetchData: load } = useLearnerStore();
   const [submittingTaskId, setSubmittingTaskId] = useState(null);
+  const [startingTaskId, setStartingTaskId] = useState(null);
+  const [submissionDrafts, setSubmissionDrafts] = useState({});
   const [launchingCourseId, setLaunchingCourseId] = useState(null);
   const [activeCourseId, setActiveCourseId] = useState(null);
 
@@ -166,11 +168,25 @@ export default function LearnerPage({ session, onLogout }) {
     window.setTimeout(() => setLaunchingCourseId(null), 250);
   }
 
+  async function handleStartTask(taskId) {
+    setStartingTaskId(taskId);
+    try {
+      await startTask(taskId);
+      showToast("Task started.", "success");
+      await load();
+    } catch (requestError) {
+      showToast("Unable to start task.", "error");
+    } finally {
+      setStartingTaskId(null);
+    }
+  }
+
   async function handleSubmitTask(taskId) {
     setSubmittingTaskId(taskId);
     try {
-      await submitTask(taskId);
-      showToast("Task marked as submitted.", "success");
+      await submitTaskWork(taskId, submissionDrafts[taskId] || {});
+      showToast("Task submitted.", "success");
+      setSubmissionDrafts((current) => ({ ...current, [taskId]: {} }));
       await load();
     } catch (requestError) {
       showToast("Unable to submit task.", "error");
@@ -445,56 +461,66 @@ export default function LearnerPage({ session, onLogout }) {
           <section id="section-tasks">
             <Panel title="Task Management" subtitle="Your assigned projects and assessments">
               <div className="toolbar" style={{ marginBottom: 16 }}>
-                {["all", "pending", "submitted", "completed", "overdue"].map(f => (
+                {["all", "assigned", "in_progress", "submitted", "approved", "revision_requested"].map(f => (
                   <label className="chip" key={f}>
                     <input type="radio" checked={taskFilter === f} onChange={() => setTaskFilter(f)} /> {titleize(f)}
                   </label>
                 ))}
               </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Task</th>
-                      <th>Due date</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).map((task) => (
-                      <tr key={task.id}>
-                        <td>
+              <div className="grid-2">
+                {tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).map((task) => {
+                  const draft = submissionDrafts[task.id] || {};
+                  const canStart = task.status === "assigned" || task.status === "revision_requested";
+                  const canSubmit = task.status === "in_progress" || task.status === "revision_requested";
+                  const tone = task.status === "approved" ? "success" : task.status === "submitted" ? "brand" : task.status === "revision_requested" ? "danger" : "warn";
+                  return (
+                    <div className="soft-card" key={task.id}>
+                      <div className="split-actions" style={{ alignItems: "flex-start" }}>
+                        <div>
                           <div className="row-title">{task.title}</div>
-                        </td>
-                        <td>
-                          <span className={task.status === "overdue" ? "text-danger" : "muted"}>
-                            {formatDateTime(task.due_at)}
-                          </span>
-                        </td>
-                        <td>
-                          <Badge tone={task.status === "completed" ? "success" : task.status === "overdue" ? "danger" : "warn"}>
-                            {titleize(task.status)}
-                          </Badge>
-                        </td>
-                        <td>
-                          {task.status === "pending" || task.status === "overdue" ? (
-                            <Button size="small" tone="primary" onClick={() => handleSubmitTask(task.id)} disabled={submittingTaskId === task.id}>
-                              {submittingTaskId === task.id ? "Submitting..." : "Mark submitted"}
-                            </Button>
-                          ) : (
-                            <span className="muted">Submitted</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).length === 0 && (
-                      <tr>
-                        <td colSpan="4"><EmptyState title="No tasks" body="You have no tasks matching this filter." /></td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          <div className="row-subtitle">Assigned by: {task.assigned_by_name || "Category Admin"}</div>
+                          <div className="row-subtitle">Due: {formatDateTime(task.due_at)}</div>
+                        </div>
+                        <Badge tone={tone}>{titleize(task.status)}</Badge>
+                      </div>
+                      <p className="muted" style={{ marginTop: 12 }}>{task.instructions || "No additional instructions."}</p>
+                      {canSubmit ? (
+                        <div className="form-stack" style={{ marginTop: 12 }}>
+                          <textarea
+                            className="field__input"
+                            rows={3}
+                            placeholder="Submission notes"
+                            value={draft.submission_notes || ""}
+                            onChange={(event) => setSubmissionDrafts((current) => ({ ...current, [task.id]: { ...draft, submission_notes: event.target.value } }))}
+                          />
+                          <input
+                            className="field__input"
+                            placeholder="Github URL or external link"
+                            value={draft.external_url || ""}
+                            onChange={(event) => setSubmissionDrafts((current) => ({ ...current, [task.id]: { ...draft, external_url: event.target.value } }))}
+                          />
+                        </div>
+                      ) : null}
+                      <div className="split-actions" style={{ marginTop: 14 }}>
+                        {canStart ? (
+                          <Button size="small" tone="primary" onClick={() => handleStartTask(task.id)} disabled={startingTaskId === task.id}>
+                            {startingTaskId === task.id ? "Starting..." : "Start Task"}
+                          </Button>
+                        ) : null}
+                        {canSubmit ? (
+                          <Button size="small" tone="primary" onClick={() => handleSubmitTask(task.id)} disabled={submittingTaskId === task.id}>
+                            {submittingTaskId === task.id ? "Submitting..." : "Submit Task"}
+                          </Button>
+                        ) : null}
+                        {task.status === "submitted" ? <span className="muted">Awaiting review</span> : null}
+                        {task.status === "approved" ? <span className="muted">Approved</span> : null}
+                      </div>
+                    </div>
+                  );
+                })}
+                {tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter).length === 0 && (
+                  <EmptyState title="No tasks assigned yet." body="Tasks assigned by your Category Admin will appear here." />
+                )}
               </div>
             </Panel>
           </section>
