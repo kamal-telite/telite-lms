@@ -139,7 +139,7 @@ function ScormBlock({ title, src, filename }) {
   );
 }
 
-function H5PBlock({ title, src, filename, courseId, moduleId, blockId }) {
+function H5PBlock({ title, src, filename, courseId, moduleId, blockId, assetId }) {
   const [completed, setCompleted] = React.useState(false);
 
   React.useEffect(() => {
@@ -174,15 +174,16 @@ function H5PBlock({ title, src, filename, courseId, moduleId, blockId }) {
     return () => window.removeEventListener('message', handleMessage);
   }, [completed, courseId, moduleId, blockId]);
 
-  if (!src) {
+  if (!src || !assetId) {
     return (
       <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)", margin: "1em 0" }}>
-        H5P content is not configured.
+        H5P content is not configured or missing asset reference.
       </div>
     );
   }
 
-  const playerUrl = `/h5p/index.html?src=${encodeURIComponent(src)}`;
+  const h5pContentUrl = `/api/v1/media/h5p/${assetId}`;
+  const playerUrl = `/h5p/index.html?src=${encodeURIComponent(h5pContentUrl)}`;
 
   return (
     <div style={{ margin: "1em 0", border: "1px solid var(--border)", borderRadius: "8px", overflow: "hidden", background: "var(--surface)" }}>
@@ -319,7 +320,7 @@ function renderNativeBlock(block, courseId, moduleId) {
     case "scorm":
       return <ScormBlock title={block.content} src={settings.url} filename={settings.filename} />;
     case "h5p":
-      return <H5PBlock title={block.content} src={settings.url} filename={settings.filename} courseId={courseId} moduleId={moduleId} blockId={block.id} />;
+      return <H5PBlock title={block.content} src={settings.url} filename={settings.filename} courseId={courseId} moduleId={moduleId} blockId={block.id} assetId={settings.asset_id} />;
     case "embed":
       return <EmbedBlock title={block.content} src={settings.url} />;
     case "assignment":

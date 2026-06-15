@@ -680,7 +680,7 @@ export function LessonBlockEditor({
       )}
 
       {/* Block Toolbar */}
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", padding: "16px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-start", padding: "16px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
         <Button tone="neutral" onClick={() => addBlock("heading")}>+ Heading</Button>
         <Button tone="neutral" onClick={() => addBlock("text")}>+ Text</Button>
         <Button tone="neutral" onClick={() => addBlock("image")}>+ Image</Button>

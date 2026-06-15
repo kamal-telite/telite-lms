@@ -55,7 +55,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
 
     @staticmethod
     def _event_status(event_type: str) -> str:
-        if event_type in {"COURSE_COMPLETED", "MODULE_COMPLETED", "QUIZ_SUBMITTED"}:
+        if event_type in {"COURSE_COMPLETED", "MODULE_COMPLETED", "BLOCK_COMPLETED", "QUIZ_SUBMITTED"}:
             return "success"
         if event_type in {"PROGRESS_MUTATION", "HEARTBEAT", "BLOCK_VIEWED"}:
             return "info"
@@ -79,6 +79,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             "COURSE_STARTED": f"{learner_name} started {course_label}",
             "COURSE_COMPLETED": f"{learner_name} completed {course_label}",
             "MODULE_COMPLETED": f"{learner_name} completed {module_label}",
+            "BLOCK_COMPLETED": f"{learner_name} completed an interactive block",
             "BLOCK_VIEWED": f"{learner_name} viewed content in {course_label}",
             "HEARTBEAT": f"{learner_name} continued learning in {course_label}",
             "PROGRESS_MUTATION": f"{learner_name} progress updated in {course_label}",

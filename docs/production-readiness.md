@@ -6,11 +6,14 @@ This document is the deployment contract for Telite LMS. It covers the checks th
 
 - Backend release-tooling lint passes in CI.
 - Backend smoke/unit tests pass in CI; live API/RLS tests remain opt-in.
+- Gitleaks and TruffleHog secret scanning pass on repository history.
+- Python dependency audit passes with `pip-audit` and Safety.
 - Frontend lint passes with `npm run lint:ci`.
 - Frontend has no critical npm audit findings.
 - Frontend build passes with `npm run build`.
 - Docker production overlay is valid with `docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet`.
 - Backend and frontend production images build successfully.
+- Trivy filesystem and image scans have no high or critical unfixed vulnerabilities.
 - `python -m scripts.validate_production_env` passes against the target environment.
 
 ## Hardening Backlog
@@ -18,6 +21,10 @@ This document is the deployment contract for Telite LMS. It covers the checks th
 The backend currently has existing full-repository Ruff debt. Treat `ruff check app tests scripts` as a required cleanup milestone before enforcing it as a blocking enterprise gate.
 
 The frontend currently has npm audit findings below the critical threshold. Upgrade `axios`, `react-router-dom`, and the Vite/esbuild chain in a dedicated dependency-hardening pass.
+
+Historical secret scanning currently reports Moodle dump/archive findings in prior commits. Rotate any exposed Moodle/LTI material and purge `moodle.sql`/archive artifacts from Git history before making the secret scan a required branch protection check.
+
+See `docs/security-remediation.md` for the current scanner findings and remediation order.
 
 ## Required Production Settings
 
@@ -41,7 +48,9 @@ When Moodle live integration is enabled, also set `MOODLE_TOKEN` and the product
 ## CI/CD Layout
 
 - `.github/workflows/ci.yml` validates backend, frontend, production environment contracts, and Docker builds on pull requests and branch pushes.
+- `.github/workflows/security.yml` runs secret, dependency, filesystem, and container image scanning.
 - `.github/workflows/container-release.yml` publishes backend and frontend images to GHCR on version tags or manual dispatch.
+- `.github/dependabot.yml` opens scheduled dependency update pull requests for npm, pip, GitHub Actions, and Docker.
 - Version tags should use `vMAJOR.MINOR.PATCH`, for example `v1.4.0`.
 
 ## Deployment Flow

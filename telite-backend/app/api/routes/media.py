@@ -2,6 +2,7 @@ import json
 from uuid import uuid4
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List
@@ -165,6 +166,29 @@ async def upload_asset(
     stored_name = f"{uuid4().hex}_{filename}"
     target = org_dir / stored_name
     target.write_bytes(contents)
+
+    if filename.lower().endswith(".h5p") or mime_type == "application/x-h5p":
+        import zipfile
+        import shutil
+        extract_dir = org_dir / "h5p_extracted" / stored_name
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with zipfile.ZipFile(target, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+            
+            if not (extract_dir / "h5p.json").exists():
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                target.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="Invalid H5P package: missing h5p.json")
+                
+            if not (extract_dir / "content" / "content.json").exists():
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                target.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="Invalid H5P package: missing content/content.json")
+        except zipfile.BadZipFile:
+            shutil.rmtree(extract_dir, ignore_errors=True)
+            target.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="Invalid H5P package: corrupted zip file")
 
     object_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
     asset = MediaAsset(
@@ -420,3 +444,35 @@ def get_asset_usage(
         })
         
     return {"usage": results}
+
+@media_router.get("/h5p/{asset_id}/{file_path:path}")
+def get_h5p_file(
+    asset_id: int,
+    file_path: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    media_repo = MediaRepository(db)
+    asset = media_repo.get_asset_by_id(asset_id, current_user.org_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+        
+    if asset.mime_type not in ("application/x-h5p", "application/zip", "application/zip-compressed", "application/octet-stream") or not asset.filename.lower().endswith(".h5p"):
+        raise HTTPException(status_code=400, detail="Asset is not an H5P package")
+        
+    # object_key looks like "/uploads/media/{org_id}/{stored_name}"
+    parts = asset.object_key.split("/")
+    stored_name = parts[-1]
+    org_dir = _uploads_root() / str(current_user.org_id)
+    extract_dir = org_dir / "h5p_extracted" / stored_name
+    
+    target_file = (extract_dir / file_path).resolve()
+    
+    # Ensure target_file is within extract_dir to prevent directory traversal
+    if extract_dir not in target_file.parents and target_file != extract_dir:
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    if not target_file.exists() or not target_file.is_file():
+        raise HTTPException(status_code=404, detail="File not found in H5P package")
+        
+    return FileResponse(target_file)

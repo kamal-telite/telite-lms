@@ -456,7 +456,7 @@ def record_events(
             org_id=current_user.org_id
         ))
 
-        if valid_block_id and ev.module_id and ev.event_type in ("BLOCK_VIEWED", "VIDEO_STARTED", "VIDEO_PAUSED", "VIDEO_COMPLETED"):
+        if valid_block_id and ev.module_id and ev.event_type in ("BLOCK_VIEWED", "VIDEO_STARTED", "VIDEO_PAUSED", "VIDEO_COMPLETED", "BLOCK_COMPLETED"):
             block_progress = db.query(LessonBlockProgress).filter(
                 LessonBlockProgress.user_id == current_user.id,
                 LessonBlockProgress.module_id == ev.module_id,
@@ -477,10 +477,54 @@ def record_events(
                 )
 
             block_progress.last_viewed_at = now
-            if ev.event_type in ("BLOCK_VIEWED", "VIDEO_COMPLETED"):
+            if ev.event_type in ("BLOCK_VIEWED", "VIDEO_COMPLETED", "BLOCK_COMPLETED"):
                 block_progress.status = "completed"
                 block_progress.completion_percentage = 100.0
                 block_progress.completed_at = block_progress.completed_at or now
+                
+                # Check for module completion cascade if this was a BLOCK_COMPLETED event
+                if ev.event_type == "BLOCK_COMPLETED":
+                    blocks_in_module = db.query(LessonBlock.id).filter(LessonBlock.module_id == ev.module_id, LessonBlock.deleted_at.is_(None)).all()
+                    completed_blocks = db.query(LessonBlockProgress.block_id).filter(
+                        LessonBlockProgress.user_id == current_user.id,
+                        LessonBlockProgress.module_id == ev.module_id,
+                        LessonBlockProgress.status == "completed"
+                    ).all()
+                    
+                    # Include the current block as completed since we just marked it, 
+                    # but it hasn't been committed to DB yet
+                    completed_block_ids = {bp.block_id for bp in completed_blocks}
+                    completed_block_ids.add(valid_block_id)
+                    
+                    all_blocks_completed = all(b.id in completed_block_ids for b in blocks_in_module)
+                    
+                    if all_blocks_completed:
+                        mp = db.query(ModuleProgress).filter(
+                            ModuleProgress.user_id == current_user.id,
+                            ModuleProgress.module_id == ev.module_id
+                        ).first()
+                        if not mp:
+                            mp = ModuleProgress(
+                                user_id=current_user.id, module_id=ev.module_id, org_id=current_user.org_id,
+                                status="completed", started_at=now, completed_at=now
+                            )
+                            db.add(mp)
+                        elif mp.status != "completed":
+                            mp.status = "completed"
+                            mp.completed_at = now
+                            
+                        # Emit MODULE_COMPLETED
+                        events.append(LearnerEvent(
+                            user_id=current_user.id,
+                            course_id=ev.course_id,
+                            module_id=ev.module_id,
+                            event_type="MODULE_COMPLETED",
+                            schema_version="1.0",
+                            payload_json={"source": "cascade_from_block"},
+                            created_at=now,
+                            org_id=current_user.org_id
+                        ))
+                        
             elif ev.event_type in ("VIDEO_STARTED", "VIDEO_PAUSED"):
                 if block_progress.status == "not_started":
                     block_progress.status = "in_progress"
