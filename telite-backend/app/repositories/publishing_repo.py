@@ -11,8 +11,20 @@ from app.models.course_section import CourseSection
 from app.models.course_module import CourseModule
 from app.models.course_version import CourseVersion
 from app.models.lesson_block import LessonBlock
+from app.models.media_asset import MediaAsset
 from app.repositories.base_repo import BaseRepository
 from app.models.builder_activity_log import BuilderActivityLog
+
+
+def freeze_h5p_block_settings(block: LessonBlock, asset: MediaAsset | None) -> dict:
+    settings = copy.deepcopy(block.metadata_json or {})
+    if block.block_type == "h5p" and block.media_asset_id and asset and asset.deleted_at is None:
+        settings.setdefault("asset_id", asset.id)
+        settings.setdefault("asset_version", asset.asset_version or 1)
+        settings.setdefault("filename", asset.filename)
+        settings.setdefault("mime_type", asset.mime_type)
+    return settings
+
 
 class PublishingRepository(BaseRepository):
 
@@ -98,6 +110,10 @@ class PublishingRepository(BaseRepository):
 
         blocks_by_module = {}
         for block in blocks:
+            asset = self.session.get(MediaAsset, block.media_asset_id) if block.media_asset_id else None
+            if asset and asset.org_id != org_id:
+                asset = None
+            settings = freeze_h5p_block_settings(block, asset)
             blocks_by_module.setdefault(block.module_id, []).append({
                 "id": block.id,
                 "module_id": block.module_id,
@@ -105,8 +121,8 @@ class PublishingRepository(BaseRepository):
                 "content": block.content,
                 "media_asset_id": block.media_asset_id,
                 "sort_order": block.sort_order,
-                "settings": copy.deepcopy(block.metadata_json or {}),
-                "metadata_json": copy.deepcopy(block.metadata_json or {}),
+                "settings": settings,
+                "metadata_json": copy.deepcopy(settings),
             })
 
         modules_by_section = {}

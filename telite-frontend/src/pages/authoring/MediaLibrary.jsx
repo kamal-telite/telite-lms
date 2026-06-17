@@ -11,7 +11,8 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const normalizedFilterType = filterType === "application/pdf" ? "pdf" : filterType;
+  const [typeFilter, setTypeFilter] = useState(normalizedFilterType || "all");
   const [folderFilter, setFolderFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [folders, setFolders] = useState([]);
@@ -38,9 +39,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
         limit: 100,
         search: search.trim() || undefined,
       };
-      if (filterType) {
-        params.type = filterType;
-      } else if (typeFilter !== "all") {
+      if (typeFilter !== "all") {
         params.type = typeFilter;
       }
       if (folderFilter !== "all") {
@@ -60,15 +59,16 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
     } finally {
       setLoading(false);
     }
-  }, [filterType, folderFilter, search, tagFilter, typeFilter]);
+  }, [folderFilter, search, tagFilter, typeFilter]);
 
   useEffect(() => {
     if (open) {
+      if (normalizedFilterType) setTypeFilter(normalizedFilterType);
       const timer = window.setTimeout(fetchAssets, search ? 250 : 0);
       return () => window.clearTimeout(timer);
     }
     return undefined;
-  }, [open, fetchAssets, search]);
+  }, [open, fetchAssets, search, normalizedFilterType]);
 
   const fetchUsage = async (assetId) => {
     setUsageLoading(true);
@@ -194,6 +194,10 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
   };
 
   const formatSize = (bytes = 0) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  const isH5pAsset = (asset) =>
+    asset.filename?.toLowerCase().endsWith(".h5p") ||
+    asset.mime_type === "application/x-h5p" ||
+    asset.tags?.includes("h5p");
 
   const renderPreview = (asset) => {
     if (asset.mime_type.startsWith("image/")) {
@@ -220,6 +224,9 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
     }
     if (asset.mime_type === "application/pdf") {
       return <span style={{ color: "#475569", fontWeight: 700 }}>PDF</span>;
+    }
+    if (isH5pAsset(asset)) {
+      return <span style={{ color: "#475569", fontWeight: 700 }}>H5P</span>;
     }
     return <span style={{ color: "#475569", fontWeight: 700 }}>File</span>;
   };
@@ -257,15 +264,14 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
       </div>
 
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px", alignItems: "center" }}>
-        {!filterType ? (
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {[
               ["all", "All"],
               ["image", "Images"],
-              ["video", "Videos"],
-              ["audio", "Audio"],
-              ["pdf", "PDFs"],
-              ["other", "Other"],
+              ["video", "Video"],
+              ["pdf", "PDF"],
+              ["scorm", "SCORM"],
+              ["h5p", "H5P"],
             ].map(([value, label]) => (
               <Button
                  key={value}
@@ -277,7 +283,6 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
                </Button>
             ))}
           </div>
-        ) : null}
         <select className="field__input" style={{ width: "160px" }} value={folderFilter} onChange={(e) => setFolderFilter(e.target.value)}>
           <option value="all">All folders</option>
           {folders.map((folder) => (
@@ -299,7 +304,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
           <ErrorState body={error} />
         ) : assets.length === 0 ? (
           <div style={{ textAlign: "center", color: "#64748b", marginTop: "100px" }}>
-            No media found. Upload an asset to get started.
+            {typeFilter === "h5p" ? "No H5P packages found. Upload an .h5p file to get started." : "No media found. Upload an asset to get started."}
           </div>
         ) : (
           <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px" }}>
@@ -319,8 +324,14 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
                 </div>
                 <div style={{ padding: "12px", fontSize: "13px" }}>
                   <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={asset.filename}>
-                    {asset.filename}
+                    {asset.metadata?.title || asset.filename}
                   </div>
+                  {asset.metadata?.mainLibrary ? (
+                    <div style={{ color: "#059669", fontSize: "12px", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Badge tone="primary">H5P</Badge>
+                      <span>{asset.metadata.mainLibrary}</span>
+                    </div>
+                  ) : null}
                   <div style={{ color: "#64748b", marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>{formatSize(asset.size_bytes)}</span>
                     <Badge tone="neutral">v{asset.asset_version}</Badge>

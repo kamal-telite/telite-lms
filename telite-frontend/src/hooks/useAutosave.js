@@ -3,21 +3,32 @@ import { api } from "../services/client";
 import { saveDraftToCache, clearDraftFromCache, getDraftFromCache } from "../services/draftCache";
 import { useToast } from "../components/common/ui";
 
+function errorDetail(error) {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map((item) => item?.msg || item).join(" ");
+  return error?.response?.data?.message || error?.message || "";
+}
+
+function isCapabilityError(error) {
+  const detail = errorDetail(error).toLowerCase();
+  return detail.includes("capability") || detail.includes("permission denied") || detail.includes("required capability");
+}
+
 export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecoverDraft }) {
   const { showToast } = useToast();
-  const [saveState, setSaveState] = useState("idle"); // idle, saving, error, offline
+  const [saveState, setSaveState] = useState("idle");
   const [lastSaved, setLastSaved] = useState(null);
   const [pendingDraft, setPendingDraft] = useState(null);
-  
+
   const timerRef = useRef(null);
   const previousDataRef = useRef(null);
   const isFirstMount = useRef(true);
 
-  // Attempt to recover draft on mount
   useEffect(() => {
     async function recoverDraft() {
       const draft = await getDraftFromCache(courseId);
-      if (draft && draft.payload) {
+      if (draft?.payload) {
         setPendingDraft(draft);
         showToast("Unsaved changes recovered from local cache.", "warning");
       }
@@ -45,43 +56,43 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
   const performSave = useCallback(async (payload, hasRetriedLock = false) => {
     setSaveState("saving");
     try {
-      // Filter: only send blocks that have a real id OR are new (no id) and not deleted.
-      // Deleted blocks with no id never need to be sent — they were never persisted.
       const blocksToSend = payload
-        .filter(b => !(b.is_deleted && !b.id))   // skip deleted new blocks
-        .map(b => ({
-          ...b,
-          media_asset_id: b.media_asset_id || b.settings?.asset_id || null,
-          // Strip _tempId — backend doesn't know about it
-          id: b.id || null,
+        .filter((block) => !(block.is_deleted && !block.id))
+        .map((block) => ({
+          ...block,
+          media_asset_id: block.media_asset_id || block.settings?.asset_id || null,
+          id: block.id || null,
         }));
 
-      // Optimistic cache write first
       await saveDraftToCache(courseId, payload);
 
-      // Attempt backend sync
       const response = await api.put(`/authoring/courses/${courseId}/blocks`, {
-        blocks: blocksToSend
+        blocks: blocksToSend,
       });
 
-      // Back-fill real IDs onto newly created blocks so subsequent saves update, not duplicate
       const saved = response.data?.blocks || [];
       if (saved.length > 0 && onBlocksSaved) {
         onBlocksSaved(saved);
       }
 
-      // Clear cache on success
       await clearDraftFromCache(courseId);
       setPendingDraft(null);
       setLastSaved(new Date());
       setSaveState("idle");
-    } catch (err) {
-      if (err.response && err.response.status === 409) {
-        // Optimistic Concurrency Conflict
+    } catch (error) {
+      if (error.response?.status === 409) {
         setSaveState("conflict");
-        if (onConflict) onConflict(err.response.data, payload);
-      } else if (err.response && err.response.status === 403) {
-        // Lock expired — surface clearly rather than silently caching
+        onConflict?.(error.response.data, payload);
+        return;
+      }
+
+      if (error.response?.status === 403) {
+        if (isCapabilityError(error)) {
+          setSaveState("error");
+          showToast(`Permission denied: ${errorDetail(error)}`, "error");
+          return;
+        }
+
         if (!hasRetriedLock) {
           try {
             await api.post(`/authoring/courses/${courseId}/lock`);
@@ -91,13 +102,14 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
             console.debug("Unable to renew editor lock before autosave retry.", lockError);
           }
         }
+
         setSaveState("error");
         showToast("Editor lock expired. Please refresh the page to continue editing.", "error");
-      } else {
-        // Network/Server Error - Keep in local draft
-        setSaveState("offline");
-        showToast("Offline. Changes saved locally.", "warning");
+        return;
       }
+
+      setSaveState("offline");
+      showToast("Autosave failed. Your changes are stored locally and will retry when possible.", "warning");
     }
   }, [courseId, onConflict, onBlocksSaved, showToast]);
 
@@ -105,12 +117,11 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
     if (isFirstMount.current) {
       isFirstMount.current = false;
       previousDataRef.current = data;
-      return;
+      return undefined;
     }
 
-    // Basic deep equality check for changes (simplified for this context)
     const hasChanged = JSON.stringify(data) !== JSON.stringify(previousDataRef.current);
-    if (!hasChanged) return;
+    if (!hasChanged) return undefined;
 
     previousDataRef.current = data;
 
@@ -118,7 +129,6 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
       clearTimeout(timerRef.current);
     }
 
-    // 2000ms debounce
     timerRef.current = setTimeout(() => {
       performSave(data);
     }, 2000);

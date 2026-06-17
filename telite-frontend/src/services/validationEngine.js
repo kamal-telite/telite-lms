@@ -53,6 +53,20 @@ export function validateBlocks(blocks) {
         }
         break;
 
+      case "h5p":
+        if (!(block.media_asset_id || block.settings?.asset_id)) {
+          errors.push({
+            blockId: block.id || `temp-${index}`,
+            message: `H5P block #${blockNum} must use an asset from the Media Library.`,
+          });
+        } else if (!block.settings?.metadata?.mainLibrary) {
+          errors.push({
+            blockId: block.id || `temp-${index}`,
+            message: `H5P block #${blockNum} is missing valid metadata. Please ensure the uploaded file is a valid .h5p package.`,
+          });
+        }
+        break;
+
       case "embed":
         if (!block.settings?.url || block.settings.url.trim() === "") {
           errors.push({

@@ -181,11 +181,11 @@ function SortableBlock({
         {(block.block_type === "image" || block.block_type === "video" || block.block_type === "audio" || block.block_type === "pdf" || block.block_type === "scorm" || block.block_type === "h5p") && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ background: "#f8fafc", padding: "32px", textAlign: "center", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
-              {block.media_asset_id || block.settings?.asset_id || block.settings?.url ? (
+              {block.media_asset_id || block.settings?.asset_id ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}>
                   <div style={{ color: "#059669", fontWeight: 500 }}>Media Attached</div>
                   <div style={{ fontSize: "12px", color: "#64748b", wordBreak: "break-all" }}>
-                    {block.settings?.filename || block.settings?.url || `Asset #${block.media_asset_id || block.settings?.asset_id}`}
+                    {block.settings?.filename || `Asset #${block.media_asset_id || block.settings?.asset_id}`}
                   </div>
                   <Button tone="neutral" size="small" disabled={isLocked} onClick={() => onOpenMedia(blockKey(block), block.block_type.split("/")[0])}>Replace Media</Button>
                 </div>
@@ -196,13 +196,7 @@ function SortableBlock({
                 </div>
               )}
             </div>
-            <input
-              className="field__input"
-              placeholder={block.block_type === "scorm" ? "SCORM package URL..." : `${block.block_type} URL...`}
-              value={block.settings?.url || ""}
-              onChange={(e) => handleSettingsChange("url", e.target.value)}
-              disabled={isLocked}
-            />
+
             {block.block_type === "scorm" ? (
               <div style={{ color: "#64748b", fontSize: "13px" }}>
                 Attach a SCORM ZIP package from the Media Library.
@@ -577,7 +571,7 @@ export function LessonBlockEditor({
 
   const handleOpenMedia = (blockId, filterType) => {
     setActiveMediaBlockId(blockId);
-    setMediaFilterType(filterType === "pdf" ? "application/pdf" : filterType);
+    setMediaFilterType(filterType);
     setMediaModalOpen(true);
   };
 
@@ -591,6 +585,7 @@ export function LessonBlockEditor({
           asset_version: asset.asset_version,
           filename: asset.filename,
           mime_type: asset.mime_type,
+          metadata: asset.metadata || {},
         }
       });
     }

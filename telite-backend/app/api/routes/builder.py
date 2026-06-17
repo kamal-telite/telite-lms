@@ -12,6 +12,7 @@ from app.models.course_module import CourseModule
 from app.models.media_asset import MediaAsset
 from app.services.r2_client import generate_presigned_download_url
 from app.services.audit_service import AuditService
+from app.services.h5p_service import assert_h5p_asset
 
 builder_router = APIRouter(prefix="/authoring", tags=["Builder Gateway"])
 
@@ -39,6 +40,49 @@ def _block_to_response(block, db: Session, org_id: int) -> dict:
             settings.setdefault("asset_version", asset.asset_version)
     block_dict["settings"] = settings
     return block_dict
+
+
+def _validate_h5p_block_asset(
+    bp,
+    *,
+    db: Session,
+    org_id: int,
+    course_id: str,
+) -> tuple[int, dict]:
+    media_asset_id = bp.media_asset_id or bp.settings.get("asset_id")
+    if not media_asset_id:
+        raise HTTPException(status_code=400, detail="H5P block requires a media asset")
+
+    module = db.query(CourseModule).filter(
+        CourseModule.id == bp.module_id,
+        CourseModule.course_id == course_id,
+        CourseModule.org_id == org_id,
+        CourseModule.deleted_at.is_(None),
+    ).first()
+    if not module:
+        raise HTTPException(status_code=400, detail="Block module does not belong to this course")
+
+    asset = db.query(MediaAsset).filter(
+        MediaAsset.id == media_asset_id,
+        MediaAsset.org_id == org_id,
+        MediaAsset.deleted_at.is_(None),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=400, detail="H5P media asset not found")
+    assert_h5p_asset(asset.filename, asset.mime_type)
+
+    settings = dict(bp.settings or {})
+    existing_asset_id = settings.get("asset_id")
+    if existing_asset_id != media_asset_id:
+        settings["asset_version"] = asset.asset_version or 1
+    else:
+        settings.setdefault("asset_version", asset.asset_version or 1)
+    settings.update({
+        "asset_id": asset.id,
+        "filename": asset.filename,
+        "mime_type": asset.mime_type,
+    })
+    return asset.id, settings
 
 # -----------------------------------------------------------------------------
 # 1. Builder Structure Fetch
@@ -277,6 +321,14 @@ def save_module_blocks(
     
     for bp in request.blocks:
         media_asset_id = bp.media_asset_id or bp.settings.get("asset_id")
+        settings = dict(bp.settings or {})
+        if bp.block_type == "h5p" and not bp.is_deleted:
+            media_asset_id, settings = _validate_h5p_block_asset(
+                bp,
+                db=db,
+                org_id=current_user.org_id,
+                course_id=course_id,
+            )
         if bp.is_deleted and bp.id:
             block = builder_repo.get_block_by_id(bp.id, current_user.org_id)
             if block:
@@ -293,12 +345,14 @@ def save_module_blocks(
                 block.block_type = bp.block_type
                 block.content = bp.content
                 block.media_asset_id = media_asset_id
-                block.metadata_json = bp.settings
+                block.metadata_json = settings
                 block.sort_order = bp.sort_order
                 builder_repo.save_block(block)
                 after_dict = block.to_dict()
                 builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_UPDATED", json.dumps({"block_id": block.id, "type": block.block_type}))
                 AuditService.log(db, current_user.org_id, current_user.id, "Block", block.id, "update", course_id, before_dict=before_dict, after_dict=after_dict)
+                if block.block_type == "h5p":
+                    AuditService.log(db, current_user.org_id, current_user.id, "h5p", block.id, "h5p.attached", course_id, after_dict=after_dict)
                 
                 results.append(_block_to_response(block, db, current_user.org_id))
         else:
@@ -309,13 +363,15 @@ def save_module_blocks(
                 block_type=bp.block_type,
                 content=bp.content,
                 media_asset_id=media_asset_id,
-                metadata_json=bp.settings,
+                metadata_json=settings,
                 sort_order=bp.sort_order
             )
             builder_repo.save_block(block)
             after_dict = block.to_dict()
             builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_CREATED", json.dumps({"block_id": block.id, "type": block.block_type}))
             AuditService.log(db, current_user.org_id, current_user.id, "Block", block.id, "create", course_id, after_dict=after_dict)
+            if block.block_type == "h5p":
+                AuditService.log(db, current_user.org_id, current_user.id, "h5p", block.id, "h5p.attached", course_id, after_dict=after_dict)
             
             results.append(_block_to_response(block, db, current_user.org_id))
 

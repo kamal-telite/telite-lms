@@ -14,6 +14,7 @@ class MediaAsset(Base):
     mime_type = Column(String(100), nullable=False)
     folder = Column(String(120), nullable=True)
     tags_json = Column(Text, nullable=True)
+    metadata_json = Column(Text, nullable=True)
     uploaded_by = Column(String(50), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -30,6 +31,7 @@ class MediaAsset(Base):
             "mime_type": self.mime_type,
             "folder": self.folder,
             "tags": self.tags_json,
+            "metadata_json": self.metadata_json,
             "uploaded_by": self.uploaded_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,

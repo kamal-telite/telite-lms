@@ -15,6 +15,10 @@ def is_production_like() -> bool:
     return get_environment() in _PRODUCTION_ENVS
 
 
+def is_development() -> bool:
+    return get_environment() == "development"
+
+
 def require_env(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:

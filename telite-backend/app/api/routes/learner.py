@@ -19,6 +19,7 @@ from app.models.lesson_block_progress import LessonBlockProgress
 from app.models.course_module import CourseModule
 from app.models.lesson_block import LessonBlock
 from app.models.media_asset import MediaAsset
+from app.models.course_version import CourseVersion
 from app.services.r2_client import generate_presigned_download_url
 
 learner_router = APIRouter(prefix="/learner", tags=["Learner APIs"])
@@ -47,6 +48,50 @@ def _block_to_response(block: LessonBlock, db: Session, org_id: int) -> dict:
             settings.setdefault("asset_version", asset.asset_version)
     block_dict["settings"] = settings
     return block_dict
+
+
+def _snapshot_block_to_response(block_payload: dict, db: Session, org_id: int) -> dict:
+    block = dict(block_payload)
+    settings = dict(block.get("settings") or block.get("metadata_json") or {})
+    asset_id = block.get("media_asset_id") or settings.get("asset_id")
+    if asset_id:
+        settings.setdefault("asset_id", asset_id)
+        asset = db.query(MediaAsset).filter(
+            MediaAsset.id == asset_id,
+            MediaAsset.org_id == org_id,
+            MediaAsset.deleted_at.is_(None),
+        ).first()
+        if asset:
+            settings.setdefault("url", _download_url_for_asset(asset))
+            settings.setdefault("filename", asset.filename)
+            settings.setdefault("mime_type", asset.mime_type)
+            settings.setdefault("asset_version", asset.asset_version)
+    block["settings"] = settings
+    block.pop("metadata_json", None)
+    return block
+
+
+def _latest_published_snapshot(db: Session, course_id: str, org_id: int) -> dict | None:
+    version = db.query(CourseVersion).filter(
+        CourseVersion.course_id == course_id,
+        CourseVersion.org_id == org_id,
+        CourseVersion.status == "published",
+    ).order_by(CourseVersion.version_number.desc(), CourseVersion.id.desc()).first()
+    return version.snapshot_json if version and version.snapshot_json else None
+
+
+def _modules_from_snapshot(snapshot: dict, db: Session, org_id: int) -> list[dict]:
+    modules = []
+    for section in snapshot.get("sections") or []:
+        for module_payload in section.get("modules") or []:
+            module = dict(module_payload)
+            module["content"] = [
+                _snapshot_block_to_response(block, db, org_id)
+                for block in module_payload.get("blocks") or []
+            ]
+            module.pop("blocks", None)
+            modules.append(module)
+    return modules
 
 
 def _valid_block_id(block_id: Optional[int], db: Session, org_id: int) -> Optional[int]:
@@ -106,6 +151,97 @@ class HeartbeatRequest(BaseModel):
     module_id: Optional[int] = None
     block_id: Optional[int] = None
     time_spent_seconds: int
+
+
+H5P_STARTED_EVENTS = {"H5P_STARTED"}
+H5P_COMPLETION_EVENTS = {"H5P_COMPLETED", "H5P_PASSED"}
+H5P_TRACKING_EVENTS = H5P_STARTED_EVENTS | H5P_COMPLETION_EVENTS | {"H5P_FAILED", "H5P_SCORED"}
+
+
+def _score_from_payload(payload: dict) -> float | None:
+    score = payload.get("score")
+    if isinstance(score, dict):
+        scaled = score.get("scaled")
+        raw = score.get("raw")
+        max_score = score.get("max")
+        if scaled is not None:
+            try:
+                return float(scaled) * 100.0
+            except (TypeError, ValueError):
+                return None
+        if raw is not None and max_score:
+            try:
+                return float(raw) / float(max_score) * 100.0
+            except (TypeError, ValueError, ZeroDivisionError):
+                return None
+    if score is not None:
+        try:
+            return float(score)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _recalculate_course_progress(
+    db: Session,
+    *,
+    user_id: str,
+    course_id: str,
+    org_id: int,
+    now: datetime,
+    events: list[LearnerEvent],
+) -> None:
+    progress_repo = ProgressRepository(db)
+    course_progress = progress_repo.get_course_progress(user_id, course_id, org_id)
+    if not course_progress:
+        course_progress = CourseProgress(
+            user_id=user_id,
+            course_id=course_id,
+            org_id=org_id,
+            status="in_progress",
+            completion_percentage=0.0,
+            started_at=now,
+        )
+
+    course_module_ids = [
+        module_id for (module_id,) in db.query(CourseModule.id).filter(
+            CourseModule.course_id == course_id,
+            CourseModule.org_id == org_id,
+            CourseModule.deleted_at.is_(None),
+        ).all()
+    ]
+    completed_module_ids = {
+        module_id for (module_id,) in db.query(ModuleProgress.module_id).filter(
+            ModuleProgress.user_id == user_id,
+            ModuleProgress.org_id == org_id,
+            ModuleProgress.module_id.in_(course_module_ids),
+            ModuleProgress.status == "completed",
+        ).all()
+    }
+    total_modules = len(course_module_ids)
+    completed_count = len(completed_module_ids)
+    course_progress.completion_percentage = (completed_count / total_modules * 100.0) if total_modules else 0.0
+    course_progress.last_viewed_at = now
+
+    if total_modules and completed_count == total_modules:
+        if course_progress.status != "completed":
+            course_progress.status = "completed"
+            course_progress.completed_at = course_progress.completed_at or now
+            course_progress.completion_percentage = 100.0
+            events.append(LearnerEvent(
+                user_id=user_id,
+                course_id=course_id,
+                event_type="COURSE_COMPLETED",
+                schema_version="1.0",
+                payload_json={"source": "cascade_from_h5p"},
+                created_at=now,
+                org_id=org_id,
+            ))
+    elif course_progress.status == "not_started":
+        course_progress.status = "in_progress"
+        course_progress.started_at = course_progress.started_at or now
+
+    progress_repo.upsert_course_progress(course_progress)
 
 @learner_router.get("/courses", response_model=List[CourseListResponse])
 def get_learner_courses(
@@ -174,6 +310,16 @@ def get_learner_course(
     course = learner_repo.get_course(id, current_user.id, current_user.org_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+
+    snapshot = _latest_published_snapshot(db, course.id, current_user.org_id) if course.status == "published" else None
+    if snapshot:
+        return {
+            "id": course.id,
+            "name": course.name,
+            "description": course.description,
+            "modules_json": _modules_from_snapshot(snapshot, db, current_user.org_id),
+            "source": "published_snapshot",
+        }
 
     modules = db.query(CourseModule).filter(
         CourseModule.course_id == course.id,
@@ -456,7 +602,14 @@ def record_events(
             org_id=current_user.org_id
         ))
 
-        if valid_block_id and ev.module_id and ev.event_type in ("BLOCK_VIEWED", "VIDEO_STARTED", "VIDEO_PAUSED", "VIDEO_COMPLETED", "BLOCK_COMPLETED"):
+        if valid_block_id and ev.module_id and ev.event_type in (
+            "BLOCK_VIEWED",
+            "VIDEO_STARTED",
+            "VIDEO_PAUSED",
+            "VIDEO_COMPLETED",
+            "BLOCK_COMPLETED",
+            *H5P_TRACKING_EVENTS,
+        ):
             block_progress = db.query(LessonBlockProgress).filter(
                 LessonBlockProgress.user_id == current_user.id,
                 LessonBlockProgress.module_id == ev.module_id,
@@ -477,18 +630,23 @@ def record_events(
                 )
 
             block_progress.last_viewed_at = now
-            if ev.event_type in ("BLOCK_VIEWED", "VIDEO_COMPLETED", "BLOCK_COMPLETED"):
+            if ev.event_type in ("BLOCK_VIEWED", "VIDEO_COMPLETED", "BLOCK_COMPLETED", *H5P_COMPLETION_EVENTS):
                 block_progress.status = "completed"
                 block_progress.completion_percentage = 100.0
                 block_progress.completed_at = block_progress.completed_at or now
                 
                 # Check for module completion cascade if this was a BLOCK_COMPLETED event
-                if ev.event_type == "BLOCK_COMPLETED":
-                    blocks_in_module = db.query(LessonBlock.id).filter(LessonBlock.module_id == ev.module_id, LessonBlock.deleted_at.is_(None)).all()
+                if ev.event_type in ("BLOCK_COMPLETED", *H5P_COMPLETION_EVENTS):
+                    blocks_in_module = db.query(LessonBlock.id).filter(
+                        LessonBlock.module_id == ev.module_id,
+                        LessonBlock.org_id == current_user.org_id,
+                        LessonBlock.deleted_at.is_(None),
+                    ).all()
                     completed_blocks = db.query(LessonBlockProgress.block_id).filter(
                         LessonBlockProgress.user_id == current_user.id,
                         LessonBlockProgress.module_id == ev.module_id,
-                        LessonBlockProgress.status == "completed"
+                        LessonBlockProgress.org_id == current_user.org_id,
+                        LessonBlockProgress.status == "completed",
                     ).all()
                     
                     # Include the current block as completed since we just marked it, 
@@ -501,7 +659,8 @@ def record_events(
                     if all_blocks_completed:
                         mp = db.query(ModuleProgress).filter(
                             ModuleProgress.user_id == current_user.id,
-                            ModuleProgress.module_id == ev.module_id
+                            ModuleProgress.module_id == ev.module_id,
+                            ModuleProgress.org_id == current_user.org_id,
                         ).first()
                         if not mp:
                             mp = ModuleProgress(
@@ -524,12 +683,40 @@ def record_events(
                             created_at=now,
                             org_id=current_user.org_id
                         ))
+                        if ev.course_id:
+                            _recalculate_course_progress(
+                                db,
+                                user_id=current_user.id,
+                                course_id=ev.course_id,
+                                org_id=current_user.org_id,
+                                now=now,
+                                events=events,
+                            )
                         
-            elif ev.event_type in ("VIDEO_STARTED", "VIDEO_PAUSED"):
+            elif ev.event_type in ("VIDEO_STARTED", "VIDEO_PAUSED", *H5P_STARTED_EVENTS, "H5P_FAILED", "H5P_SCORED"):
                 if block_progress.status == "not_started":
                     block_progress.status = "in_progress"
                 if "position_seconds" in ev.payload_json:
                     block_progress.video_position_seconds = int(ev.payload_json.get("position_seconds") or 0)
+                score = _score_from_payload(ev.payload_json or {})
+                if score is not None:
+                    mp = db.query(ModuleProgress).filter(
+                        ModuleProgress.user_id == current_user.id,
+                        ModuleProgress.module_id == ev.module_id,
+                        ModuleProgress.org_id == current_user.org_id,
+                    ).first()
+                    if not mp:
+                        mp = ModuleProgress(
+                            user_id=current_user.id,
+                            module_id=ev.module_id,
+                            org_id=current_user.org_id,
+                            status="in_progress",
+                            started_at=now,
+                        )
+                    mp.score = score
+                    mp.last_viewed_at = now
+                    progress_repo = ProgressRepository(db)
+                    progress_repo.upsert_module_progress(mp)
             db.add(block_progress)
     if events:
         db.add_all(events)

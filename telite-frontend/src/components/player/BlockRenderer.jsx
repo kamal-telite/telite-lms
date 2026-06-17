@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 // Reusable component to track when a block enters the viewport
-function TrackedBlock({ children, blockId, courseId, moduleId }) {
+function TrackedBlock({ children, blockId, courseId, moduleId, blockType }) {
   const ref = useRef(null);
   const [viewed, setViewed] = useState(false);
 
@@ -13,14 +13,14 @@ function TrackedBlock({ children, blockId, courseId, moduleId }) {
         setViewed(true);
         observer.disconnect();
 
-        // Emit BLOCK_VIEWED
+        const eventType = blockType === "h5p" ? "H5P_STARTED" : "BLOCK_VIEWED";
         const token = localStorage.getItem("token");
         fetch("/api/v1/learner/events", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             events: [{
-              event_type: "BLOCK_VIEWED",
+              event_type: eventType,
               course_id: courseId,
               module_id: moduleId,
               ...(Number.isInteger(blockId) ? { block_id: blockId } : {})
@@ -32,7 +32,7 @@ function TrackedBlock({ children, blockId, courseId, moduleId }) {
 
     observer.observe(ref.current);
     return () => observer.disconnect();
-  }, [viewed, courseId, moduleId, blockId]);
+  }, [viewed, courseId, moduleId, blockId, blockType]);
 
   return <div ref={ref}>{children}</div>;
 }
@@ -139,33 +139,57 @@ function ScormBlock({ title, src, filename }) {
   );
 }
 
-function H5PBlock({ title, src, filename, courseId, moduleId, blockId, assetId }) {
+function H5PBlock({ title, src, filename, courseId, moduleId, blockId, assetId, assetVersion }) {
+  console.log("H5P BLOCK RENDERED", { title, src, filename, courseId, moduleId, blockId, assetId, assetVersion });
   const [completed, setCompleted] = React.useState(false);
 
   React.useEffect(() => {
+    const sendEvent = (eventType, statement) => {
+      if (!courseId) return;
+      const token = localStorage.getItem("token");
+      fetch("/api/v1/learner/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          events: [{
+            event_type: eventType,
+            course_id: courseId,
+            module_id: moduleId,
+            ...(Number.isInteger(blockId) ? { block_id: blockId } : {}),
+            payload_json: {
+              source: "h5p_xapi",
+              verb: statement?.verb?.id,
+              activity: statement?.object?.definition?.name || statement?.object?.id,
+              score: statement?.result?.score || null,
+              success: statement?.result?.success,
+              completion: statement?.result?.completion
+            }
+          }]
+        })
+      }).catch(() => {});
+    };
+
     const handleMessage = (event) => {
       if (event.data?.type === 'H5P_xAPI') {
         const stmt = event.data.event;
         const verb = stmt?.verb?.id;
-        
-        if (verb === 'http://adlnet.gov/expapi/verbs/completed' || verb === 'http://adlnet.gov/expapi/verbs/passed') {
+
+        if (stmt?.result?.score) {
+          sendEvent("H5P_SCORED", stmt);
+        }
+
+        if (verb === 'http://adlnet.gov/expapi/verbs/completed') {
           if (!completed && courseId) {
             setCompleted(true);
-            const token = localStorage.getItem("token");
-            fetch("/api/v1/learner/events", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({
-                events: [{
-                  event_type: "BLOCK_COMPLETED",
-                  course_id: courseId,
-                  module_id: moduleId,
-                  ...(Number.isInteger(blockId) ? { block_id: blockId } : {}),
-                  payload_json: JSON.stringify({ source: 'h5p_xapi', score: stmt.result?.score })
-                }]
-              })
-            }).catch(() => {});
+            sendEvent("H5P_COMPLETED", stmt);
           }
+        } else if (verb === 'http://adlnet.gov/expapi/verbs/passed') {
+          if (!completed && courseId) {
+            setCompleted(true);
+            sendEvent("H5P_PASSED", stmt);
+          }
+        } else if (verb === 'http://adlnet.gov/expapi/verbs/failed') {
+          sendEvent("H5P_FAILED", stmt);
         }
       }
     };
@@ -174,7 +198,7 @@ function H5PBlock({ title, src, filename, courseId, moduleId, blockId, assetId }
     return () => window.removeEventListener('message', handleMessage);
   }, [completed, courseId, moduleId, blockId]);
 
-  if (!src || !assetId) {
+  if (!assetId) {
     return (
       <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)", margin: "1em 0" }}>
         H5P content is not configured or missing asset reference.
@@ -182,7 +206,8 @@ function H5PBlock({ title, src, filename, courseId, moduleId, blockId, assetId }
     );
   }
 
-  const h5pContentUrl = `/api/v1/media/h5p/${assetId}`;
+  const version = assetVersion || 1;
+  const h5pContentUrl = `/api/v1/player/h5p/${assetId}/versions/${version}`;
   const playerUrl = `/h5p/index.html?src=${encodeURIComponent(h5pContentUrl)}`;
 
   return (
@@ -276,7 +301,7 @@ export function BlockRenderer({ content, courseId, moduleId }) {
     return (
       <div className="native-block-content" style={{ display: "flex", flexDirection: "column", gap: "1em", fontSize: "16px", lineHeight: 1.6, color: "var(--text)" }}>
         {visibleBlocks.map((block) => (
-          <TrackedBlock key={block.id || block.sort_order} blockId={block.id} courseId={courseId} moduleId={moduleId}>
+          <TrackedBlock key={block.id || block.sort_order} blockId={block.id} courseId={courseId} moduleId={moduleId} blockType={block.block_type}>
             {renderNativeBlock(block, courseId, moduleId)}
           </TrackedBlock>
         ))}
@@ -320,7 +345,7 @@ function renderNativeBlock(block, courseId, moduleId) {
     case "scorm":
       return <ScormBlock title={block.content} src={settings.url} filename={settings.filename} />;
     case "h5p":
-      return <H5PBlock title={block.content} src={settings.url} filename={settings.filename} courseId={courseId} moduleId={moduleId} blockId={block.id} assetId={settings.asset_id} />;
+      return <H5PBlock title={block.content} src={settings.url} filename={settings.filename} courseId={courseId} moduleId={moduleId} blockId={block.id} assetId={settings.asset_id} assetVersion={settings.asset_version} />;
     case "embed":
       return <EmbedBlock title={block.content} src={settings.url} />;
     case "assignment":

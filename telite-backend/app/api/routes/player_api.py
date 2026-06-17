@@ -2,20 +2,96 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, TokenData
 from app.db.engine import db_session
+from app.repositories.enrollment_repo import EnrollmentRepository
 from app.models.course_module import CourseModule
 from app.models.module_progress import ModuleProgress
 from app.models.interactive_tracking import InteractiveTracking
+from app.models.media_asset import MediaAsset
+from app.models.lesson_block import LessonBlock
+from app.models.course import Course
+from app.models.course_version import CourseVersion
 from app.services.analytics_service import analytics_service
+from app.services.h5p_service import (
+    assert_h5p_asset,
+    resolve_h5p_extract_dir,
+    safe_h5p_file_path,
+)
 
 logger = logging.getLogger("telite.player")
 
 player_router = APIRouter(prefix="/player", tags=["Native Player"])
+
+
+def _uploads_root() -> Path:
+    return Path(__file__).resolve().parents[3] / "uploads" / "media"
+
+
+def _published_snapshot_references_asset(snapshot: dict | None, asset_id: int, asset_version: int | None) -> bool:
+    if not isinstance(snapshot, dict):
+        return False
+    for section in snapshot.get("sections") or []:
+        for module in section.get("modules") or []:
+            for block in module.get("blocks") or []:
+                settings = block.get("settings") or block.get("metadata_json") or {}
+                block_asset_id = block.get("media_asset_id") or settings.get("asset_id")
+                block_version = settings.get("asset_version")
+                if block_asset_id == asset_id and (asset_version is None or block_version == asset_version):
+                    return True
+    return False
+
+
+def _has_h5p_playback_access(
+    db: Session,
+    *,
+    current_user: TokenData,
+    asset_id: int,
+    asset_version: int | None,
+) -> bool:
+    if current_user.role in ("super_admin", "category_admin") or current_user.is_platform_admin:
+        return True
+
+    enrollment_repo = EnrollmentRepository(db)
+    live_courses = (
+        db.query(Course.id)
+        .join(CourseModule, CourseModule.course_id == Course.id)
+        .join(LessonBlock, LessonBlock.module_id == CourseModule.id)
+        .filter(
+            Course.org_id == current_user.org_id,
+            Course.status.in_(("active", "published")),
+            CourseModule.org_id == current_user.org_id,
+            CourseModule.deleted_at.is_(None),
+            LessonBlock.org_id == current_user.org_id,
+            LessonBlock.media_asset_id == asset_id,
+            LessonBlock.deleted_at.is_(None),
+        )
+        .distinct()
+        .all()
+    )
+    for (course_id,) in live_courses:
+        if enrollment_repo.has_access(current_user.id, course_id, current_user.org_id):
+            return True
+
+    published_versions = db.query(CourseVersion).filter(
+        CourseVersion.org_id == current_user.org_id,
+        CourseVersion.status == "published",
+    ).all()
+    for version in published_versions:
+        if (
+            _published_snapshot_references_asset(version.snapshot_json, asset_id, asset_version)
+            and enrollment_repo.has_access(current_user.id, version.course_id, current_user.org_id)
+        ):
+            return True
+
+    return False
 
 class TrackingEvent(BaseModel):
     element: str
@@ -28,6 +104,69 @@ class TrackingSyncRequest(BaseModel):
     status: str | None = None
     score: float | None = None
     time_spent_seconds: int = 0
+
+
+@player_router.get("/h5p/{asset_id}/versions/{asset_version}")
+@player_router.get("/h5p/{asset_id}/versions/{asset_version}/{file_path:path}")
+def get_h5p_asset_file(
+    asset_id: int,
+    asset_version: int,
+    file_path: str | None = None,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user),
+):
+    asset = db.query(MediaAsset).filter(
+        MediaAsset.id == asset_id,
+        MediaAsset.org_id == current_user.org_id,
+        MediaAsset.deleted_at.is_(None),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    assert_h5p_asset(asset.filename, asset.mime_type)
+    if asset_version < 1 or asset_version > (asset.asset_version or 1):
+        raise HTTPException(status_code=404, detail="H5P asset version not found")
+    if not _has_h5p_playback_access(
+        db,
+        current_user=current_user,
+        asset_id=asset.id,
+        asset_version=asset_version,
+    ):
+        raise HTTPException(status_code=403, detail="Not enrolled or access denied")
+
+    stored_name = asset.object_key.split("/")[-1]
+    org_dir = _uploads_root() / str(current_user.org_id)
+    extract_dir = resolve_h5p_extract_dir(
+        org_dir,
+        asset_id=asset.id,
+        asset_version=asset_version,
+        current_stored_name=stored_name,
+        current_asset_version=asset.asset_version or 1,
+    )
+    return FileResponse(safe_h5p_file_path(extract_dir, file_path))
+
+
+@player_router.get("/h5p/{asset_id}")
+@player_router.get("/h5p/{asset_id}/{file_path:path}")
+def get_current_h5p_asset_file(
+    asset_id: int,
+    file_path: str | None = None,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user),
+):
+    asset = db.query(MediaAsset).filter(
+        MediaAsset.id == asset_id,
+        MediaAsset.org_id == current_user.org_id,
+        MediaAsset.deleted_at.is_(None),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return get_h5p_asset_file(
+        asset_id,
+        asset.asset_version or 1,
+        file_path,
+        db,
+        current_user,
+    )
 
 @player_router.post("/tracking")
 def sync_tracking(

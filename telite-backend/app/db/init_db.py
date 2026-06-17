@@ -17,11 +17,10 @@ import json
 import logging
 import os
 
-from sqlalchemy import Boolean, Float, Integer, inspect, text
-from sqlalchemy.sql.sqltypes import BigInteger, Numeric, String, Text
+from sqlalchemy import inspect, text
 
-from app.core.runtime import is_production_like
-from app.db.engine import get_db_session, get_engine
+from app.core.runtime import is_development, is_production_like
+from app.db.engine import get_db_session, get_engine, is_postgres_dsn
 from app.models.base import Base
 
 logger = logging.getLogger("telite.db.init")
@@ -34,22 +33,17 @@ def create_all_tables() -> None:
     logger.info("SQLAlchemy tables verified/created.")
 
 
+# Legacy mixin columns only — domain columns belong in Alembic (see docs/adr/004-schema-authority.md).
+
 def repair_shared_columns() -> None:
-    """Add shared ORM mixin columns that may be missing on older tables."""
+    """Add legacy shared mixin columns on SQLite dev bootstrap only."""
+    if not _allow_legacy_schema_bootstrap():
+        logger.info("Skipping repair_shared_columns; schema is Alembic-managed.")
+        return
+
     engine = get_engine()
     inspector = inspect(engine)
     preparer = engine.dialect.identifier_preparer
-
-    def default_for_column(column) -> str:
-        if column.nullable:
-            return ""
-        if isinstance(column.type, (Integer, BigInteger, Float, Numeric)):
-            return " DEFAULT 0"
-        if isinstance(column.type, Boolean):
-            return " DEFAULT FALSE"
-        if isinstance(column.type, (String, Text)):
-            return " DEFAULT ''"
-        return ""
 
     with engine.begin() as connection:
         for table in Base.metadata.sorted_tables:
@@ -82,20 +76,6 @@ def repair_shared_columns() -> None:
                     text(f"ALTER TABLE {quoted_table} ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1")
                 )
                 logger.info("Added missing org_id column to %s.", table.name)
-                existing_columns.add("org_id")
-
-            for column in table.c:
-                if column.name in existing_columns:
-                    continue
-                if column.primary_key:
-                    continue
-                column_type = column.type.compile(dialect=engine.dialect)
-                nullable = "" if column.nullable else " NOT NULL"
-                default = default_for_column(column)
-                connection.execute(
-                    text(f"ALTER TABLE {quoted_table} ADD COLUMN {preparer.quote(column.name)} {column_type}{nullable}{default}")
-                )
-                logger.info("Added missing %s column to %s.", column.name, table.name)
 
 
 def apply_rls_if_postgres() -> None:
@@ -205,7 +185,22 @@ def ensure_default_organization() -> None:
 def _use_alembic_migrations() -> bool:
     if is_production_like():
         return True
+    if is_postgres_dsn():
+        return True
     return os.getenv("TELITE_USE_ALEMBIC", "").lower() in ("true", "1", "yes")
+
+
+def _allow_legacy_schema_bootstrap() -> bool:
+    """SQLite-only dev bootstrap. PostgreSQL and production-like envs use Alembic only."""
+    if is_production_like():
+        return False
+    if not is_development():
+        return False
+    if _use_alembic_migrations():
+        return False
+    if is_postgres_dsn():
+        return False
+    return True
 
 
 def run_phase3_init() -> None:
@@ -215,15 +210,19 @@ def run_phase3_init() -> None:
     """
     logger.info("Phase 3 DB init startingâ€¦")
 
-    use_alembic = _use_alembic_migrations()
-    if not use_alembic:
+    if _allow_legacy_schema_bootstrap():
         create_all_tables()
         repair_shared_columns()
         apply_rls_if_postgres()
         ensure_default_organization()
         backfill_course_modules_from_courses()
-    else:
+    elif _use_alembic_migrations():
         logger.info("Skipping schema repair and legacy backfills; schema managed by Alembic.")
+    else:
+        logger.info(
+            "Skipping legacy schema bootstrap in %s; run Alembic migrations for schema changes.",
+            os.getenv("ENVIRONMENT", "development"),
+        )
 
     # 6. Verify connectivity
     if verify_connection():

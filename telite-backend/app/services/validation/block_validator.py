@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.services.validation.base_validator import BaseValidator
 from app.services.validation.schemas import ValidationResultItem, FixTarget
 from app.models.media_asset import MediaAsset
+from app.services.h5p_service import is_h5p_asset
 
 class BlockValidator(BaseValidator):
     def validate(self, section, module, block, b_idx) -> List[ValidationResultItem]:
@@ -36,14 +37,14 @@ class BlockValidator(BaseValidator):
             asset_id = block.media_asset_id or settings.get("asset_id")
             url = settings.get("url")
             
-            if not asset_id and not url:
+            if not asset_id:
                 results.append(ValidationResultItem(
                     type="missing_media",
                     severity="error",
                     section_id=section.id,
                     module_id=module.id,
                     block_id=block.id,
-                    message=f"{b_type.upper()} block #{b_num} in '{mod_title}' is missing media.",
+                    message=f"{b_type.upper()} block #{b_num} in '{mod_title}' must use an asset from the Media Library.",
                     fix_target=fix_target
                 ))
             elif asset_id:
@@ -62,7 +63,17 @@ class BlockValidator(BaseValidator):
                         message=f"{b_type.upper()} block #{b_num} references a media asset that no longer exists.",
                         fix_target=fix_target
                     ))
-            elif url:
+                elif b_type == "h5p" and not is_h5p_asset(asset.filename, asset.mime_type):
+                    results.append(ValidationResultItem(
+                        type="invalid_h5p_asset",
+                        severity="error",
+                        section_id=section.id,
+                        module_id=module.id,
+                        block_id=block.id,
+                        message=f"H5P block #{b_num} in '{mod_title}' references a non-H5P media asset.",
+                        fix_target=fix_target
+                    ))
+            if b_type != "h5p" and url and not asset_id:
                 results.append(ValidationResultItem(
                     type="external_media",
                     severity="warning",

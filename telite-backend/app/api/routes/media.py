@@ -18,6 +18,15 @@ from app.models.course import Course
 from app.services.r2_client import generate_presigned_upload_url, generate_presigned_download_url
 from app.services.audit_service import AuditService
 from app.core.permissions import require_capability
+from app.services.h5p_service import (
+    MAX_H5P_PACKAGE_BYTES,
+    assert_h5p_asset,
+    install_h5p_package,
+    is_h5p_asset,
+    resolve_h5p_extract_dir,
+    safe_h5p_file_path,
+    update_h5p_version_manifest,
+)
 
 media_router = APIRouter(prefix="/authoring/media", tags=["Media Library"])
 
@@ -73,6 +82,29 @@ def _tag_list(asset: MediaAsset) -> list[str]:
         return []
     return parsed if isinstance(parsed, list) else []
 
+def _metadata_dict(asset: MediaAsset) -> dict:
+    if not asset.metadata_json:
+        return {}
+    try:
+        parsed = json.loads(asset.metadata_json)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+def _merge_tags(existing: list[str], extra: list[str]) -> list[str]:
+    merged = list(existing)
+    for tag in extra:
+        value = str(tag).strip().lower()
+        if value and value not in merged:
+            merged.append(value[:40])
+    return merged[:20]
+
+def _require_h5p_permission(current_user: TokenData, permission: str) -> None:
+    if current_user.role == "super_admin" or current_user.is_platform_admin:
+        return
+    if not current_user.has_permission(permission):
+        raise HTTPException(status_code=403, detail=f"You do not have the required capability: {permission}")
+
 def _download_url_for(asset: MediaAsset) -> str:
     if asset.object_key.startswith("/uploads/"):
         return asset.object_key
@@ -96,9 +128,21 @@ def _asset_response(db: Session, asset: MediaAsset, usage_count: int | None = No
         "mime_type": asset.mime_type,
         "folder": asset.folder or "",
         "tags": _tag_list(asset),
+        "metadata": _metadata_dict(asset),
         "download_url": _download_url_for(asset),
         "used_by_blocks": used_by_blocks,
         "can_delete": used_by_blocks == 0,
+    }
+
+def _h5p_metadata_payload(metadata, asset_version: int) -> dict:
+    return {
+        "title": metadata.title,
+        "mainLibrary": metadata.main_library,
+        "language": metadata.language,
+        "embedTypes": ["div"],
+        "asset_version": asset_version,
+        "file_count": metadata.file_count,
+        "extracted_bytes": metadata.extracted_bytes,
     }
 
 @media_router.post("/upload-url", dependencies=[Depends(require_admin), Depends(require_capability("media.upload"))])
@@ -107,6 +151,13 @@ def create_upload_url(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    if is_h5p_asset(request.filename, request.mime_type):
+        _require_h5p_permission(current_user, "h5p.upload")
+        raise HTTPException(
+            status_code=400,
+            detail="H5P packages must be uploaded through the validated media upload endpoint.",
+        )
+
     media_repo = MediaRepository(db)
     
     # Generate unique object key
@@ -155,6 +206,11 @@ async def upload_asset(
 
     contents = await file.read()
     size_bytes = len(contents)
+    h5p_upload = is_h5p_asset(file.filename, file.content_type)
+    if h5p_upload:
+        _require_h5p_permission(current_user, "h5p.upload")
+    if h5p_upload and size_bytes > MAX_H5P_PACKAGE_BYTES:
+        raise HTTPException(status_code=400, detail="H5P package is too large")
     if size_bytes > 500 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large")
 
@@ -165,30 +221,18 @@ async def upload_asset(
 
     stored_name = f"{uuid4().hex}_{filename}"
     target = org_dir / stored_name
-    target.write_bytes(contents)
-
-    if filename.lower().endswith(".h5p") or mime_type == "application/x-h5p":
-        import zipfile
-        import shutil
-        extract_dir = org_dir / "h5p_extracted" / stored_name
-        extract_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            with zipfile.ZipFile(target, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir)
-            
-            if not (extract_dir / "h5p.json").exists():
-                shutil.rmtree(extract_dir, ignore_errors=True)
-                target.unlink(missing_ok=True)
-                raise HTTPException(status_code=400, detail="Invalid H5P package: missing h5p.json")
-                
-            if not (extract_dir / "content" / "content.json").exists():
-                shutil.rmtree(extract_dir, ignore_errors=True)
-                target.unlink(missing_ok=True)
-                raise HTTPException(status_code=400, detail="Invalid H5P package: missing content/content.json")
-        except zipfile.BadZipFile:
-            shutil.rmtree(extract_dir, ignore_errors=True)
-            target.unlink(missing_ok=True)
-            raise HTTPException(status_code=400, detail="Invalid H5P package: corrupted zip file")
+    h5p_metadata = None
+    if h5p_upload:
+        mime_type = "application/x-h5p"
+        h5p_metadata = install_h5p_package(
+            target,
+            contents=contents,
+            filename=filename,
+            mime_type=mime_type,
+            extract_root=org_dir / "h5p_extracted" / stored_name,
+        )
+    else:
+        target.write_bytes(contents)
 
     object_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
     asset = MediaAsset(
@@ -198,10 +242,19 @@ async def upload_asset(
         size_bytes=size_bytes,
         mime_type=mime_type,
         folder=_clean_folder(folder),
-        tags_json=json.dumps(_clean_tags(tags)),
+        tags_json=json.dumps(_merge_tags(_clean_tags(tags), ["h5p"] if h5p_upload else [])),
+        metadata_json=json.dumps(_h5p_metadata_payload(h5p_metadata, 1)) if h5p_metadata else None,
         uploaded_by=current_user.id
     )
     media_repo.save_asset(asset)
+    if h5p_upload:
+        update_h5p_version_manifest(
+            org_dir,
+            asset_id=asset.id,
+            asset_version=asset.asset_version or 1,
+            stored_name=stored_name,
+            metadata=h5p_metadata,
+        )
     media_repo.log_activity(
         current_user.id,
         current_user.org_id,
@@ -209,6 +262,8 @@ async def upload_asset(
         json.dumps({"asset_id": asset.id, "filename": asset.filename})
     )
     AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.uploaded")
+    if h5p_upload:
+        AuditService.log(db, current_user.org_id, current_user.id, "h5p", asset.id, "h5p.uploaded")
     response = _asset_response(db, asset)
     db.commit()
 
@@ -340,6 +395,14 @@ async def replace_asset_file(
 
     contents = await file.read()
     size_bytes = len(contents)
+    replacing_h5p = is_h5p_asset(asset.filename, asset.mime_type)
+    replacement_is_h5p = is_h5p_asset(file.filename, file.content_type)
+    if replacing_h5p or replacement_is_h5p:
+        _require_h5p_permission(current_user, "h5p.edit")
+    if replacing_h5p:
+        assert_h5p_asset(file.filename or asset.filename, file.content_type or "application/octet-stream")
+    if replacement_is_h5p and size_bytes > MAX_H5P_PACKAGE_BYTES:
+        raise HTTPException(status_code=400, detail="H5P package is too large")
     if size_bytes > 500 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large")
 
@@ -350,13 +413,34 @@ async def replace_asset_file(
 
     stored_name = f"{uuid4().hex}_{filename}"
     target = org_dir / stored_name
-    target.write_bytes(contents)
+    h5p_metadata = None
+    if replacing_h5p or replacement_is_h5p:
+        mime_type = "application/x-h5p"
+        h5p_metadata = install_h5p_package(
+            target,
+            contents=contents,
+            filename=filename,
+            mime_type=mime_type,
+            extract_root=org_dir / "h5p_extracted" / stored_name,
+        )
+    else:
+        target.write_bytes(contents)
 
     asset.filename = file.filename or filename
     asset.object_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
     asset.size_bytes = size_bytes
     asset.mime_type = mime_type
     asset.asset_version = (asset.asset_version or 1) + 1
+    if replacing_h5p or replacement_is_h5p:
+        asset.tags_json = json.dumps(_merge_tags(_tag_list(asset), ["h5p"]))
+        asset.metadata_json = json.dumps(_h5p_metadata_payload(h5p_metadata, asset.asset_version))
+        update_h5p_version_manifest(
+            org_dir,
+            asset_id=asset.id,
+            asset_version=asset.asset_version,
+            stored_name=stored_name,
+            metadata=h5p_metadata,
+        )
     media_repo.log_activity(
         current_user.id,
         current_user.org_id,
@@ -364,6 +448,8 @@ async def replace_asset_file(
         json.dumps({"asset_id": asset.id, "filename": asset.filename, "asset_version": asset.asset_version})
     )
     AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.replaced")
+    if replacing_h5p or replacement_is_h5p:
+        AuditService.log(db, current_user.org_id, current_user.id, "h5p", asset.id, "h5p.replaced")
     response = _asset_response(db, asset)
     db.commit()
     return {"asset": response}
@@ -380,6 +466,8 @@ def delete_asset(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     used_by_blocks = _usage_count(db, asset.id, current_user.org_id)
+    if is_h5p_asset(asset.filename, asset.mime_type):
+        _require_h5p_permission(current_user, "h5p.delete")
     if used_by_blocks:
         raise HTTPException(
             status_code=409,
@@ -457,22 +545,19 @@ def get_h5p_file(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
         
-    if asset.mime_type not in ("application/x-h5p", "application/zip", "application/zip-compressed", "application/octet-stream") or not asset.filename.lower().endswith(".h5p"):
-        raise HTTPException(status_code=400, detail="Asset is not an H5P package")
+    assert_h5p_asset(asset.filename, asset.mime_type)
         
     # object_key looks like "/uploads/media/{org_id}/{stored_name}"
     parts = asset.object_key.split("/")
     stored_name = parts[-1]
     org_dir = _uploads_root() / str(current_user.org_id)
-    extract_dir = org_dir / "h5p_extracted" / stored_name
-    
-    target_file = (extract_dir / file_path).resolve()
-    
-    # Ensure target_file is within extract_dir to prevent directory traversal
-    if extract_dir not in target_file.parents and target_file != extract_dir:
-        raise HTTPException(status_code=403, detail="Access denied")
-        
-    if not target_file.exists() or not target_file.is_file():
-        raise HTTPException(status_code=404, detail="File not found in H5P package")
+    extract_dir = resolve_h5p_extract_dir(
+        org_dir,
+        asset_id=asset.id,
+        asset_version=asset.asset_version,
+        current_stored_name=stored_name,
+        current_asset_version=asset.asset_version or 1,
+    )
+    target_file = safe_h5p_file_path(extract_dir, file_path)
         
     return FileResponse(target_file)
