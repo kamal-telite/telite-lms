@@ -4,7 +4,7 @@ from typing import Dict, List, Any
 from pydantic import BaseModel
 
 from app.api.auth import get_current_user, TokenData
-from app.core.rbac import require_org_admin
+from app.api.auth import require_super_admin
 from app.db.engine import db_session
 from app.models.role_permission import RolePermission
 from app.core.rbac import ROLE_PERMISSIONS, Permission
@@ -16,7 +16,7 @@ class PermissionUpdate(BaseModel):
     role: str
     updates: Dict[str, bool]
 
-@permissions_router.get("", dependencies=[Depends(require_org_admin)])
+@permissions_router.get("", dependencies=[Depends(require_super_admin)])
 def get_permission_matrix(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
@@ -65,7 +65,7 @@ def get_permission_matrix(
         "matrix": matrix
     }
 
-@permissions_router.put("", dependencies=[Depends(require_org_admin)])
+@permissions_router.put("", dependencies=[Depends(require_super_admin)])
 def update_permission_matrix(
     updates: List[PermissionUpdate],
     db: Session = Depends(db_session),

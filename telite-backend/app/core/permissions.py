@@ -66,6 +66,7 @@ def build_jwt_claims(user: dict[str, Any], db: Session | None = None) -> dict[st
 
     return {
         "sub": user["id"],
+        "username": user.get("username"),
         "email": user["email"],
         "role": role,
         "name": user["full_name"],

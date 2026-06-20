@@ -58,7 +58,7 @@ def get_category_stats_dashboard(
 
 @dashboard_router.get("/learner")
 def get_learner_dashboard(current_user: TokenData = Depends(get_current_user), db: Session = Depends(db_session)):
-    if not (current_user.role in ["learner", "student", "employee", "intern"] or Permission.LEARNER_VIEW_COURSES in ROLE_PERMISSIONS.get(current_user.role, set())):
+    if not (current_user.role == "learner" or Permission.LEARNER_VIEW_COURSES in ROLE_PERMISSIONS.get(current_user.role, set())):
         raise HTTPException(status_code=403, detail="Learner access required")
     try:
         analytics_repo = AnalyticsRepository(db)

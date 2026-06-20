@@ -25,7 +25,7 @@ ATS_STATS_CONFIG = {
 
 def _list_pal_leaderboard(db: Session, category_slug: str, org_id: int | None = None, limit: int | None = None) -> list[dict[str, Any]]:
     stmt = select(User).where(
-        User.role.in_(["learner", "student"]),
+        User.role == "learner",
         User.is_active == True,
         User.category_scope == category_slug
     )

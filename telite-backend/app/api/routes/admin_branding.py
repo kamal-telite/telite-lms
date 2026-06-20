@@ -33,15 +33,12 @@ class BrandingUpdateRequest(BaseModel):
 
 from app.api.auth import TokenData
 
-def verify_org_admin(user: TokenData, org_id: int) -> None:
-    """Ensure the user is a super_admin or an admin of this specific org."""
+def verify_super_admin(user: TokenData, org_id: int) -> None:
+    """Ensure the user is a super_admin for this specific org."""
     role = user.role
     user_org_id = user.org_id
     
-    if role == "super_admin":
-        return
-        
-    if role in ["category_admin", "company_super_admin", "college_super_admin"] and user_org_id == org_id:
+    if role == "super_admin" and user_org_id == org_id:
         return
         
     raise HTTPException(
@@ -56,7 +53,7 @@ def get_draft_branding(
     current_user: TokenData = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get current draft branding config."""
-    verify_org_admin(current_user, org_id)
+    verify_super_admin(current_user, org_id)
     with get_platform_session() as session:
         repo = OrgRepository(session)
         draft = repo.get_draft_branding(org_id)
@@ -69,7 +66,7 @@ def save_draft_branding(
     current_user: TokenData = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Save config as draft."""
-    verify_org_admin(current_user, org_id)
+    verify_super_admin(current_user, org_id)
     with get_platform_session() as session:
         repo = OrgRepository(session)
         draft = repo.save_draft_branding(org_id, request, user_id=current_user.id)
@@ -81,7 +78,7 @@ def publish_branding(
     current_user: TokenData = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Publish current draft to live."""
-    verify_org_admin(current_user, org_id)
+    verify_super_admin(current_user, org_id)
     with get_platform_session() as session:
         repo = OrgRepository(session)
         try:
@@ -96,7 +93,7 @@ def get_branding_history(
     current_user: TokenData = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get published branding history."""
-    verify_org_admin(current_user, org_id)
+    verify_super_admin(current_user, org_id)
     with get_platform_session() as session:
         repo = OrgRepository(session)
         history = repo.get_branding_history(org_id)
@@ -109,7 +106,7 @@ def rollback_branding(
     current_user: TokenData = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Rollback to a specific version."""
-    verify_org_admin(current_user, org_id)
+    verify_super_admin(current_user, org_id)
     with get_platform_session() as session:
         repo = OrgRepository(session)
         try:
@@ -126,7 +123,7 @@ async def upload_branding_asset(
     current_user: TokenData = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Upload a branding asset (logo, favicon, or login_banner) directly to the draft."""
-    verify_org_admin(current_user, org_id)
+    verify_super_admin(current_user, org_id)
 
     valid_types = {"logo", "favicon", "login_banner", "certificate"}
     if asset_type not in valid_types:

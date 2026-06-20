@@ -92,7 +92,7 @@ def get_tasks(
     # The viewer filter logic for list_tasks:
     # If learner, show assigned to them or 'all'.
     # Otherwise just show all in category/org.
-    assigned_to = viewer.id if viewer.role in ["learner", "student", "employee", "intern"] else None
+    assigned_to = viewer.id if viewer.role == "learner" else None
 
     task_payloads = task_repo.list_assignment_payloads_by_org(
         org_id=scoped_org_id, 
@@ -240,7 +240,7 @@ def mark_task_submitted(
     actor = user_repo.get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
-    if actor.role not in ["learner", "student", "employee", "intern"] or not actor.is_active:
+    if actor.role != "learner" or not actor.is_active:
         raise HTTPException(status_code=403, detail="Active learner session required")
     try:
         task_repo = TaskRepository(db)
@@ -277,7 +277,7 @@ def start_task(
 ):
     user_repo = UserRepository(db)
     actor = user_repo.get_by_id(current_user.id)
-    if not actor or actor.role not in ["learner", "student", "employee", "intern"] or not actor.is_active:
+    if not actor or actor.role != "learner" or not actor.is_active:
         raise HTTPException(status_code=403, detail="Active learner session required")
     task_repo = TaskRepository(db)
     task = task_repo.get_by_id(task_id)
@@ -300,7 +300,7 @@ def submit_task_work(
 ):
     user_repo = UserRepository(db)
     actor = user_repo.get_by_id(current_user.id)
-    if not actor or actor.role not in ["learner", "student", "employee", "intern"] or not actor.is_active:
+    if not actor or actor.role != "learner" or not actor.is_active:
         raise HTTPException(status_code=403, detail="Active learner session required")
     task_repo = TaskRepository(db)
     task = task_repo.get_by_id(task_id)

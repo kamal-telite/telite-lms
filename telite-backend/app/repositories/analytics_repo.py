@@ -57,7 +57,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
     def _event_status(event_type: str) -> str:
         if event_type in {"COURSE_COMPLETED", "MODULE_COMPLETED", "BLOCK_COMPLETED", "QUIZ_SUBMITTED"}:
             return "success"
-        if event_type in {"PROGRESS_MUTATION", "HEARTBEAT", "BLOCK_VIEWED"}:
+        if event_type in {"PROGRESS_MUTATION", "HEARTBEAT", "BLOCK_VIEWED", "POLL_VOTED", "FLASHCARD_FLIPPED", "RESOURCE_DOWNLOADED"}:
             return "info"
         return "warning" if "FAILED" in event_type else "info"
 
@@ -67,7 +67,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             return "enrollment"
         if "QUIZ" in event_type:
             return "pal"
-        if "COURSE" in event_type or "MODULE" in event_type or "BLOCK" in event_type:
+        if "COURSE" in event_type or "MODULE" in event_type or "BLOCK" in event_type or event_type in ["POLL_VOTED", "FLASHCARD_FLIPPED", "RESOURCE_DOWNLOADED"]:
             return "course"
         return "system"
 
@@ -84,6 +84,9 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             "HEARTBEAT": f"{learner_name} continued learning in {course_label}",
             "PROGRESS_MUTATION": f"{learner_name} progress updated in {course_label}",
             "QUIZ_SUBMITTED": f"{learner_name} submitted a quiz in {course_label}",
+            "POLL_VOTED": f"{learner_name} voted in a poll",
+            "FLASHCARD_FLIPPED": f"{learner_name} flipped a flashcard",
+            "RESOURCE_DOWNLOADED": f"{learner_name} downloaded a resource",
         }
         return labels.get(event.event_type, f"{learner_name} triggered {event.event_type.lower().replace('_', ' ')}")
 
@@ -641,9 +644,9 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         return [{"course_id": r.course_id, "completions": r.completions} for r in results]
 
     def get_engagement_heatmap(self, category_slug: str | None = None, org_id: int | None = None) -> list[dict[str, Any]]:
-        """Calculates engagement weight based on HEARTBEAT and BLOCK_VIEWED."""
+        """Calculates engagement weight based on HEARTBEAT, BLOCK_VIEWED, and interactive blocks."""
         stmt = select(func.date(LearnerEvent.created_at).label('day'), func.count(LearnerEvent.id).label('interactions')).where(
-            LearnerEvent.event_type.in_(["HEARTBEAT", "BLOCK_VIEWED"])
+            LearnerEvent.event_type.in_(["HEARTBEAT", "BLOCK_VIEWED", "POLL_VOTED", "FLASHCARD_FLIPPED", "RESOURCE_DOWNLOADED", "QUIZ_SUBMITTED"])
         )
         if category_slug:
             stmt = stmt.join(Course, Course.id == LearnerEvent.course_id).where(Course.category_slug == category_slug)

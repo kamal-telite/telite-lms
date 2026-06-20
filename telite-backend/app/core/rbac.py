@@ -408,11 +408,4 @@ def require_any_admin(current_user: TokenData = Depends(get_current_user)) -> To
     return current_user
 
 
-def require_org_admin(current_user: TokenData = Depends(get_current_user)) -> TokenData:
-    """Require platform_admin or super_admin role."""
-    if current_user.role != "super_admin" and not current_user.is_platform_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Organisation admin access required.",
-        )
-    return current_user
+
