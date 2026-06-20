@@ -29,7 +29,9 @@ def _build_dsn() -> str:
     url = os.getenv("TELITE_DATABASE_URL", "").strip()
     if url:
         # SQLAlchemy needs postgresql+psycopg:// not postgresql://
-        if url.startswith("postgresql://") or url.startswith("postgres://"):
+        if url.startswith("postgresql+psycopg2://"):
+            url = url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
+        elif url.startswith("postgresql://") or url.startswith("postgres://"):
             url = url.replace("postgresql://", "postgresql+psycopg://", 1)
             url = url.replace("postgres://", "postgresql+psycopg://", 1)
         return url

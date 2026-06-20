@@ -35,7 +35,12 @@ def _engine():
     url = os.getenv("TELITE_TEST_DATABASE_URL") or os.getenv("TELITE_DATABASE_URL")
     if not url:
         pytest.skip("TELITE_TEST_DATABASE_URL or TELITE_DATABASE_URL is required")
-    return create_engine(url.replace("postgresql://", "postgresql+psycopg://", 1), future=True)
+    return create_engine(
+        url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
+        .replace("postgresql://", "postgresql+psycopg://", 1)
+        .replace("postgres://", "postgresql+psycopg://", 1),
+        future=True,
+    )
 
 
 def _probe_engine():
