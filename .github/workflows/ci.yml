@@ -40,8 +40,8 @@ jobs:
     env:
       ENVIRONMENT: development
       PYTHONPATH: .
-      TELITE_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
-      TELITE_TEST_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
+      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
+      TELITE_TEST_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
       TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
       TELITE_PASSWORD_SALT: ci-test-password-salt
       REDIS_ENABLED: "false"
@@ -156,7 +156,7 @@ jobs:
           --health-retries 10
     env:
       ENVIRONMENT: development
-      TELITE_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_migration_ci
+      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_migration_ci
       TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
       TELITE_PASSWORD_SALT: ci-test-password-salt
       REDIS_ENABLED: "false"
