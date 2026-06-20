@@ -1,60 +1,61 @@
-"""Pytest configuration for Telite LMS backend."""
-
-from __future__ import annotations
-
 import os
-import sys
-from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-os.environ.setdefault("ENVIRONMENT", "development")
-os.environ.setdefault("TELITE_DB_BACKEND", "sqlite")
-os.environ.setdefault("TELITE_DB_PATH", "data/ci_test_telite_lms.db")
-os.environ.setdefault("TELITE_AUTH_SECRET", "ci-test-auth-secret-not-for-production-use")
-os.environ.setdefault("TELITE_PASSWORD_SALT", "ci-test-password-salt")
-os.environ.setdefault("REDIS_ENABLED", "false")
-os.environ.setdefault("TELITE_USE_ALEMBIC", "false")
-
+from app.main import create_app
+from app.db.engine import dispose_engine
 from app.models.base import Base
 
 
-@pytest.fixture
-def client():
-    from fastapi.testclient import TestClient
+TEST_DATABASE_URL = os.getenv(
+    "TELITE_TEST_DATABASE_URL",
+    "postgresql+psycopg://postgres:postgres123@localhost:55432/test_telite_backend",
+)
 
-    from app.main import app
 
-    return TestClient(app)
+def _reset_schema(engine) -> None:
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        return
+    Base.metadata.drop_all(engine)
+
+
+@pytest.fixture(scope="function")
+def client(engine):
+    os.environ["TELITE_DATABASE_URL"] = TEST_DATABASE_URL
+    dispose_engine()
+    with TestClient(create_app()) as test_client:
+        yield test_client
+    dispose_engine()
 
 
 @pytest.fixture(scope="session")
 def engine():
     # Use manual local postgres instance on port 55432
-    db_url = os.getenv(
-        "TELITE_TEST_DATABASE_URL",
-        "postgresql+psycopg://postgres@localhost:55432/test_telite_backend",
-    )
-    engine = create_engine(db_url)
+    os.environ["TELITE_DATABASE_URL"] = TEST_DATABASE_URL
+    engine = create_engine(TEST_DATABASE_URL)
     
     # Create all tables
+    _reset_schema(engine)
     Base.metadata.create_all(engine)
     
     yield engine
     
     # Teardown
-    Base.metadata.drop_all(engine)
+    _reset_schema(engine)
     engine.dispose()
 
 @pytest.fixture(scope="function")
 def db_session(engine):
-    """Create a new database session for a test."""
+    # Create all tables cleanly for each test
+    _reset_schema(engine)
+    Base.metadata.create_all(engine)
+    
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = TestingSessionLocal()
     try:

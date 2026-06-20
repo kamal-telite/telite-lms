@@ -23,14 +23,27 @@ jobs:
     defaults:
       run:
         working-directory: telite-backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: telite_backend_ci
+          POSTGRES_USER: telite_ci
+          POSTGRES_PASSWORD: telite_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U telite_ci -d telite_backend_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       ENVIRONMENT: development
-      TELITE_DB_BACKEND: sqlite
-      TELITE_DB_PATH: data/ci_test_telite_lms.db
-      TELITE_DATABASE_URL: sqlite:///data/ci_test_telite_lms.db
+      PYTHONPATH: .
+      TELITE_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
+      TELITE_TEST_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
       TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
       TELITE_PASSWORD_SALT: ci-test-password-salt
-      TELITE_USE_ALEMBIC: "false"
       REDIS_ENABLED: "false"
     steps:
       - name: Checkout
@@ -53,10 +66,11 @@ jobs:
       - name: Ruff release tooling
         run: ruff check scripts/validate_production_env.py tests/test_health.py tests/test_api_verification.py tests/test_rls_verification.py tests/test_rls_isolation.py
 
+      - name: Run database migrations
+        run: alembic upgrade head
+
       - name: Pytest
-        run: |
-          mkdir -p data
-          pytest -q tests/test_health.py tests/test_course_creation.py tests/test_task_workflow.py
+        run: pytest -q tests/test_health.py tests/test_course_creation.py tests/test_task_workflow.py
 
   frontend:
     name: Frontend lint and build
