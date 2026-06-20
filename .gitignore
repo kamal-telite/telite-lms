@@ -28,6 +28,9 @@ htmlcov/
 
 # Logs and debug output
 *.log
+*.out
+*.err
+*.trace
 logs/
 npm-debug.log*
 yarn-debug.log*
@@ -35,12 +38,20 @@ yarn-error.log*
 pnpm-debug.log*
 backend_logs.txt
 real_logs.txt
+latest_logs.txt
+logs.txt
+logs2.txt
+recover.txt
+recovered.txt
 backend_*.out.log
 backend_*.err.log
+*_logs.txt
 *_response.json
 inspect.json
 inventory.json
 validation_output.txt
+lint-*.txt
+lint-report*.txt
 
 # Environment files and credentials
 .env
@@ -88,7 +99,9 @@ pgdata/
 moodledata/
 telite-backend/data/
 telite-backend/scratch/
+telite-backend/uploads/
 telite-frontend/scratch/
+uploads/
 
 # Moodle local config
 moodle/config.php
@@ -99,6 +112,8 @@ moodle/html/config.php
 playwright-report/
 test-results/
 output/
+tmp/
+temp/
 
 # IDE, editor, and local agent state
 .idea/
