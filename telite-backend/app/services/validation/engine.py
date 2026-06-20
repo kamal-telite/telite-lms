@@ -75,6 +75,27 @@ class ValidationEngine:
                 if mod_errors_before == mod_errors_after:
                     valid_modules += 1
 
+        # Process orphaned modules
+        assigned_module_ids = {m.id for sec_modules in modules_by_section.values() for m in sec_modules}
+        orphaned_modules = [m for m in modules if m.id not in assigned_module_ids]
+        
+        for m_idx, mod in enumerate(orphaned_modules):
+            total_modules += 1
+            mod_errors_before = sum(1 for r in results if r.severity == "error")
+            
+            # Module level for orphans
+            blocks = self.builder_repo.get_blocks(mod.id, org_id)
+            results.extend(module_validator.validate(None, mod, m_idx, blocks))
+            
+            # Block level for orphans
+            for b_idx, block in enumerate(blocks):
+                results.extend(block_validator.validate(None, mod, block, b_idx))
+                results.extend(accessibility_validator.validate(None, mod, block, b_idx))
+            
+            mod_errors_after = sum(1 for r in results if r.severity == "error")
+            if mod_errors_before == mod_errors_after:
+                valid_modules += 1
+
         if total_modules > 0 and total_modules < 3:
             results.append(ValidationResultItem(
                 type="low_content_volume",

@@ -92,13 +92,56 @@ export function validateBlocks(blocks) {
         break;
 
       case "quiz_reference":
-        if (!block.settings?.quiz_id) {
+        errors.push({
+          blockId: block.id || `temp-${index}`,
+          message: `Quiz Reference block #${blockNum} is deprecated. Use a Native Quiz block instead.`,
+        });
+        break;
+
+      case "quiz": {
+        const questions = block.settings?.questions || [];
+        if (questions.length === 0) {
           errors.push({
             blockId: block.id || `temp-${index}`,
-            message: `Quiz Reference block #${blockNum} has no quiz selected.`,
+            message: `Quiz block #${blockNum} has no questions.`,
           });
+          break;
         }
+
+        questions.forEach((question, questionIndex) => {
+          if (!question.text || question.text.trim() === "") {
+            errors.push({
+              blockId: block.id || `temp-${index}`,
+              message: `Question ${questionIndex + 1} in Quiz block #${blockNum} is missing text.`,
+            });
+          }
+
+          const options = question.options || [];
+          if (options.length < 2) {
+            errors.push({
+              blockId: block.id || `temp-${index}`,
+              message: `Question ${questionIndex + 1} in Quiz block #${blockNum} needs at least two options.`,
+            });
+          }
+
+          options.forEach((option, optionIndex) => {
+            if (!option.text || option.text.trim() === "") {
+              errors.push({
+                blockId: block.id || `temp-${index}`,
+                message: `Option ${optionIndex + 1} for question ${questionIndex + 1} is empty.`,
+              });
+            }
+          });
+
+          if (!question.correct_option_id || !options.some((option) => option.id === question.correct_option_id)) {
+            errors.push({
+              blockId: block.id || `temp-${index}`,
+              message: `Question ${questionIndex + 1} in Quiz block #${blockNum} has no valid correct option.`,
+            });
+          }
+        });
         break;
+      }
 
       default:
         // Unknown block types

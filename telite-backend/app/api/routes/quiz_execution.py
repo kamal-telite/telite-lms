@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -10,7 +10,18 @@ from app.models.quiz_attempt import QuizAttempt, QuizAttemptEvent
 from app.models.quiz_answer import QuizAnswer, GradingEvent
 from app.models.question import QuestionVersion
 
-quiz_execution_router = APIRouter(prefix="/quiz-execution", tags=["Quiz Execution"])
+def _native_quiz_engine_only():
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Deprecated. TELITE V1 uses Native Quiz Blocks and /api/v1/learner/blocks/{id}/quiz/submit.",
+    )
+
+
+quiz_execution_router = APIRouter(
+    prefix="/quiz-execution",
+    tags=["Quiz Execution"],
+    dependencies=[Depends(_native_quiz_engine_only)],
+)
 
 @quiz_execution_router.post("/quizzes/{quiz_id}/attempts")
 def start_attempt(

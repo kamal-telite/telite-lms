@@ -23,6 +23,8 @@ class CourseProgress(Base, TenantMixin, TimestampMixin):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    enrolled_version: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="The published version number the learner is pinned to")
 
     # Relationships
     user: Mapped["User"] = relationship("User")
@@ -39,6 +41,7 @@ class CourseProgress(Base, TenantMixin, TimestampMixin):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "last_viewed_at": self.last_viewed_at.isoformat() if self.last_viewed_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "enrolled_version": self.enrolled_version,
             "org_id": self.org_id,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

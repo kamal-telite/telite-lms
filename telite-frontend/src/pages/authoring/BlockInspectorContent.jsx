@@ -34,7 +34,7 @@ export function BlockInspectorContent({
             <span className="inspector-row__value">{activeBlock.block_type}</span>
           </div>
           
-          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "#334155", marginTop: "8px" }}>
+          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "var(--text-primary)", marginTop: "8px" }}>
             <span>Hide in learner preview</span>
             <input
               type="checkbox"
@@ -42,7 +42,7 @@ export function BlockInspectorContent({
               onChange={(event) => onBlockSettingChange?.("hidden", event.target.checked)}
             />
           </label>
-          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "#334155" }}>
+          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "var(--text-primary)" }}>
             <span>Lock editing</span>
             <input
               type="checkbox"

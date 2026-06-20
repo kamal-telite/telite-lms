@@ -61,6 +61,26 @@ class EnrollmentRepository(BaseRepository[EnrollmentRequest]):
 
     # ── Mutations ─────────────────────────────────────────────────────────────
 
+    def get_latest_by_email_category_statuses(
+        self,
+        email: str,
+        category_slug: str,
+        org_id: int,
+        statuses: Sequence[str],
+    ) -> EnrollmentRequest | None:
+        stmt = (
+            select(EnrollmentRequest)
+            .where(
+                EnrollmentRequest.email == email.lower().strip(),
+                EnrollmentRequest.category_slug == category_slug,
+                EnrollmentRequest.org_id == org_id,
+                EnrollmentRequest.status.in_(list(statuses)),
+            )
+            .order_by(EnrollmentRequest.created_at.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def create_request(
         self,
         *,

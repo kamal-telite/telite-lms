@@ -37,9 +37,31 @@ def execute_workflow_action(
         raise HTTPException(status_code=404, detail="Course not found")
 
     action = request.action
-    log_action = ""
-    new_status = ""
     previous_status = course.status
+
+    # Normalize 'active' -> 'published' for legacy data
+    if previous_status == "active":
+        previous_status = "published"
+
+    # Define legal state transitions
+    VALID_TRANSITIONS = {
+        "submit_for_review": ["draft", "rejected"],
+        "approve":           ["review"],
+        "reject":            ["review"],
+        "publish":           ["approved"],
+        "archive":           ["published"],
+    }
+
+    if action not in VALID_TRANSITIONS:
+        raise HTTPException(status_code=400, detail="Invalid action")
+
+    allowed_from = VALID_TRANSITIONS[action]
+    if previous_status not in allowed_from:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot '{action}' a course that is currently '{previous_status}'. "
+                   f"Allowed from: {', '.join(allowed_from)}."
+        )
 
     if action == "submit_for_review":
         new_status = "review"
@@ -56,20 +78,16 @@ def execute_workflow_action(
     elif action == "archive":
         new_status = "archived"
         log_action = "COURSE_ARCHIVED"
-    else:
-        raise HTTPException(status_code=400, detail="Invalid action")
 
     # Verify Capabilities
-    if action == "submit_for_review":
-        check_capability(db, current_user, "course.submit")
-    elif action == "approve":
-        check_capability(db, current_user, "course.approve")
-    elif action == "reject":
-        check_capability(db, current_user, "course.reject")
-    elif action == "publish":
-        check_capability(db, current_user, "course.publish")
-    elif action == "archive":
-        check_capability(db, current_user, "course.archive")
+    capability_map = {
+        "submit_for_review": "course.submit",
+        "approve": "course.approve",
+        "reject": "course.reject",
+        "publish": "course.publish",
+        "archive": "course.archive",
+    }
+    check_capability(db, current_user, capability_map[action])
 
     AuditService.log(db, current_user.org_id, current_user.id, "course", course_id, log_action.lower().replace("_", "."), course_id)
 

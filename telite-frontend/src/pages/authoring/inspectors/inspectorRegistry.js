@@ -17,5 +17,6 @@ export const inspectorRegistry = {
   scorm: ScormInspector,
   h5p: H5PInspector,
   assignment: AssignmentInspector,
+  quiz: QuizInspector,
   quiz_reference: QuizInspector,
 };

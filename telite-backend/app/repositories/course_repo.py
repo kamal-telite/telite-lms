@@ -107,6 +107,15 @@ class CourseRepository(BaseRepository[Course]):
         stmt = stmt.order_by(Course.name).limit(limit).offset(offset)
         return self.session.execute(stmt).scalars().all()
 
+    def list_by_ids_for_org(self, course_ids: list[str], org_id: int) -> Sequence[Course]:
+        if not course_ids:
+            return []
+        stmt = select(Course).where(
+            Course.id.in_(course_ids),
+            Course.org_id == org_id,
+        )
+        return self.session.execute(stmt).scalars().all()
+
     def list_purchasable(self, org_id: int) -> Sequence[Course]:
         """List courses available for purchase (price_paise > 0)."""
         stmt = (

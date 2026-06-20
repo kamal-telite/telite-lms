@@ -115,19 +115,19 @@ export function VersionHistoryPanel({ courseId, onVersionChanged }) {
       </div>
 
       {compareBase ? (
-        <div style={{ padding: "10px 12px", borderRadius: "8px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a8a", fontSize: "13px", marginBottom: "12px" }}>
+        <div style={{ padding: "10px 12px", borderRadius: "8px", border: "1px solid var(--border-strong)", background: "var(--primary-bg)", color: "var(--primary)", fontSize: "13px", marginBottom: "12px" }}>
           Comparing from v{compareBase.version_number}. Select another version to view differences.
         </div>
       ) : null}
 
       {compareResult ? (
-        <div style={{ padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "#fff", marginBottom: "12px", width: "800px", maxWidth: "100%", position: "absolute", zIndex: 10, left: "-500px", top: "100px", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", position: "sticky", top: 0, background: "#fff", paddingBottom: "12px", borderBottom: "1px solid #e2e8f0", zIndex: 11 }}>
+        <div style={{ padding: "14px", borderRadius: "8px", border: "1px solid var(--border-subtle)", background: "var(--surface-raised)", marginBottom: "12px", width: "800px", maxWidth: "100%", position: "absolute", zIndex: 10, left: "-500px", top: "100px", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", position: "sticky", top: 0, background: "var(--surface-raised)", paddingBottom: "12px", borderBottom: "1px solid var(--border-subtle)", zIndex: 11 }}>
             <div>
-              <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "16px" }}>
+              <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "16px" }}>
                 Diff: v{compareResult.left_version.version_number} → {compareResult.right_version.version_number === "Draft" ? "Live Draft" : `v${compareResult.right_version.version_number}`}
               </div>
-              <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px" }}>Detailed change breakdown</div>
+              <div style={{ color: "var(--text-secondary)", fontSize: "12px", marginTop: "2px" }}>Detailed change breakdown</div>
             </div>
             <Button tone="neutral" onClick={() => setCompareResult(null)}>Close Diff</Button>
           </div>
@@ -140,7 +140,7 @@ export function VersionHistoryPanel({ courseId, onVersionChanged }) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {versions.map(v => (
-          <div key={v.id} style={{ padding: "16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+          <div key={v.id} style={{ padding: "16px", background: "var(--surface-sunken)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontWeight: 600 }}>v{v.version_number}</div>
               <Badge tone={v.status === "published" ? "success" : v.status === "review" ? "warning" : "neutral"}>
@@ -148,12 +148,12 @@ export function VersionHistoryPanel({ courseId, onVersionChanged }) {
               </Badge>
             </div>
             
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "8px" }}>
+            <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "8px" }}>
               Created: {new Date(v.created_at).toLocaleString()}
             </div>
 
             {v.status === "published" && v.published_at && (
-              <div style={{ fontSize: "12px", color: "#059669", marginTop: "4px" }}>
+              <div style={{ fontSize: "12px", color: "var(--success)", marginTop: "4px" }}>
                 Published: {new Date(v.published_at).toLocaleString()}
               </div>
             )}
@@ -180,7 +180,7 @@ export function VersionHistoryPanel({ courseId, onVersionChanged }) {
           </div>
         ))}
         {versions.length === 0 && (
-          <div style={{ color: "#64748b", fontSize: "14px" }}>No versions tracked yet.</div>
+          <div style={{ color: "var(--text-secondary)", fontSize: "14px" }}>No versions tracked yet.</div>
         )}
       </div>
 
@@ -198,7 +198,7 @@ export function VersionHistoryPanel({ courseId, onVersionChanged }) {
           </>
         }
       >
-        <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, color: "var(--text-secondary)", lineHeight: 1.5 }}>
           This will replace the current draft structure with the selected version snapshot. Current sections,
           modules, and blocks will be archived and a restored draft will be created.
         </p>

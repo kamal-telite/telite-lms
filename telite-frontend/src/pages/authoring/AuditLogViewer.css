@@ -4,9 +4,9 @@
   gap: 16px;
   height: 100%;
   padding: 16px;
-  background-color: #fff;
+  background-color: var(--surface-raised);
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-subtle);
 }
 
 .audit-viewer-header {
@@ -14,13 +14,13 @@
   justify-content: space-between;
   align-items: center;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .audit-viewer-header h3 {
   margin: 0;
   font-size: 1.125rem;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .audit-viewer-filters {
@@ -40,14 +40,14 @@
 .filter-group label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .filter-group input {
   padding: 8px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   font-size: 0.875rem;
   outline: none;
@@ -55,16 +55,16 @@
 }
 
 .filter-group input:focus {
-  border-color: #3b82f6;
+  border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 .audit-viewer-content {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background-color: #f8fafc;
+  background-color: var(--surface-sunken);
 }
 
 .audit-list {
@@ -73,8 +73,8 @@
 }
 
 .audit-row {
-  border-bottom: 1px solid #e2e8f0;
-  background-color: #fff;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--surface-raised);
   transition: background-color 0.15s;
 }
 
@@ -91,18 +91,18 @@
 }
 
 .audit-row-summary:hover {
-  background-color: #f1f5f9;
+  background-color: var(--surface-sunken);
 }
 
 .audit-row.expanded .audit-row-summary {
-  background-color: #f1f5f9;
-  border-bottom: 1px solid #e2e8f0;
+  background-color: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .audit-row-actor {
   width: 150px;
   flex-shrink: 0;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 0.875rem;
   white-space: nowrap;
   overflow: hidden;
@@ -114,7 +114,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #334155;
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -122,14 +122,14 @@
   width: 120px;
   flex-shrink: 0;
   text-align: right;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
 }
 
 .audit-row-details {
   padding: 16px;
-  background-color: #fafafa;
-  border-bottom: 1px solid #e2e8f0;
+  background-color: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .audit-meta {
@@ -138,7 +138,7 @@
   gap: 16px;
   margin-bottom: 16px;
   font-size: 0.8125rem;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .audit-meta span {
@@ -153,8 +153,8 @@
 
 .audit-diff-pane {
   flex: 1;
-  background-color: #fff;
-  border: 1px solid #e2e8f0;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -162,18 +162,18 @@
 .audit-diff-pane strong {
   display: block;
   padding: 8px 12px;
-  background-color: #f1f5f9;
-  border-bottom: 1px solid #e2e8f0;
+  background-color: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-subtle);
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .audit-diff-pane pre {
   margin: 0;
   padding: 12px;
   font-size: 0.8125rem;
-  color: #334155;
+  color: var(--text-primary);
   overflow-x: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -182,11 +182,11 @@
 .audit-diff-empty {
   padding: 12px;
   text-align: center;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-style: italic;
   font-size: 0.875rem;
-  background-color: #fff;
-  border: 1px dashed #cbd5e1;
+  background-color: var(--surface-raised);
+  border: 1px dashed var(--border-subtle);
   border-radius: 6px;
 }
 
@@ -196,14 +196,14 @@
   align-items: center;
   gap: 16px;
   padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-subtle);
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .audit-empty-state {
   padding: 48px;
   text-align: center;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }

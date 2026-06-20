@@ -5,8 +5,8 @@ import { inspectorRegistry } from "./inspectors/inspectorRegistry";
 function DetailRow({ label, value }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", fontSize: "13px" }}>
-      <span style={{ color: "#64748b" }}>{label}</span>
-      <span style={{ color: "#0f172a", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" }}>
+      <span style={{ color: "var(--text-secondary)" }}>{label}</span>
+      <span style={{ color: "var(--text-primary)", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" }}>
         {value || "Not set"}
       </span>
     </div>
@@ -15,8 +15,8 @@ function DetailRow({ label, value }) {
 
 function SectionCard({ title, children }) {
   return (
-    <section style={{ border: "1px solid #e2e8f0", borderRadius: "8px", background: "#fff", overflow: "hidden" }}>
-      <div style={{ padding: "12px 14px", borderBottom: "1px solid #e2e8f0", fontWeight: 700, fontSize: "13px", color: "#334155" }}>
+    <section style={{ border: "1px solid var(--border-subtle)", borderRadius: "8px", background: "var(--surface-raised)", overflow: "hidden" }}>
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border-subtle)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>
         {title}
       </div>
       <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -41,11 +41,11 @@ export function BuilderInspectorPanel({
   const InspectorComponent = activeBlock ? inspectorRegistry[activeBlock.block_type] : null;
 
   return (
-    <aside style={{ width: "320px", background: "#f8fafc", borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "16px", borderBottom: "1px solid #e2e8f0", background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <aside style={{ width: "320px", background: "var(--surface-sunken)", borderLeft: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "16px", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontWeight: 700, color: "#0f172a" }}>Inspector</div>
-          <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>Course context</div>
+          <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>Inspector</div>
+          <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>Course context</div>
         </div>
         <Button tone="neutral" icon="clock" onClick={onOpenHistory}>History</Button>
       </div>
@@ -67,7 +67,7 @@ export function BuilderInspectorPanel({
               <DetailRow label="Section" value={activeSection?.title} />
             </>
           ) : (
-            <div style={{ color: "#64748b", fontSize: "13px" }}>Select a module to inspect its properties.</div>
+            <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Select a module to inspect its properties.</div>
           )}
         </SectionCard>
 
@@ -77,7 +77,7 @@ export function BuilderInspectorPanel({
               <DetailRow label="Block ID" value={activeBlock.id || "Unsaved"} />
               <DetailRow label="Type" value={activeBlock.block_type} />
               <DetailRow label="Sort Order" value={activeBlock.sort_order} />
-              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "#334155" }}>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "var(--text-primary)" }}>
                 <span>Hide in learner preview</span>
                 <input
                   type="checkbox"
@@ -85,7 +85,7 @@ export function BuilderInspectorPanel({
                   onChange={(event) => onBlockSettingChange?.("hidden", event.target.checked)}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "#334155" }}>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", fontSize: "13px", color: "var(--text-primary)" }}>
                 <span>Lock editing</span>
                 <input
                   type="checkbox"
@@ -101,7 +101,7 @@ export function BuilderInspectorPanel({
               ) : null}
             </>
           ) : (
-            <div style={{ color: "#64748b", fontSize: "13px" }}>Select a lesson block to edit visibility and lock settings.</div>
+            <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Select a lesson block to edit visibility and lock settings.</div>
           )}
         </SectionCard>
 
@@ -124,7 +124,7 @@ export function BuilderInspectorPanel({
               <DetailRow label="Modules" value={moduleCount} />
             </>
           ) : (
-            <div style={{ color: "#64748b", fontSize: "13px" }}>No section selected.</div>
+            <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>No section selected.</div>
           )}
         </SectionCard>
 

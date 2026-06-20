@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { offlineSyncManager } from "../../lib/offlineSyncManager";
 import { Button, LoadingState, ErrorState } from "../common/ui";
+import { api } from "../../services/client";
 
 export function NativePlayer({ cmid, onExit }) {
   const [loading, setLoading] = useState(true);
@@ -11,17 +12,10 @@ export function NativePlayer({ cmid, onExit }) {
   useEffect(() => {
     async function initPlayer() {
       try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`/api/v1/player/modules/${cmid}/launch`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        if (!res.ok) throw new Error("Failed to load module");
-        const data = await res.json();
+        const { data } = await api.get(`/api/v1/player/modules/${cmid}/launch`);
         setLaunchData(data);
       } catch (err) {
-        setError(err.message);
+        setError(err?.response?.data?.detail || err.message || "Failed to load module");
       } finally {
         setLoading(false);
       }
@@ -99,8 +93,8 @@ export function NativePlayer({ cmid, onExit }) {
   if (error) return <ErrorState body={error} action={<Button onClick={onExit}>Back to Course</Button>} />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#fff" }}>
-      <div style={{ padding: "12px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "var(--surface-bg)", color: "var(--text-primary)" }}>
+      <div style={{ padding: "12px 24px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface-raised)" }}>
         <h2 style={{ margin: 0, fontSize: "16px" }}>Interactive Module</h2>
         <Button size="small" tone="ghost" onClick={onExit}>Exit Activity</Button>
       </div>

@@ -86,9 +86,9 @@ export function PermissionMatrix() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", textAlign: "left" }}>
           <thead>
             <tr>
-              <th style={{ padding: "16px", borderBottom: "2px solid #e2e8f0", background: "#f8fafc", color: "#475569", fontWeight: 600 }}>Capability</th>
+              <th style={{ padding: "16px", borderBottom: "2px solid var(--border-subtle)", background: "var(--surface-sunken)", color: "var(--text-secondary)", fontWeight: 600 }}>Capability</th>
               {data.roles.map(role => (
-                <th key={role} style={{ padding: "16px", borderBottom: "2px solid #e2e8f0", background: "#f8fafc", color: "#475569", fontWeight: 600, textAlign: "center" }}>
+                <th key={role} style={{ padding: "16px", borderBottom: "2px solid var(--border-subtle)", background: "var(--surface-sunken)", color: "var(--text-secondary)", fontWeight: 600, textAlign: "center" }}>
                   {formatRole(role)}
                 </th>
               ))}
@@ -96,8 +96,8 @@ export function PermissionMatrix() {
           </thead>
           <tbody>
             {data.capabilities.map(cap => (
-              <tr key={cap} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                <td style={{ padding: "16px", color: "#0f172a", fontWeight: 500 }}>
+              <tr key={cap} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                <td style={{ padding: "16px", color: "var(--text-primary)", fontWeight: 500 }}>
                   {formatKey(cap)}
                 </td>
                 {data.roles.map(role => (
@@ -106,7 +106,7 @@ export function PermissionMatrix() {
                       type="checkbox" 
                       checked={matrix[role][cap]} 
                       onChange={() => handleToggle(role, cap)}
-                      style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#0f172a" }}
+                      style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--text-primary)" }}
                     />
                   </td>
                 ))}
@@ -116,7 +116,7 @@ export function PermissionMatrix() {
         </table>
       </Card>
       {hasChanges && (
-        <div style={{ marginTop: "16px", padding: "12px", background: "#eff6ff", color: "#1e40af", borderRadius: "6px", fontSize: "13px" }}>
+        <div style={{ marginTop: "16px", padding: "12px", background: "var(--primary-bg)", color: "var(--primary)", borderRadius: "6px", fontSize: "13px" }}>
           <strong>Unsaved changes:</strong> Permissions are evaluated directly from user sessions, so affected users may need to log out and back in after saving for these changes to take effect.
         </div>
       )}

@@ -226,7 +226,6 @@ export default function LearnerPage({ session, onLogout }) {
     {
       label: "Workspace",
       items: [
-        { id: "launch-current", label: "Moodle link", icon: "moodle" },
         { id: "section-certificates", label: "Certificates", icon: "certificate" },
         { id: "section-leaderboard", label: "Leaderboard", icon: "leaderboard" },
       ],

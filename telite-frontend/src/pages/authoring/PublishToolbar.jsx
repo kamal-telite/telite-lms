@@ -92,18 +92,18 @@ export function PublishToolbar({ courseId, courseStatus, onStatusChanged, valida
   const infos = validationResults.filter(r => r.severity === "info");
 
   const ValidationCard = ({ result, icon }) => (
-    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", borderRadius: "8px", padding: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
         <div style={{ fontSize: "16px" }}>{icon}</div>
         <div>
-          <div style={{ fontWeight: 600, color: "#1e293b" }}>{result.message}</div>
+          <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{result.message}</div>
           {result.fix_target?.module_title && (
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+            <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
               Module: {result.fix_target.module_title}
             </div>
           )}
           {!result.fix_target?.module_title && result.fix_target?.section_title && (
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+            <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
               Location: {result.fix_target.section_title}
             </div>
           )}
@@ -118,17 +118,17 @@ export function PublishToolbar({ courseId, courseStatus, onStatusChanged, valida
   );
 
   return (
-    <div style={{ padding: "16px 24px", background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
+    <div style={{ padding: "16px 24px", background: "var(--surface-raised)", borderBottom: "1px solid var(--border-subtle)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div style={{ fontSize: "14px", color: "#64748b", fontWeight: 500 }}>Publishing State:</div>
+          <div style={{ fontSize: "14px", color: "var(--text-secondary)", fontWeight: 500 }}>Publishing State:</div>
           <Badge tone={courseStatus === "published" ? "success" : courseStatus === "review" ? "warning" : "neutral"}>
             {(courseStatus || "DRAFT").toUpperCase()}
           </Badge>
           
           {validationSummary && validationSummary.score !== undefined && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "16px", borderLeft: "1px solid #e2e8f0", paddingLeft: "16px" }}>
-              <div style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>Readiness Score:</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "16px", borderLeft: "1px solid var(--border-subtle)", paddingLeft: "16px" }}>
+              <div style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>Readiness Score:</div>
               <Badge tone={validationSummary.score === 100 ? "success" : validationSummary.score > 50 ? "warning" : "danger"}>
                 {validationSummary.score}%
               </Badge>
@@ -165,8 +165,8 @@ export function PublishToolbar({ courseId, courseStatus, onStatusChanged, valida
       </div>
 
       {validationResults.length > 0 && (
-        <div style={{ marginTop: "24px", padding: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
-          <div style={{ fontWeight: 600, marginBottom: "16px", fontSize: "16px", color: "#0f172a" }}>Publish Readiness</div>
+        <div style={{ marginTop: "24px", padding: "16px", background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)", borderRadius: "8px" }}>
+          <div style={{ fontWeight: 600, marginBottom: "16px", fontSize: "16px", color: "var(--text-primary)" }}>Publish Readiness</div>
           
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px", maxHeight: "400px", overflowY: "auto" }}>
             {errors.map((error, idx) => (

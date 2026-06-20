@@ -4,15 +4,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.api.auth import get_current_user, require_admin, TokenData
-from app.core.permissions import require_capability
 from app.db.engine import db_session
 from app.repositories.course_repo import CourseRepository
 from app.repositories.builder_repo import BuilderRepository
 from app.models.course_module import CourseModule
 from app.models.media_asset import MediaAsset
 from app.services.r2_client import generate_presigned_download_url
-from app.services.audit_service import AuditService
-from app.services.h5p_service import assert_h5p_asset
 
 builder_router = APIRouter(prefix="/authoring", tags=["Builder Gateway"])
 
@@ -41,49 +38,6 @@ def _block_to_response(block, db: Session, org_id: int) -> dict:
     block_dict["settings"] = settings
     return block_dict
 
-
-def _validate_h5p_block_asset(
-    bp,
-    *,
-    db: Session,
-    org_id: int,
-    course_id: str,
-) -> tuple[int, dict]:
-    media_asset_id = bp.media_asset_id or bp.settings.get("asset_id")
-    if not media_asset_id:
-        raise HTTPException(status_code=400, detail="H5P block requires a media asset")
-
-    module = db.query(CourseModule).filter(
-        CourseModule.id == bp.module_id,
-        CourseModule.course_id == course_id,
-        CourseModule.org_id == org_id,
-        CourseModule.deleted_at.is_(None),
-    ).first()
-    if not module:
-        raise HTTPException(status_code=400, detail="Block module does not belong to this course")
-
-    asset = db.query(MediaAsset).filter(
-        MediaAsset.id == media_asset_id,
-        MediaAsset.org_id == org_id,
-        MediaAsset.deleted_at.is_(None),
-    ).first()
-    if not asset:
-        raise HTTPException(status_code=400, detail="H5P media asset not found")
-    assert_h5p_asset(asset.filename, asset.mime_type)
-
-    settings = dict(bp.settings or {})
-    existing_asset_id = settings.get("asset_id")
-    if existing_asset_id != media_asset_id:
-        settings["asset_version"] = asset.asset_version or 1
-    else:
-        settings.setdefault("asset_version", asset.asset_version or 1)
-    settings.update({
-        "asset_id": asset.id,
-        "filename": asset.filename,
-        "mime_type": asset.mime_type,
-    })
-    return asset.id, settings
-
 # -----------------------------------------------------------------------------
 # 1. Builder Structure Fetch
 # -----------------------------------------------------------------------------
@@ -104,14 +58,22 @@ def get_builder_structure(
     sections = builder_repo.get_sections(course_id, current_user.org_id)
     modules = builder_repo.get_modules(course_id, current_user.org_id)
     
+    from app.models.lesson_block import LessonBlock
+    block_counts = db.query(LessonBlock.module_id, func.count(LessonBlock.id)).filter(
+        LessonBlock.org_id == current_user.org_id,
+        LessonBlock.deleted_at.is_(None)
+    ).group_by(LessonBlock.module_id).all()
+    block_count_map = {module_id: count for module_id, count in block_counts}
+    
     sections_list = []
     for section in sections:
         sec_dict = section.to_dict()
-        sec_dict["modules"] = [
-            m.to_dict()
-            for m in modules
-            if m.section_id == section.id or (m.section_id is None and m.section == section.sort_order)
-        ]
+        sec_dict["modules"] = []
+        for m in modules:
+            if m.section_id == section.id or (m.section_id is None and m.section == section.sort_order):
+                md = m.to_dict()
+                md["block_count"] = block_count_map.get(m.id, 0)
+                sec_dict["modules"].append(md)
         sections_list.append(sec_dict)
 
     assigned_module_ids = {
@@ -119,7 +81,12 @@ def get_builder_structure(
         for section in sections_list
         for module in section.get("modules", [])
     }
-    unassigned_modules = [m.to_dict() for m in modules if m.id not in assigned_module_ids]
+    unassigned_modules = []
+    for m in modules:
+        if m.id not in assigned_module_ids:
+            md = m.to_dict()
+            md["block_count"] = block_count_map.get(m.id, 0)
+            unassigned_modules.append(md)
     if unassigned_modules:
         sections_list.append({
             "id": 0,
@@ -227,13 +194,12 @@ class ModuleStructureUpdate(BaseModel):
 
 class SectionStructureUpdate(BaseModel):
     section_id: int
-    sort_order: Optional[int] = None
     modules: List[ModuleStructureUpdate]
 
 class SaveStructureRequest(BaseModel):
     updates: List[SectionStructureUpdate]
 
-@builder_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin), Depends(require_capability("module.edit"))])
+@builder_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin)])
 def save_course_structure(
     course_id: str,
     request: SaveStructureRequest,
@@ -247,18 +213,6 @@ def save_course_structure(
 
     for section_update in request.updates:
         section_id = None if section_update.section_id == 0 else section_update.section_id
-        
-        if section_id is not None and section_update.sort_order is not None:
-            from app.models.course_section import CourseSection
-            sec = db.query(CourseSection).filter(
-                CourseSection.id == section_id,
-                CourseSection.course_id == course_id,
-                CourseSection.org_id == current_user.org_id
-            ).first()
-            if sec:
-                sec.sort_order = section_update.sort_order
-                AuditService.log(db, current_user.org_id, current_user.id, "section", sec.id, "update", course_id)
-                
         for module_update in section_update.modules:
             module = db.query(CourseModule).filter(
                 CourseModule.id == module_update.module_id,
@@ -268,7 +222,6 @@ def save_course_structure(
             if module:
                 module.section_id = section_id
                 module.sort_order = module_update.sort_order
-                AuditService.log(db, current_user.org_id, current_user.id, "module", module.id, "update", course_id)
 
     db.commit()
     return {"success": True}
@@ -300,7 +253,7 @@ def get_module_blocks(
         results.append(_block_to_response(b, db, current_user.org_id))
     return {"blocks": results}
 
-@builder_router.put("/courses/{course_id}/blocks", dependencies=[Depends(require_admin), Depends(require_capability("block.edit"))])
+@builder_router.put("/courses/{course_id}/blocks", dependencies=[Depends(require_admin)])
 def save_module_blocks(
     course_id: str,
     request: SaveBlocksRequest,
@@ -321,38 +274,23 @@ def save_module_blocks(
     
     for bp in request.blocks:
         media_asset_id = bp.media_asset_id or bp.settings.get("asset_id")
-        settings = dict(bp.settings or {})
-        if bp.block_type == "h5p" and not bp.is_deleted:
-            media_asset_id, settings = _validate_h5p_block_asset(
-                bp,
-                db=db,
-                org_id=current_user.org_id,
-                course_id=course_id,
-            )
         if bp.is_deleted and bp.id:
             block = builder_repo.get_block_by_id(bp.id, current_user.org_id)
             if block:
-                before_dict = block.to_dict()
-                builder_repo.delete_block(block, current_user.id)
+                builder_repo.delete_block(block)
                 builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_DELETED", json.dumps({"block_id": bp.id}))
-                AuditService.log(db, current_user.org_id, current_user.id, "Block", bp.id, "delete", course_id, before_dict=before_dict)
         elif bp.id:
             # Update existing
             block = builder_repo.get_block_by_id(bp.id, current_user.org_id)
             if block:
-                before_dict = block.to_dict()
                 # Basic optimistic concurrency could go here by checking a version number if it existed
                 block.block_type = bp.block_type
                 block.content = bp.content
                 block.media_asset_id = media_asset_id
-                block.metadata_json = settings
+                block.metadata_json = bp.settings
                 block.sort_order = bp.sort_order
                 builder_repo.save_block(block)
-                after_dict = block.to_dict()
                 builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_UPDATED", json.dumps({"block_id": block.id, "type": block.block_type}))
-                AuditService.log(db, current_user.org_id, current_user.id, "Block", block.id, "update", course_id, before_dict=before_dict, after_dict=after_dict)
-                if block.block_type == "h5p":
-                    AuditService.log(db, current_user.org_id, current_user.id, "h5p", block.id, "h5p.attached", course_id, after_dict=after_dict)
                 
                 results.append(_block_to_response(block, db, current_user.org_id))
         else:
@@ -363,81 +301,13 @@ def save_module_blocks(
                 block_type=bp.block_type,
                 content=bp.content,
                 media_asset_id=media_asset_id,
-                metadata_json=settings,
+                metadata_json=bp.settings,
                 sort_order=bp.sort_order
             )
             builder_repo.save_block(block)
-            after_dict = block.to_dict()
             builder_repo.log_activity(course_id, current_user.id, current_user.org_id, "BLOCK_CREATED", json.dumps({"block_id": block.id, "type": block.block_type}))
-            AuditService.log(db, current_user.org_id, current_user.id, "Block", block.id, "create", course_id, after_dict=after_dict)
-            if block.block_type == "h5p":
-                AuditService.log(db, current_user.org_id, current_user.id, "h5p", block.id, "h5p.attached", course_id, after_dict=after_dict)
             
             results.append(_block_to_response(block, db, current_user.org_id))
 
     db.commit()
     return {"success": True, "blocks": results}
-
-@builder_router.get("/courses/{course_id}/validate", dependencies=[Depends(require_admin)])
-def validate_course(
-    course_id: str,
-    db: Session = Depends(db_session),
-    current_user: TokenData = Depends(get_current_user)
-):
-    from app.services.validation.engine import ValidationEngine
-    from app.services.validation.schemas import ValidationResult, ValidationSummary, ValidationResultItem
-
-    try:
-        val_engine = ValidationEngine(db)
-        result = val_engine.run(course_id, current_user.org_id)
-        return result.model_dump() if hasattr(result, "model_dump") else result.dict()
-    except Exception as exc:
-        fallback = ValidationResult(
-            summary=ValidationSummary(errors=1, warnings=0, infos=0, score=0),
-            results=[
-                ValidationResultItem(
-                    type="validation_failed",
-                    severity="error",
-                    message=f"Course validation failed: {exc}",
-                )
-            ],
-        )
-        return fallback.model_dump() if hasattr(fallback, "model_dump") else fallback.dict()
-
-@builder_router.get("/courses/{course_id}/audit-logs", dependencies=[Depends(require_admin)])
-def get_audit_logs(
-    course_id: str,
-    db: Session = Depends(db_session),
-    current_user: TokenData = Depends(get_current_user)
-):
-    import json
-
-    from app.models.builder_activity_log import BuilderActivityLog
-
-    logs = db.query(BuilderActivityLog).filter(
-        BuilderActivityLog.course_id == course_id,
-        BuilderActivityLog.org_id == current_user.org_id
-    ).order_by(BuilderActivityLog.created_at.desc()).all()
-
-    audit_logs = []
-    for log in logs:
-        try:
-            payload = json.loads(log.payload or "{}")
-        except json.JSONDecodeError:
-            payload = {"raw": log.payload}
-        entity_type = str(payload.get("type") or log.action.split("_", 1)[0] or "activity").lower()
-        entity_id = payload.get("block_id") or payload.get("module_id") or payload.get("section_id") or course_id
-        audit_logs.append({
-            "id": log.id,
-            "org_id": log.org_id,
-            "user_id": log.user_id,
-            "course_id": log.course_id,
-            "entity_type": entity_type,
-            "entity_id": str(entity_id),
-            "action": log.action.lower(),
-            "before_json": None,
-            "after_json": payload,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-        })
-
-    return {"audit_logs": audit_logs}

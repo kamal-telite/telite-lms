@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button, EmptyState, LoadingState, ErrorState, Icon, useToast } from "../common/ui";
 import { CourseSidebar } from "./CourseSidebar";
 import { BlockRenderer } from "./BlockRenderer";
+import { api } from "../../services/client";
 
 export function LearnerPlayer({ courseId, onExit }) {
   const { showToast } = useToast();
@@ -15,21 +16,12 @@ export function LearnerPlayer({ courseId, onExit }) {
   useEffect(() => {
     async function loadCourse() {
       try {
-        const token = localStorage.getItem("token");
-        // Get course details
-        const res = await fetch(`/api/v1/learner/courses/${courseId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error("Failed to load course details");
-        const data = await res.json();
+        const { data } = await api.get(`/api/v1/learner/courses/${courseId}`);
         setCourseData(data);
         
         // Get resume state
-        const resumeRes = await fetch(`/api/v1/learner/resume/${courseId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (resumeRes.ok) {
-          const resumeData = await resumeRes.json();
+        try {
+          const { data: resumeData } = await api.get(`/api/v1/learner/resume/${courseId}`);
           // Find the module to activate
           if (resumeData.last_module_id && data.modules_json) {
             const mod = data.modules_json.find(m => m.id === resumeData.last_module_id);
@@ -38,11 +30,13 @@ export function LearnerPlayer({ courseId, onExit }) {
           } else if (data.modules_json && data.modules_json.length > 0) {
             setActiveModule(data.modules_json[0]);
           }
-        } else if (data.modules_json && data.modules_json.length > 0) {
-           setActiveModule(data.modules_json[0]);
+        } catch {
+          if (data.modules_json && data.modules_json.length > 0) {
+            setActiveModule(data.modules_json[0]);
+          }
         }
       } catch (err) {
-        setError(err.message);
+        setError(err?.response?.data?.detail || err.message || "Failed to load course details");
       } finally {
         setLoading(false);
       }
@@ -54,15 +48,10 @@ export function LearnerPlayer({ courseId, onExit }) {
     // Heartbeat for time spent
     const interval = setInterval(() => {
       if (!courseId) return;
-      const token = localStorage.getItem("token");
-      fetch("/api/v1/learner/heartbeat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
+      api.post("/api/v1/learner/heartbeat", {
           course_id: courseId,
           module_id: activeModule?.id || null,
           time_spent_seconds: 15
-        })
       }).catch(() => {});
     }, 15000);
     return () => clearInterval(interval);
@@ -71,13 +60,9 @@ export function LearnerPlayer({ courseId, onExit }) {
   useEffect(() => {
     // Emit MODULE_STARTED
     if (activeModule && courseId) {
-      const token = localStorage.getItem("token");
       // Prevent duplicate starts if already completed or tracked recently? 
       // The backend can handle deduplication or we just blindly send it.
-      fetch("/api/v1/learner/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
+      api.post("/api/v1/learner/events", {
           events: [
             {
               event_type: "MODULE_STARTED",
@@ -90,24 +75,17 @@ export function LearnerPlayer({ courseId, onExit }) {
               module_id: activeModule.id
             }
           ]
-        })
       }).catch(() => {});
     }
   }, [activeModule?.id, courseId]);
 
   const handleModuleComplete = async () => {
     if (!activeModule) return;
-    const token = localStorage.getItem("token");
     try {
-      const response = await fetch("/api/v1/learner/progress", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          course_id: courseId,
-          module_updates: [{ module_id: activeModule.id, status: "completed" }]
-        })
+      await api.post("/api/v1/learner/progress", {
+        course_id: courseId,
+        module_updates: [{ module_id: activeModule.id, status: "completed" }]
       });
-      if (!response.ok) throw new Error("Progress update failed");
       // Update local progress state
       setProgressData(prev => ({ ...prev, [activeModule.id]: "completed" }));
       showToast("Module marked complete.", "success");
@@ -127,25 +105,27 @@ export function LearnerPlayer({ courseId, onExit }) {
   if (error) return <ErrorState body={error} action={<Button onClick={onExit}>Back to Dashboard</Button>} />;
 
   return (
-    <div className="learner-player" style={{ display: "flex", height: "100vh", width: "100vw", background: "var(--background)", position: "fixed", top: 0, left: 0, zIndex: 10000 }}>
-      {/* Sidebar Navigation */}
-      <CourseSidebar 
-        course={courseData} 
-        activeModule={activeModule} 
-        onSelectModule={setActiveModule}
-        progressData={progressData}
-        onExit={onExit}
-      />
+    <div className="learner-player" style={{ display: "flex", height: "100vh", background: "var(--surface-bg)", color: "var(--text-primary)", width: "100%", zIndex: 10000, overflow: "hidden" }}>
+      {/* Sidebar Navigation — fixed height, internal scroll */}
+      <div style={{ flexShrink: 0, width: "300px", height: "100%", overflowY: "auto" }}>
+        <CourseSidebar 
+          course={courseData} 
+          activeModule={activeModule} 
+          onSelectModule={setActiveModule}
+          progressData={progressData}
+          onExit={onExit}
+        />
+      </div>
 
-      {/* Main Content Area */}
-      <div className="player-main" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Header */}
-        <header style={{ padding: "16px 24px", borderBottom: "1px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      {/* Main Content Area — single scroll region */}
+      <div className="player-main" style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", color: "var(--text-primary)" }}>
+        {/* Sticky Header */}
+        <header style={{ flexShrink: 0, padding: "16px 24px", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>{activeModule?.title || courseData.name}</h2>
           <Button tone="primary" onClick={handleModuleComplete}>Mark Complete</Button>
         </header>
 
-        {/* Content Scroll Area */}
+        {/* Scrollable Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "40px", display: "flex", justifyContent: "center" }}>
           <div style={{ maxWidth: "800px", width: "100%" }}>
             {activeModule && activeModule.content?.length > 0 ? (
@@ -153,7 +133,7 @@ export function LearnerPlayer({ courseId, onExit }) {
             ) : activeModule ? (
               <EmptyState title="No lesson content" body="This module does not have learner-visible blocks yet." />
             ) : (
-              <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+              <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)", fontSize: "16px" }}>
                 Select a module to begin
               </div>
             )}

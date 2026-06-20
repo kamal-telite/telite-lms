@@ -65,7 +65,7 @@ function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDe
         {module.title}
       </div>
       <div className="syllabus-module__meta">
-        <div className="syllabus-module__count">{module.blocks?.length || 0}</div>
+        <div className="syllabus-module__count">{module.block_count || 0}</div>
         <div className={`syllabus-module__status syllabus-module__status--${module.validationStatus || 'empty'}`} />
       </div>
       {canEdit && (
@@ -426,7 +426,7 @@ export function SyllabusTree({
         ))}
       </SortableContext>
       {sections.length === 0 && (
-        <div style={{ color: "#64748b", fontSize: "14px", textAlign: "center", marginTop: "20px" }}>
+        <div style={{ color: "var(--text-secondary)", fontSize: "14px", textAlign: "center", marginTop: "20px" }}>
           No sections yet.
         </div>
       )}

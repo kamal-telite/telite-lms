@@ -82,26 +82,26 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
 
   return (
     <Modal open={open} onClose={onClose} title={`Preview: ${courseName || "Course"}`} width="1100px">
-      <div style={{ display: "flex", gap: "12px", marginBottom: "16px", padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-        <div style={{ fontWeight: 600, color: "#475569", display: "flex", alignItems: "center", marginRight: "16px" }}>Preview As:</div>
+      <div style={{ display: "flex", gap: "12px", marginBottom: "16px", padding: "12px", background: "var(--surface-sunken)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+        <div style={{ fontWeight: 600, color: "var(--text-secondary)", display: "flex", alignItems: "center", marginRight: "16px" }}>Preview As:</div>
         <Button tone={role === "learner" ? "primary" : "neutral"} onClick={() => setRole("learner")}>Learner</Button>
         <Button tone={role === "cat_admin" ? "primary" : "neutral"} onClick={() => setRole("cat_admin")}>Category Admin</Button>
         <Button tone={role === "super_admin" ? "primary" : "neutral"} onClick={() => setRole("super_admin")}>Super Admin</Button>
       </div>
 
       <div style={{
-        border: "1px solid #dbe3ef",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "12px",
         height: "620px",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        background: "#fff",
+        background: "var(--surface-raised)",
       }}>
-        <div style={{ background: "#f8fafc", padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0" }}>
+        <div style={{ background: "var(--surface-sunken)", padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-subtle)" }}>
           <div>
-            <div style={{ color: "#0f172a", fontWeight: 700 }}>{roleLabel}</div>
-            <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px" }}>
+            <div style={{ color: "var(--text-primary)", fontWeight: 700 }}>{roleLabel}</div>
+            <div style={{ color: "var(--text-secondary)", fontSize: "12px", marginTop: "2px" }}>
               Rendering current builder structure without learner progress tracking.
             </div>
           </div>
@@ -114,12 +114,12 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
           <ErrorState body={error} action={<Button tone="primary" onClick={loadStructure}>Retry</Button>} />
         ) : (
           <div style={{ display: "flex", minHeight: 0, flex: 1 }}>
-            <aside style={{ width: "280px", borderRight: "1px solid #e2e8f0", background: "#f8fafc", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: "16px", borderBottom: "1px solid #e2e8f0" }}>
-                <div style={{ fontWeight: 700, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <aside style={{ width: "280px", borderRight: "1px solid var(--border-subtle)", background: "var(--surface-sunken)", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "16px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {courseData?.course?.name || courseName}
                 </div>
-                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
                   {modules.length} module(s)
                 </div>
               </div>
@@ -138,10 +138,10 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
                         alignItems: "flex-start",
                         textAlign: "left",
                         padding: "10px",
-                        border: `1px solid ${isActive ? "#bfdbfe" : "transparent"}`,
+                        border: `1px solid ${isActive ? "var(--border-strong)" : "transparent"}`,
                         borderRadius: "8px",
-                        background: isActive ? "#eff6ff" : "transparent",
-                        color: "#0f172a",
+                        background: isActive ? "var(--primary-bg)" : "transparent",
+                        color: "var(--text-primary)",
                         cursor: "pointer",
                       }}
                     >
@@ -149,8 +149,8 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
                         width: "22px",
                         height: "22px",
                         borderRadius: "999px",
-                        background: isActive ? "#2563eb" : "#e2e8f0",
-                        color: isActive ? "#fff" : "#475569",
+                        background: isActive ? "var(--primary)" : "var(--border-subtle)",
+                        color: isActive ? "var(--surface-raised)" : "var(--text-secondary)",
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -163,7 +163,7 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
                         <span style={{ display: "block", fontWeight: 700, fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {module.title}
                         </span>
-                        <span style={{ display: "block", color: "#64748b", fontSize: "12px", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {module.section_title || "Course modules"}
                         </span>
                       </span>
@@ -171,7 +171,7 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
                   );
                 })}
                 {modules.length === 0 ? (
-                  <div style={{ padding: "16px", color: "#64748b", fontSize: "13px", textAlign: "center" }}>
+                  <div style={{ padding: "16px", color: "var(--text-secondary)", fontSize: "13px", textAlign: "center" }}>
                     No modules available to preview.
                   </div>
                 ) : null}
@@ -179,14 +179,14 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
             </aside>
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-              <header style={{ padding: "16px 22px", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
-                <div style={{ color: "#64748b", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>
+              <header style={{ padding: "16px 22px", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)" }}>
+                <div style={{ color: "var(--text-secondary)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>
                   {activeModule?.section_title || "Course modules"}
                 </div>
-                <h3 style={{ margin: "4px 0 0", color: "#0f172a" }}>{activeModule?.title || "Select a module"}</h3>
+                <h3 style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>{activeModule?.title || "Select a module"}</h3>
               </header>
 
-              <div style={{ flex: 1, overflowY: "auto", padding: "28px", background: "#fff" }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "28px", background: "var(--surface-raised)" }}>
                 <div style={{ maxWidth: "820px", margin: "0 auto" }}>
                   {loadingBlocks ? (
                     <LoadingState title="Loading module blocks..." />
@@ -194,12 +194,12 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
                     blocks.length > 0 ? (
                       <BlockRenderer content={blocks} />
                     ) : (
-                      <div style={{ border: "1px dashed #cbd5e1", borderRadius: "8px", padding: "40px", textAlign: "center", color: "#64748b", background: "#f8fafc" }}>
+                      <div style={{ border: "1px dashed var(--border-subtle)", borderRadius: "8px", padding: "40px", textAlign: "center", color: "var(--text-secondary)", background: "var(--surface-sunken)" }}>
                         This module has no visible blocks yet.
                       </div>
                     )
                   ) : (
-                    <div style={{ border: "1px dashed #cbd5e1", borderRadius: "8px", padding: "40px", textAlign: "center", color: "#64748b", background: "#f8fafc" }}>
+                    <div style={{ border: "1px dashed var(--border-subtle)", borderRadius: "8px", padding: "40px", textAlign: "center", color: "var(--text-secondary)", background: "var(--surface-sunken)" }}>
                       Select a module from the preview sidebar.
                     </div>
                   )}

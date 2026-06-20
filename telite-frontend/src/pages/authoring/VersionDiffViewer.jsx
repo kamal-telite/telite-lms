@@ -64,7 +64,7 @@ function EventCard({ event }) {
   const tone = isAddition ? "success" : isRemoval ? "danger" : "warning";
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden", marginBottom: "8px" }}>
+    <div style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", borderRadius: "8px", overflow: "hidden", marginBottom: "8px" }}>
       <div 
         style={{ 
           padding: "12px", 
@@ -72,15 +72,15 @@ function EventCard({ event }) {
           justifyContent: "space-between", 
           alignItems: "center",
           cursor: event.diff_html ? "pointer" : "default",
-          background: event.diff_html && expanded ? "#f8fafc" : "#fff"
+          background: event.diff_html && expanded ? "var(--surface-sunken)" : "var(--surface-raised)"
         }}
         onClick={() => { if (event.diff_html) setExpanded(!expanded) }}
       >
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ fontSize: "16px", width: "24px", textAlign: "center" }}>{icon}</div>
           <div>
-            <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "14px" }}>{label}</div>
-            <div style={{ fontSize: "13px", color: "#64748b", marginTop: "2px" }}>
+            <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "14px" }}>{label}</div>
+            <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "2px" }}>
               {entityName}
             </div>
           </div>
@@ -88,7 +88,7 @@ function EventCard({ event }) {
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <Badge tone={tone}>{isAddition ? "ADDED" : isRemoval ? "REMOVED" : "MODIFIED"}</Badge>
           {event.diff_html && (
-            <div style={{ color: "#94a3b8", fontSize: "12px" }}>
+            <div style={{ color: "var(--text-muted)", fontSize: "12px" }}>
               {expanded ? "▲ Hide Diff" : "▼ Show Diff"}
             </div>
           )}
@@ -96,16 +96,16 @@ function EventCard({ event }) {
       </div>
       
       {expanded && event.diff_html && (
-        <div style={{ padding: "16px", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", marginBottom: "8px", textTransform: "uppercase" }}>Text Differences</div>
+        <div style={{ padding: "16px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-sunken)" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", marginBottom: "8px", textTransform: "uppercase" }}>Text Differences</div>
           <div 
             style={{ 
               padding: "12px", 
-              background: "#fff", 
-              border: "1px solid #e2e8f0", 
+              background: "var(--surface-raised)", 
+              border: "1px solid var(--border-subtle)", 
               borderRadius: "6px", 
               fontSize: "13px", 
-              color: "#334155", 
+              color: "var(--text-primary)", 
               overflowX: "auto",
               lineHeight: 1.5,
               whiteSpace: "pre-wrap"
@@ -125,7 +125,7 @@ export function VersionDiffViewer({ diffResult }) {
 
   if (changes.length === 0) {
     return (
-      <div style={{ padding: "24px", textAlign: "center", color: "#64748b", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+      <div style={{ padding: "24px", textAlign: "center", color: "var(--text-secondary)", background: "var(--surface-sunken)", borderRadius: "8px", border: "1px dashed var(--border-subtle)" }}>
         No structural or content differences found.
       </div>
     );
@@ -134,7 +134,7 @@ export function VersionDiffViewer({ diffResult }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Summary Stats */}
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", padding: "12px", background: "var(--surface-sunken)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
         <div style={{ fontSize: "12px" }}><span style={{ fontWeight: 600 }}>{summary.sections_added}</span> Sections Added</div>
         <div style={{ fontSize: "12px" }}><span style={{ fontWeight: 600 }}>{summary.modules_added}</span> Modules Added</div>
         <div style={{ fontSize: "12px" }}><span style={{ fontWeight: 600 }}>{summary.blocks_changed}</span> Blocks Changed</div>

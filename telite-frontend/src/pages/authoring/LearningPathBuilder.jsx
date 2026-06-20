@@ -12,8 +12,8 @@ function SortableCourseItem({ course, index, onRemove, onSettings }) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    background: "#fff",
-    border: "1px solid #e2e8f0",
+    background: "var(--surface-raised)",
+    border: "1px solid var(--border-subtle)",
     borderRadius: "8px",
     padding: "16px",
     marginBottom: "12px",
@@ -25,13 +25,13 @@ function SortableCourseItem({ course, index, onRemove, onSettings }) {
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div {...attributes} {...listeners} style={{ cursor: "grab", color: "#94a3b8" }}>
+      <div {...attributes} {...listeners} style={{ cursor: "grab", color: "var(--text-muted)" }}>
         ☰
       </div>
-      <div style={{ fontWeight: 600, width: "30px", color: "#64748b" }}>{index + 1}.</div>
+      <div style={{ fontWeight: 600, width: "30px", color: "var(--text-secondary)" }}>{index + 1}.</div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 500, color: "#0f172a" }}>{course.name}</div>
-        <div style={{ fontSize: "12px", color: "#64748b" }}>{course.category_slug || 'Uncategorized'}</div>
+        <div style={{ fontWeight: 500, color: "var(--text-primary)" }}>{course.name}</div>
+        <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{course.category_slug || 'Uncategorized'}</div>
       </div>
       {course.settings?.require_previous && (
         <Badge tone="warning">Requires Previous</Badge>
@@ -159,11 +159,11 @@ export function LearningPathBuilder() {
   if (loading) return <LoadingState message="Loading Path Builder..." />;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc' }}>
-      <header style={{ padding: '16px 24px', background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--surface-sunken)' }}>
+      <header style={{ padding: '16px 24px', background: 'var(--surface-raised)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ margin: '0 0 4px 0', fontSize: '20px' }}>{pathData?.title}</h2>
-          <div style={{ color: '#64748b', fontSize: '14px' }}>Learning Path Orchestrator</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Learning Path Orchestrator</div>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <Button tone="neutral" onClick={() => navigate('/admin')}>Exit</Button>
@@ -190,8 +190,8 @@ export function LearningPathBuilder() {
             </SortableContext>
           </DndContext>
 
-          <div style={{ marginTop: '24px', padding: '24px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
-            <div style={{ marginBottom: '12px', color: '#64748b' }}>Add Course to Path</div>
+          <div style={{ marginTop: '24px', padding: '24px', background: 'var(--surface-raised)', border: '1px dashed var(--border-subtle)', borderRadius: '8px', textAlign: 'center' }}>
+            <div style={{ marginBottom: '12px', color: 'var(--text-secondary)' }}>Add Course to Path</div>
             <select className="field__input" style={{ maxWidth: '300px', margin: '0 auto' }} onChange={(e) => { if(e.target.value) addCourse(e.target.value); e.target.value=''; }}>
               <option value="">-- Select Course --</option>
               {allCourses.filter(c => !courses.find(pc => pc.id === c.id)).map(c => (
@@ -202,22 +202,22 @@ export function LearningPathBuilder() {
         </div>
 
         {/* Analytics Pane */}
-        <div style={{ width: '350px', background: '#fff', borderLeft: '1px solid #e2e8f0', padding: '24px', overflowY: 'auto' }}>
+        <div style={{ width: '350px', background: 'var(--surface-raised)', borderLeft: '1px solid var(--border-subtle)', padding: '24px', overflowY: 'auto' }}>
           <h3 style={{ marginBottom: '24px' }}>Path Analytics</h3>
           {analytics ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{ padding: '16px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                <div style={{ fontSize: '13px', color: '#166534', fontWeight: 600 }}>Path Completion Rate</div>
-                <div style={{ fontSize: '32px', fontWeight: 700, color: '#15803d' }}>{analytics.path_completion_percentage}%</div>
+              <div style={{ padding: '16px', background: 'var(--success-bg)', borderRadius: '8px', border: '1px solid var(--success)' }}>
+                <div style={{ fontSize: '13px', color: 'var(--success)', fontWeight: 600 }}>Path Completion Rate</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--success)' }}>{analytics.path_completion_percentage}%</div>
               </div>
               
               <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>Enrolled</div>
+                <div style={{ flex: 1, padding: '12px', background: 'var(--surface-sunken)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Enrolled</div>
                   <div style={{ fontSize: '20px', fontWeight: 600 }}>{analytics.total_enrolled}</div>
                 </div>
-                <div style={{ flex: 1, padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>Completed</div>
+                <div style={{ flex: 1, padding: '12px', background: 'var(--surface-sunken)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Completed</div>
                   <div style={{ fontSize: '20px', fontWeight: 600 }}>{analytics.completed_learners}</div>
                 </div>
               </div>
@@ -227,8 +227,8 @@ export function LearningPathBuilder() {
                 {analytics.courses_stats.map(stat => {
                   const courseName = allCourses.find(c => c.id === stat.course_id)?.name || stat.course_id;
                   return (
-                    <div key={stat.course_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <div style={{ fontSize: '13px', color: stat.is_bottleneck ? '#ef4444' : '#334155' }}>
+                    <div key={stat.course_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--surface-sunken)' }}>
+                      <div style={{ fontSize: '13px', color: stat.is_bottleneck ? 'var(--error)' : 'var(--text-primary)' }}>
                         {stat.is_bottleneck && '⚠️ '} {courseName}
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>{stat.completion_rate}%</div>
@@ -238,7 +238,7 @@ export function LearningPathBuilder() {
               </div>
             </div>
           ) : (
-            <div style={{ color: '#64748b', fontSize: '14px' }}>Analytics not available for this path yet.</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Analytics not available for this path yet.</div>
           )}
         </div>
       </div>

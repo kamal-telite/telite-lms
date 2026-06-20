@@ -7,6 +7,7 @@ import { CoursePreviewModal } from "./CoursePreviewModal";
 import { SyllabusTree } from "./SyllabusTree";
 import { BuilderDrawer } from "./BuilderDrawer";
 import { BlockInspectorContent } from "./BlockInspectorContent";
+import { AssignmentSubmissionsPanel } from "./AssignmentSubmissionsPanel";
 import "./builder.css";
 import { ProfileDropdown } from "../../layouts/DashboardLayout";
 import { getInitials } from "../../utils/formatters";
@@ -44,6 +45,7 @@ export function CourseBuilderLayout({
   const [moduleTitle, setModuleTitle] = useState("");
   const [moduleType, setModuleType] = useState("page");
   const [isCreatingStructure, setIsCreatingStructure] = useState(false);
+  const [autoCreateBlock, setAutoCreateBlock] = useState(true);
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -189,6 +191,7 @@ export function CourseBuilderLayout({
         section_id: moduleModalSection.id || null,
         title: moduleTitle.trim(),
         module_type: moduleType,
+        auto_create_block: autoCreateBlock,
       });
       const module = data.module;
       setSections((current) =>
@@ -388,7 +391,7 @@ export function CourseBuilderLayout({
           <ProfileDropdown 
             profile={{
               initials: getInitials(session?.user?.name || "Author"),
-              gradient: ["#2563EB", "#059669"],
+              gradient: ["#2563EB", "var(--success)"],
               name: session?.user?.name,
               roleLabel: "author",
             }} 
@@ -437,6 +440,7 @@ export function CourseBuilderLayout({
             <LessonBlockEditor
               courseId={course?.id}
               moduleId={activeModuleId}
+              moduleType={activeContext.module?.module_type}
               activeBlock={activeBlock}
               highlightBlockId={highlightBlockId}
               onHighlightClear={() => setHighlightBlockId(null)}
@@ -464,6 +468,9 @@ export function CourseBuilderLayout({
           activeBlock={activeBlock}
           onBlockSettingChange={handleBlockSettingChange}
         />
+        {activeBlock?.block_type === "assignment" ? (
+          <AssignmentSubmissionsPanel blockId={activeBlock.id} />
+        ) : null}
       </BuilderDrawer>
 
       <BuilderDrawer 
@@ -517,7 +524,7 @@ export function CourseBuilderLayout({
         width={400}
         footer={<Button tone="primary" onClick={() => setShowLockWarningModal(false)}>Understood</Button>}
       >
-        <p style={{ margin: 0, color: "#991b1b", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, color: "var(--error)", lineHeight: 1.5 }}>
           <strong>Warning:</strong> Your editing lock for this course will expire in less than 5 minutes. 
           Please save your work or refresh your session to renew the lock.
         </p>
@@ -587,6 +594,17 @@ export function CourseBuilderLayout({
               <option value="assignment">Assignment shell</option>
             </select>
           </label>
+          {moduleType !== "page" && (
+            <label className="field" style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "8px", flexDirection: "row", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={autoCreateBlock}
+                onChange={(e) => setAutoCreateBlock(e.target.checked)}
+                style={{ width: "auto", margin: 0 }}
+              />
+              <span style={{ fontSize: "14px", fontWeight: "normal" }}>Create {moduleType} Block automatically</span>
+            </label>
+          )}
         </form>
       </Modal>
 
@@ -631,7 +649,7 @@ export function CourseBuilderLayout({
           </>
         }
       >
-        <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, color: "var(--text-secondary)", lineHeight: 1.5 }}>
           {deleteTarget?.type === "section"
             ? "Delete this section only if it has no modules. Move or delete its modules first."
             : "Delete this module from the builder. Its lesson blocks will no longer appear in the syllabus."}

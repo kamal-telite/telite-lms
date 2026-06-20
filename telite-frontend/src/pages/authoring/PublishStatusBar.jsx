@@ -67,19 +67,33 @@ export function PublishStatusBar({ courseId, courseStatus, onStatusChanged, vali
 
   const errors = validationResults.filter(r => r.severity === "error");
 
+  // saveState is an object { state: string, lastSaved: Date|null } passed from CourseBuilderLayout
+  const saveStateValue = typeof saveState === 'object' ? saveState?.state : saveState;
+  const saveLastSaved = typeof saveState === 'object' ? saveState?.lastSaved : null;
+
+  // Normalize status: backend may store 'active' which is equivalent to 'published'
+  const normalizedStatus = courseStatus === 'active' ? 'published' : (courseStatus || 'draft');
+
   return (
     <>
       <div className="builder-status-bar">
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {saveState === 'saving' && <div className="saving-dot" />}
-          <span>{saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Save Error' : 'Saved'}</span>
+          {saveStateValue === 'saving' && <div className="saving-dot" />}
+          <span>
+            {saveStateValue === 'saving' ? 'Saving...' 
+              : saveStateValue === 'error' ? 'Save Error' 
+              : saveStateValue === 'offline' ? 'Offline (cached locally)'
+              : saveStateValue === 'conflict' ? 'Save Conflict'
+              : saveLastSaved ? `Saved ${saveLastSaved.toLocaleTimeString()}` 
+              : 'Saved'}
+          </span>
         </div>
 
         <div className="builder-status-bar__divider" />
 
         <div className="builder-status-bar__readiness" onClick={() => setShowReadiness(true)}>
           Readiness: {validationSummary?.score !== undefined ? `${validationSummary.score}%` : "Checking..."}
-          {errors.length > 0 && <span style={{ color: "#ef4444", fontWeight: 600 }}>({errors.length} errors)</span>}
+          {errors.length > 0 && <span style={{ color: "var(--error)", fontWeight: 600 }}>({errors.length} errors)</span>}
         </div>
 
         <div className="builder-status-bar__divider" />
@@ -89,25 +103,25 @@ export function PublishStatusBar({ courseId, courseStatus, onStatusChanged, vali
         <div className="builder-status-bar__spacer" />
         
         <div style={{ display: "flex", alignItems: "center", gap: "16px", fontWeight: 600 }}>
-          <Badge tone={courseStatus === "published" ? "success" : courseStatus === "review" ? "warning" : "neutral"}>
-            {(courseStatus || "DRAFT").toUpperCase()}
+          <Badge tone={normalizedStatus === "published" ? "success" : normalizedStatus === "review" ? "warning" : normalizedStatus === "approved" ? "accent" : "neutral"}>
+            {normalizedStatus.toUpperCase()}
           </Badge>
         </div>
         
         <div style={{ display: "flex", gap: "8px" }}>
-          {courseStatus === "draft" && canSubmit && (
-            <Button tone="primary" size="small" disabled={loading} onClick={() => openWorkflowDialog("submit_for_review")}>Submit For Review</Button>
+          {normalizedStatus === "draft" && canSubmit && (
+            <Button tone="primary" size="small" disabled={loading || saveStateValue === 'saving'} onClick={() => openWorkflowDialog("submit_for_review")}>Submit For Review</Button>
           )}
-          {courseStatus === "review" && (
+          {normalizedStatus === "review" && (
             <>
               {canReject && <Button tone="danger" size="small" disabled={loading} onClick={() => openWorkflowDialog("reject")}>Reject</Button>}
               {canApprove && <Button tone="success" size="small" disabled={loading} onClick={() => openWorkflowDialog("approve")}>Approve</Button>}
             </>
           )}
-          {courseStatus === "approved" && canPublish && (
+          {normalizedStatus === "approved" && canPublish && (
             <Button tone="primary" size="small" disabled={loading} onClick={() => openWorkflowDialog("publish")}>Publish Course</Button>
           )}
-          {courseStatus === "published" && canPublish && (
+          {normalizedStatus === "published" && canPublish && (
             <Button tone="neutral" size="small" disabled={loading} onClick={() => openWorkflowDialog("archive")}>Archive</Button>
           )}
         </div>

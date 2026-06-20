@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 
 from app.models.base import Base, TenantMixin
 
@@ -21,7 +22,7 @@ class LearnerEvent(Base, TenantMixin):
     
     event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     schema_version: Mapped[str] = mapped_column(String(10), nullable=False, default="v1")
-    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    payload_json: Mapped[dict] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=dict)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 

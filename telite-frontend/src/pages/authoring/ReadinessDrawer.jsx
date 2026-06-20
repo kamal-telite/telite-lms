@@ -83,7 +83,7 @@ export function ReadinessDrawer({ open, onClose, validationResults, onFixValidat
               <ValidationCard key={`info-${idx}`} result={info} icon="ℹ️" />
             ))}
             {validationResults.length === 0 && (
-              <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>
                 No readiness issues found. Course is ready to publish.
               </div>
             )}

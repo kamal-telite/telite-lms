@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from app.api.auth import get_current_user, require_admin, TokenData
 from app.core.permissions import require_capability
@@ -21,7 +21,7 @@ from app.models.course_section import CourseSection
 from app.models.course_version import CourseVersion
 from app.models.lesson_block import LessonBlock
 from app.models.media_asset import MediaAsset
-from app.models.quiz_models import QuizDefinition, QuizSettings
+from app.models.quiz_models import QuizDefinition
 from app.services.storage import storage_service
 from app.models.learning_path import LearningPath, LearningPathCourse
 from app.services.audit_service import AuditService
@@ -29,6 +29,28 @@ from app.services.audit_service import AuditService
 logger = logging.getLogger("telite.authoring")
 
 authoring_router = APIRouter(prefix="/authoring", tags=["Authoring Gateway"])
+
+
+def _default_native_quiz_settings() -> dict:
+    q_id = f"q_{uuid.uuid4().hex[:10]}"
+    option_a = f"opt_{uuid.uuid4().hex[:10]}_a"
+    option_b = f"opt_{uuid.uuid4().hex[:10]}_b"
+    return {
+        "passing_score": 80,
+        "max_attempts": 3,
+        "questions": [
+            {
+                "id": q_id,
+                "text": "",
+                "points": 10,
+                "options": [
+                    {"id": option_a, "text": ""},
+                    {"id": option_b, "text": ""},
+                ],
+                "correct_option_id": option_a,
+            }
+        ],
+    }
 
 
 def _log_builder_activity(
@@ -46,6 +68,20 @@ def _log_builder_activity(
         action=action,
         payload=json.dumps(payload or {}),
     ))
+
+# -----------------------------------------------------------------------------
+# Validation endpoint
+# -----------------------------------------------------------------------------
+@authoring_router.get("/courses/{course_id}/validate", dependencies=[Depends(require_admin)])
+def validate_course(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    from app.services.validation.engine import ValidationEngine
+    val_engine = ValidationEngine(db)
+    val_result = val_engine.run(course_id, current_user.org_id)
+    return val_result.model_dump()
 
 # -----------------------------------------------------------------------------
 # 1. Course Versioning & Publishing
@@ -291,17 +327,6 @@ class SectionStructureUpdate(BaseModel):
 class SaveStructureRequest(BaseModel):
     updates: List[SectionStructureUpdate]
 
-def _quiz_to_response(quiz: QuizDefinition, module: CourseModule) -> dict:
-    return {
-        "id": quiz.id,
-        "title": quiz.title,
-        "description": quiz.description,
-        "passing_score": quiz.passing_score,
-        "module_id": module.id,
-        "module_title": module.title,
-        "course_id": module.course_id,
-    }
-
 @authoring_router.get("/courses/{course_id}/quizzes", dependencies=[Depends(require_admin)])
 def list_course_quizzes(
     course_id: str,
@@ -316,19 +341,34 @@ def list_course_quizzes(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    rows = db.query(QuizDefinition, CourseModule).join(
-        CourseModule,
-        CourseModule.id == QuizDefinition.module_id,
+    rows = db.query(CourseModule, LessonBlock).join(
+        LessonBlock,
+        LessonBlock.module_id == CourseModule.id,
     ).filter(
-        QuizDefinition.org_id == current_user.org_id,
-        QuizDefinition.deleted_at.is_(None),
         CourseModule.course_id == course_id,
         CourseModule.org_id == current_user.org_id,
         CourseModule.module_type == "quiz",
         CourseModule.deleted_at.is_(None),
-    ).order_by(CourseModule.sort_order, QuizDefinition.id).all()
+        LessonBlock.org_id == current_user.org_id,
+        LessonBlock.block_type.in_(("quiz", "native_quiz")),
+        LessonBlock.deleted_at.is_(None),
+    ).order_by(CourseModule.sort_order, LessonBlock.sort_order, LessonBlock.id).all()
 
-    return {"quizzes": [_quiz_to_response(quiz, module) for quiz, module in rows]}
+    return {
+        "quizzes": [
+            {
+                "id": block.id,
+                "block_id": block.id,
+                "title": module.title,
+                "description": None,
+                "passing_score": (block.metadata_json or {}).get("passing_score"),
+                "module_id": module.id,
+                "module_title": module.title,
+                "course_id": module.course_id,
+            }
+            for module, block in rows
+        ]
+    }
 
 @authoring_router.put("/courses/{course_id}/structure", dependencies=[Depends(require_admin), Depends(require_capability("section.edit")), Depends(require_capability("module.edit"))])
 def update_course_structure(
@@ -575,7 +615,6 @@ def update_learning_path_courses(
         
     db.commit()
     return {"success": True}
-
 # -----------------------------------------------------------------------------
 # Legacy Moodle Proxied Endpoints
 # -----------------------------------------------------------------------------
@@ -587,6 +626,7 @@ class CreateModuleRequest(BaseModel):
     title: str
     module_type: str
     content_url: str | None = None
+    auto_create_block: bool = False
     
 class UpdateModuleRequest(BaseModel):
     title: str
@@ -598,15 +638,9 @@ def create_module(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
-    course = db.query(Course).filter(Course.id == request.course_id, Course.org_id == current_user.org_id).first()
+    course = db.scalar(select(Course).where(Course.id == request.course_id, Course.org_id == current_user.org_id))
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    title = request.title.strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="Module title is required")
-    # Create native interactive module record
-    # Note: Moodle proxy sync has been retired.
-    
     section = None
     if request.section_id:
         section = db.query(CourseSection).filter(
@@ -628,6 +662,8 @@ def create_module(
         module_order_query = module_order_query.filter(CourseModule.section_id.is_(None), CourseModule.section == request.section)
     max_order = module_order_query.count()
 
+    title = request.title.strip() if request.title else "Untitled Module"
+
     new_module = CourseModule(
         course_id=course.id,
         section=section.sort_order if section else request.section,
@@ -642,13 +678,24 @@ def create_module(
     db.add(new_module)
     db.flush()
 
-    if new_module.module_type == "quiz":
-        quiz = QuizDefinition(
-            org_id=current_user.org_id,
-            module_id=new_module.id,
-            title=new_module.title,
+    if request.auto_create_block or new_module.module_type == "quiz":
+        block_type_map = {
+            "quiz": "quiz",
+            "assignment": "assignment",
+            "resource": "resource_collection"
+        }
+        btype = block_type_map.get(new_module.module_type)
+        if btype:
+            from app.models.lesson_block import LessonBlock
+            default_block = LessonBlock(
+                module_id=new_module.id,
+                org_id=current_user.org_id,
+                block_type=btype,
+                sort_order=0,
+                content="",
+                metadata_json=_default_native_quiz_settings() if btype == "quiz" else None,
             )
-        db.add(quiz)
+            db.add(default_block)
 
     payload = new_module.to_dict()
     _log_builder_activity(db, course.id, current_user.id, current_user.org_id, "MODULE_CREATED", {"module_id": new_module.id, "title": new_module.title})
@@ -716,38 +763,6 @@ def duplicate_module(
     )
     db.add(new_module)
     db.flush()
-
-    source_quiz = db.query(QuizDefinition).filter(
-        QuizDefinition.module_id == source_module.id,
-        QuizDefinition.org_id == current_user.org_id,
-        QuizDefinition.deleted_at.is_(None),
-    ).first()
-    new_quiz = None
-    if source_quiz:
-        new_quiz = QuizDefinition(
-            org_id=current_user.org_id,
-            module_id=new_module.id,
-            title=f"{source_quiz.title} Copy",
-            description=source_quiz.description,
-            passing_score=source_quiz.passing_score,
-        )
-        db.add(new_quiz)
-        db.flush()
-
-        source_settings = db.query(QuizSettings).filter(QuizSettings.quiz_id == source_quiz.id).first()
-        if source_settings:
-            db.add(QuizSettings(
-                quiz_id=new_quiz.id,
-                time_limit=source_settings.time_limit,
-                passing_score=source_settings.passing_score,
-                attempt_limit=source_settings.attempt_limit,
-                show_answers=source_settings.show_answers,
-                show_score=source_settings.show_score,
-                shuffle_questions=source_settings.shuffle_questions,
-                shuffle_options=source_settings.shuffle_options,
-                cooldown_minutes=source_settings.cooldown_minutes,
-                review_mode=source_settings.review_mode,
-            ))
 
     source_blocks = db.query(LessonBlock).filter(
         LessonBlock.module_id == source_module.id,
@@ -830,4 +845,7 @@ def add_quiz_question(
     if not module or module.module_type != "quiz":
         raise HTTPException(status_code=404, detail="Quiz module not found")
         
-    return {"success": True, "detail": "Question added to Moodle execution engine successfully"}
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Deprecated. TELITE V1 quiz authoring uses native LessonBlock metadata_json via the Course Builder.",
+    )

@@ -220,15 +220,15 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
       );
     }
     if (asset.mime_type.startsWith("audio/")) {
-      return <span style={{ color: "#475569", fontWeight: 700 }}>AUDIO</span>;
+      return <span style={{ color: "var(--text-secondary)", fontWeight: 700 }}>AUDIO</span>;
     }
     if (asset.mime_type === "application/pdf") {
-      return <span style={{ color: "#475569", fontWeight: 700 }}>PDF</span>;
+      return <span style={{ color: "var(--text-secondary)", fontWeight: 700 }}>PDF</span>;
     }
     if (isH5pAsset(asset)) {
-      return <span style={{ color: "#475569", fontWeight: 700 }}>H5P</span>;
+      return <span style={{ color: "var(--text-secondary)", fontWeight: 700 }}>H5P</span>;
     }
-    return <span style={{ color: "#475569", fontWeight: 700 }}>File</span>;
+    return <span style={{ color: "var(--text-secondary)", fontWeight: 700 }}>File</span>;
   };
 
   return (
@@ -297,13 +297,13 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
         </select>
       </div>
 
-      <div style={{ minHeight: "400px", maxHeight: "60vh", overflowY: "auto", background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+      <div style={{ minHeight: "400px", maxHeight: "60vh", overflowY: "auto", background: "var(--surface-sunken)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
         {loading ? (
           <LoadingState message="Loading media..." />
         ) : error ? (
           <ErrorState body={error} />
         ) : assets.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#64748b", marginTop: "100px" }}>
+          <div style={{ textAlign: "center", color: "var(--text-secondary)", marginTop: "100px" }}>
             {typeFilter === "h5p" ? "No H5P packages found. Upload an .h5p file to get started." : "No media found. Upload an asset to get started."}
           </div>
         ) : (
@@ -312,14 +312,14 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
               <div
                 key={asset.id}
                 style={{
-                  background: "#fff",
-                  border: "1px solid #cbd5e1",
+                  background: "var(--surface-raised)",
+                  border: "1px solid var(--border-subtle)",
                   borderRadius: "8px",
                   overflow: "hidden",
                   transition: "all 0.2s",
                 }}
               >
-                <div style={{ height: "120px", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ height: "120px", background: "var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   {renderPreview(asset)}
                 </div>
                 <div style={{ padding: "12px", fontSize: "13px" }}>
@@ -327,28 +327,28 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
                     {asset.metadata?.title || asset.filename}
                   </div>
                   {asset.metadata?.mainLibrary ? (
-                    <div style={{ color: "#059669", fontSize: "12px", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ color: "var(--success)", fontSize: "12px", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                       <Badge tone="primary">H5P</Badge>
                       <span>{asset.metadata.mainLibrary}</span>
                     </div>
                   ) : null}
-                  <div style={{ color: "#64748b", marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ color: "var(--text-secondary)", marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>{formatSize(asset.size_bytes)}</span>
                     <Badge tone="neutral">v{asset.asset_version}</Badge>
                   </div>
                   {(asset.folder || asset.tags?.length) ? (
-                    <div style={{ marginTop: "6px", color: "#475569", fontSize: "12px" }}>
+                    <div style={{ marginTop: "6px", color: "var(--text-secondary)", fontSize: "12px" }}>
                       {asset.folder ? <span>{asset.folder}</span> : null}
                       {asset.folder && asset.tags?.length ? <span> · </span> : null}
                       {asset.tags?.length ? <span>{asset.tags.join(", ")}</span> : null}
                     </div>
                   ) : null}
                   {asset.used_by_blocks ? (
-                    <div style={{ marginTop: "6px", color: "#0f172a", fontSize: "12px", fontWeight: 500, display: "flex", gap: "4px", cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); setUsageTarget(asset); fetchUsage(asset.id); }}>
+                    <div style={{ marginTop: "6px", color: "var(--text-primary)", fontSize: "12px", fontWeight: 500, display: "flex", gap: "4px", cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); setUsageTarget(asset); fetchUsage(asset.id); }}>
                       <span style={{ textDecoration: "underline" }}>Used in {asset.used_by_blocks} block(s)</span>
                     </div>
                   ) : (
-                    <div style={{ marginTop: "6px", color: "#64748b", fontSize: "12px" }}>
+                    <div style={{ marginTop: "6px", color: "var(--text-secondary)", fontSize: "12px" }}>
                       Not attached
                     </div>
                   )}
@@ -383,7 +383,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
           </>
         }
       >
-        <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, color: "var(--text-secondary)", lineHeight: 1.5 }}>
           Delete {deleteTarget?.filename}? This removes it from the media library.
         </p>
       </Modal>
@@ -397,12 +397,12 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
           <Button tone="primary" onClick={() => setUsageTarget(null)}>Acknowledge</Button>
         }
       >
-        <p style={{ margin: "0 0 16px", color: "#475569", lineHeight: 1.5 }}>
+        <p style={{ margin: "0 0 16px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
           <strong>{usageTarget?.filename}</strong> cannot be deleted because it is currently used in {usageTarget?.used_by_blocks} location(s).
         </p>
-        <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+        <div style={{ background: "var(--surface-sunken)", padding: "12px", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
           <p style={{ margin: "0 0 8px", fontWeight: 600, fontSize: "13px" }}>Please remove it from these blocks first:</p>
-          <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", color: "#475569" }}>
+          <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", color: "var(--text-secondary)" }}>
             {usageData.map((u, i) => (
               <li key={i}>{u.course_title} → {u.section_title} → {u.module_title}</li>
             ))}
@@ -454,7 +454,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
           </>
         }
       >
-        <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, color: "var(--text-secondary)", lineHeight: 1.5 }}>
           <strong>{replaceWarningTarget?.filename}</strong> is used in {replaceWarningTarget?.used_by_blocks} lesson blocks. If you replace this file, it will be updated across all of those locations immediately.
         </p>
       </Modal>

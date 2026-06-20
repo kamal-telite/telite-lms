@@ -39,7 +39,7 @@ const GradingDashboard = () => {
         {selectedAttempt ? (
           <>
             <div className="p-6 border-b border-slate-200 bg-white">
-              <h2 className="text-2xl font-bold text-slate-800">{selectedAttempt.student}'s Submission</h2>
+              <h2 className="text-2xl font-bold text-slate-800">{selectedAttempt.student}&apos;s Submission</h2>
               <p className="text-slate-500">{selectedAttempt.quiz}</p>
             </div>
             
@@ -48,7 +48,7 @@ const GradingDashboard = () => {
                 <h4 className="font-semibold text-slate-800 mb-2">Question 1 (Essay)</h4>
                 <p className="text-slate-600 mb-4">Explain the concept of closures in JavaScript.</p>
                 <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg text-slate-700 italic mb-6">
-                  "A closure is the combination of a function bundled together (enclosed) with references to its surrounding state (the lexical environment). In other words, a closure gives you access to an outer function's scope from an inner function."
+                  &quot;A closure is the combination of a function bundled together (enclosed) with references to its surrounding state (the lexical environment). In other words, a closure gives you access to an outer function&apos;s scope from an inner function.&quot;
                 </div>
 
                 <div className="border-t border-slate-100 pt-6">

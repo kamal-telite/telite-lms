@@ -253,17 +253,15 @@ class ValidationService:
                             })
                             
                     if b_type == "quiz_reference":
-                        settings = block.metadata_json or {}
-                        if not settings.get("quiz_id"):
-                            errors.append({
-                                "type": "missing_quiz",
-                                "severity": "error",
-                                "section_id": section.id,
-                                "module_id": mod.id,
-                                "block_id": block.id,
-                                "message": f"Quiz Reference block #{b_num} in '{fix_target['module_title']}' has no quiz selected.",
-                                "fix_target": b_fix
-                            })
+                        errors.append({
+                            "type": "deprecated_quiz_reference",
+                            "severity": "error",
+                            "section_id": section.id,
+                            "module_id": mod.id,
+                            "block_id": block.id,
+                            "message": f"Quiz Reference block #{b_num} in '{fix_target['module_title']}' is deprecated. Use a Native Quiz block instead.",
+                            "fix_target": b_fix
+                        })
 
                 if len(errors) == mod_errors_count:
                     valid_modules += 1

@@ -11,29 +11,29 @@ export function MediaUsageDrawer({ open, onClose, asset, usageData, loading }) {
       right: 0,
       bottom: 0,
       width: "400px",
-      background: "#fff",
+      background: "var(--surface-raised)",
       boxShadow: "-4px 0 16px rgba(0,0,0,0.1)",
       zIndex: 9999,
       display: "flex",
       flexDirection: "column",
-      borderLeft: "1px solid #e2e8f0"
+      borderLeft: "1px solid var(--border-subtle)"
     }}>
       <div style={{
         padding: "20px",
-        borderBottom: "1px solid #e2e8f0",
+        borderBottom: "1px solid var(--border-subtle)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center"
       }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "#0f172a" }}>Media Usage</h2>
-          <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>
+          <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--text-primary)" }}>Media Usage</h2>
+          <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "4px" }}>
             {asset?.filename} is used in {asset?.used_by_blocks} location(s)
           </div>
         </div>
         <button 
           onClick={onClose}
-          style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#64748b" }}
+          style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--text-secondary)" }}
         >
           ×
         </button>
@@ -45,23 +45,23 @@ export function MediaUsageDrawer({ open, onClose, asset, usageData, loading }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {usageData.map((u, i) => (
-              <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
-                <div style={{ padding: "12px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontWeight: 600, fontSize: "14px", color: "#0f172a" }}>
+              <div key={i} style={{ border: "1px solid var(--border-subtle)", borderRadius: "8px", overflow: "hidden" }}>
+                <div style={{ padding: "12px", background: "var(--surface-sunken)", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>
                     {u.course_title}
                   </div>
                   <Button tone="neutral" size="small" onClick={() => window.open(`/authoring/courses/${u.course_id}/builder?module=${u.module_id}&block=${u.block_id}`, "_blank")}>
                     Open
                   </Button>
                 </div>
-                <div style={{ padding: "12px", fontFamily: "monospace", fontSize: "12px", color: "#475569", lineHeight: 1.5 }}>
-                  <div style={{ paddingLeft: "12px", borderLeft: "2px solid #cbd5e1" }}>
+                <div style={{ padding: "12px", fontFamily: "monospace", fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  <div style={{ paddingLeft: "12px", borderLeft: "2px solid var(--border-subtle)" }}>
                     {u.section_title}
                   </div>
-                  <div style={{ paddingLeft: "24px", borderLeft: "2px solid #cbd5e1" }}>
+                  <div style={{ paddingLeft: "24px", borderLeft: "2px solid var(--border-subtle)" }}>
                     └─ {u.module_title}
                   </div>
-                  <div style={{ paddingLeft: "36px", borderLeft: "2px solid #cbd5e1" }}>
+                  <div style={{ paddingLeft: "36px", borderLeft: "2px solid var(--border-subtle)" }}>
                     &nbsp;&nbsp;└─ Block #{u.block_id} ({u.block_type})
                   </div>
                 </div>

@@ -5,11 +5,11 @@ import { api, getErrorMessage } from "../../../services/client";
 function DiffViewer({ beforeObj, afterObj }) {
   return (
     <div style={{ display: 'flex', gap: '16px', marginTop: '16px' }}>
-      <div style={{ flex: 1, background: '#fef2f2', padding: '12px', borderRadius: '4px', overflowX: 'auto', fontSize: '12px', fontFamily: 'monospace' }}>
+      <div style={{ flex: 1, background: 'var(--error-bg)', padding: '12px', borderRadius: '4px', overflowX: 'auto', fontSize: '12px', fontFamily: 'monospace' }}>
         <strong>Before:</strong>
         <pre style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(beforeObj, null, 2)}</pre>
       </div>
-      <div style={{ flex: 1, background: '#f0fdf4', padding: '12px', borderRadius: '4px', overflowX: 'auto', fontSize: '12px', fontFamily: 'monospace' }}>
+      <div style={{ flex: 1, background: 'var(--success-bg)', padding: '12px', borderRadius: '4px', overflowX: 'auto', fontSize: '12px', fontFamily: 'monospace' }}>
         <strong>After:</strong>
         <pre style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(afterObj, null, 2)}</pre>
       </div>
@@ -57,23 +57,23 @@ export function AuditLogModal({ courseId, open, onClose }) {
     >
       {loading ? <LoadingState message="Loading logs..." /> : 
        error ? <ErrorState body={error} /> : 
-       logs.length === 0 ? <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>No audit logs found for this course.</div> :
+       logs.length === 0 ? <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>No audit logs found for this course.</div> :
        (
          <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
              <thead>
                <tr>
-                 <th style={{ padding: '12px', borderBottom: '2px solid #e2e8f0', background: '#f8fafc', color: '#475569' }}>Date</th>
-                 <th style={{ padding: '12px', borderBottom: '2px solid #e2e8f0', background: '#f8fafc', color: '#475569' }}>User</th>
-                 <th style={{ padding: '12px', borderBottom: '2px solid #e2e8f0', background: '#f8fafc', color: '#475569' }}>Entity</th>
-                 <th style={{ padding: '12px', borderBottom: '2px solid #e2e8f0', background: '#f8fafc', color: '#475569' }}>Action</th>
-                 <th style={{ padding: '12px', borderBottom: '2px solid #e2e8f0', background: '#f8fafc', color: '#475569' }}>Changes</th>
+                 <th style={{ padding: '12px', borderBottom: '2px solid var(--border-subtle)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}>Date</th>
+                 <th style={{ padding: '12px', borderBottom: '2px solid var(--border-subtle)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}>User</th>
+                 <th style={{ padding: '12px', borderBottom: '2px solid var(--border-subtle)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}>Entity</th>
+                 <th style={{ padding: '12px', borderBottom: '2px solid var(--border-subtle)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}>Action</th>
+                 <th style={{ padding: '12px', borderBottom: '2px solid var(--border-subtle)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}>Changes</th>
                </tr>
              </thead>
              <tbody>
                {logs.map(log => (
                  <React.Fragment key={log.id}>
-                   <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                   <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                      <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{new Date(log.created_at).toLocaleString()}</td>
                      <td style={{ padding: '12px' }}>{log.user_id}</td>
                      <td style={{ padding: '12px' }}>{log.entity_type} ({log.entity_id})</td>
@@ -90,7 +90,7 @@ export function AuditLogModal({ courseId, open, onClose }) {
                    </tr>
                    {expandedLogId === log.id && (
                      <tr>
-                       <td colSpan={5} style={{ padding: '16px', background: '#f8fafc', borderBottom: '2px solid #cbd5e1' }}>
+                       <td colSpan={5} style={{ padding: '16px', background: 'var(--surface-sunken)', borderBottom: '2px solid var(--border-subtle)' }}>
                          <DiffViewer beforeObj={log.before_json} afterObj={log.after_json} />
                        </td>
                      </tr>
