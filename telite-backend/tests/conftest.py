@@ -13,7 +13,7 @@ from app.models.base import Base
 TEST_DATABASE_URL = os.getenv(
     "TELITE_TEST_DATABASE_URL",
     "postgresql+psycopg://postgres:postgres123@localhost:55432/test_telite_backend",
-)
+).replace("postgresql://", "postgresql+psycopg://", 1).replace("postgres://", "postgresql+psycopg://", 1)
 
 
 def _reset_schema(engine) -> None:
