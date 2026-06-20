@@ -155,15 +155,15 @@ def apply_rls_policies(session: Session) -> None:
 def set_rls_context(session: Session, org_id: int) -> None:
     """Set the RLS context for the current transaction."""
     session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
-        {"org_id": org_id},
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
+        {"org_id": str(org_id)},
     )
-    session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+    session.execute(text("SELECT set_config('app.bypass_rls', 'off', true)"))
 
 
 def set_platform_context(session: Session) -> None:
     """Bypass RLS for platform-level operations."""
-    session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+    session.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
 
 
 def verify_rls_active(session: Session, table: str) -> bool:

@@ -43,6 +43,8 @@ from app.models.quiz_answer import QuizAnswer, GradingEvent
 from app.models.rubric import GradingRubric, RubricCriteria
 from app.models.role_permission import RolePermission
 
+from app.models.assignment_submission import AssignmentSubmission
+
 __all__ = [
     "Base",
     "TenantMixin",
@@ -101,4 +103,5 @@ __all__ = [
     "GradingRubric",
     "RubricCriteria",
     "RolePermission",
+    "AssignmentSubmission",
 ]

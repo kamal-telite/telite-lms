@@ -167,10 +167,12 @@ def create_upload_url(
     # Register the asset
     asset = MediaAsset(
         org_id=current_user.org_id,
-        filename=request.filename,
-        object_key=object_key,
-        size_bytes=request.size_bytes,
-        mime_type=request.mime_type,
+        file_name=request.filename,
+        storage_key=object_key,
+        file_size=request.size_bytes,
+        file_type=request.mime_type,
+        storage_provider="r2",
+        url=object_key,
         uploaded_by=current_user.id
     )
     media_repo.save_asset(asset)
@@ -237,10 +239,12 @@ async def upload_asset(
     object_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
     asset = MediaAsset(
         org_id=current_user.org_id,
-        filename=file.filename or filename,
-        object_key=object_key,
-        size_bytes=size_bytes,
-        mime_type=mime_type,
+        file_name=file.filename or filename,
+        storage_key=object_key,
+        file_size=size_bytes,
+        file_type=mime_type,
+        storage_provider="local",
+        url=object_key,
         folder=_clean_folder(folder),
         tags_json=json.dumps(_merge_tags(_clean_tags(tags), ["h5p"] if h5p_upload else [])),
         metadata_json=json.dumps(_h5p_metadata_payload(h5p_metadata, 1)) if h5p_metadata else None,
@@ -288,7 +292,7 @@ def list_assets(
     if search:
         term = search.strip()
         query = query.filter(
-            MediaAsset.filename.ilike(f"%{term}%") |
+            MediaAsset.file_name.ilike(f"%{term}%") |
             MediaAsset.tags_json.ilike(f"%{term}%") |
             MediaAsset.folder.ilike(f"%{term}%")
         )
@@ -298,19 +302,19 @@ def list_assets(
         query = query.filter(MediaAsset.tags_json.ilike(f'%"{tag.strip().lower()}"%'))
     if type and type != "all":
         if type == "pdf":
-            query = query.filter(MediaAsset.mime_type == "application/pdf")
+            query = query.filter(MediaAsset.file_type == "application/pdf")
         elif type == "other":
             query = query.filter(
-                ~MediaAsset.mime_type.startswith("image/"),
-                ~MediaAsset.mime_type.startswith("video/"),
-                ~MediaAsset.mime_type.startswith("audio/"),
-                MediaAsset.mime_type != "application/pdf",
+                ~MediaAsset.file_type.startswith("image/"),
+                ~MediaAsset.file_type.startswith("video/"),
+                ~MediaAsset.file_type.startswith("audio/"),
+                MediaAsset.file_type != "application/pdf",
             )
         elif type.endswith("/"):
-            query = query.filter(MediaAsset.mime_type.startswith(type))
+            query = query.filter(MediaAsset.file_type.startswith(type))
         elif type == "scorm":
             query = query.filter(
-                MediaAsset.mime_type.in_(
+                MediaAsset.file_type.in_(
                     (
                         "application/zip",
                         "application/x-zip-compressed",
@@ -320,7 +324,7 @@ def list_assets(
             )
         elif type == "h5p":
             query = query.filter(
-                MediaAsset.mime_type.in_(
+                MediaAsset.file_type.in_(
                     (
                         "application/zip",
                         "application/x-h5p",
@@ -328,12 +332,12 @@ def list_assets(
                         "application/octet-stream",
                     )
                 ),
-                MediaAsset.filename.ilike("%.h5p")
+                MediaAsset.file_name.ilike("%.h5p")
             )
         elif "/" in type:
-            query = query.filter(MediaAsset.mime_type == type)
+            query = query.filter(MediaAsset.file_type == type)
         else:
-            query = query.filter(MediaAsset.mime_type.startswith(f"{type}/"))
+            query = query.filter(MediaAsset.file_type.startswith(f"{type}/"))
 
     assets = query.order_by(MediaAsset.created_at.desc(), MediaAsset.id.desc()).limit(limit).all()
     
@@ -426,11 +430,10 @@ async def replace_asset_file(
     else:
         target.write_bytes(contents)
 
-    asset.filename = file.filename or filename
-    asset.object_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
-    asset.size_bytes = size_bytes
-    asset.mime_type = mime_type
-    asset.asset_version = (asset.asset_version or 1) + 1
+    asset.file_name = file.filename or filename
+    asset.storage_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
+    asset.file_size = size_bytes
+    asset.file_type = mime_type
     if replacing_h5p or replacement_is_h5p:
         asset.tags_json = json.dumps(_merge_tags(_tag_list(asset), ["h5p"]))
         asset.metadata_json = json.dumps(_h5p_metadata_payload(h5p_metadata, asset.asset_version))
