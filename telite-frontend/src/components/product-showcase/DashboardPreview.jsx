@@ -101,7 +101,7 @@ export default function DashboardPreview() {
                 <span className="alert-time">09:15 AM</span>
                 <span className="severity">INFO</span>
               </div>
-              <span className="alert-txt">New enterprise tenant 'FinEdge' onboarded.</span>
+              <span className="alert-txt">New enterprise tenant &apos;FinEdge&apos; onboarded.</span>
             </div>
             <div className="alert-item low">
               <div className="alert-meta">

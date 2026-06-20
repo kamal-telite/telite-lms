@@ -7,19 +7,12 @@ import {
   approveEnrollmentRequest,
   approveVerification,
   bulkUploadVerifications,
-  createAdmin,
   inviteAdmin,
   createCategory,
-  createTask,
   deleteCategory,
   deleteUser,
-  fetchSettings,
   addAllowedDomain,
   removeAllowedDomain,
-  fetchSuperAdminDashboard,
-  fetchOrganizations,
-  fetchUsers,
-  fetchVerifications,
   getErrorMessage,
   rejectEnrollmentRequest,
   rejectVerification,
@@ -32,7 +25,7 @@ import { ChartCanvas } from "../../components/common/charts";
 import { DashboardShell, SectionTitle, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
 import { BrandingSettingsTab } from "../../components/dashboard/BrandingSettingsTab";
-import { TaskBoardKanban } from "../../components/dashboard/TaskBoard";
+
 import { useSuperAdminStore } from "../../store/dashboardStore";
 import {
   Avatar,
@@ -49,10 +42,8 @@ import {
 } from "../../components/common/ui";
 import {
   formatDateTime,
-  formatMonthDate,
   formatPercent,
   formatShortDate,
-  getCompletionColor,
   getInitials,
   getRankColor,
   getRoleLabel,
@@ -83,21 +74,7 @@ const ADMIN_INITIAL = {
   username: "",
 };
 
-const TASK_INITIAL = {
-  title: "",
-  description: "",
-  assignee: "all_new_learners",
-  category_slug: "all",
-  due_at: "",
-  status: "pending",
-  notes: "",
-};
 
-const ALL_SCOPE_OPTIONS = [
-  { value: "all_new_learners", label: "All new learners" },
-  { value: "all_categories", label: "All categories" },
-  { value: "all_admins", label: "All admins" },
-];
 
 export default function SuperAdminPage({ session, onLogout }) {
   const navigate = useNavigate();
@@ -118,9 +95,7 @@ export default function SuperAdminPage({ session, onLogout }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [categoryModal, setCategoryModal] = useState({ open: false, item: null });
   const [adminModal, setAdminModal] = useState({ open: false, item: null });
-  const [taskModal, setTaskModal] = useState({ open: false, item: null });
   const [categoryDeleteId, setCategoryDeleteId] = useState(null);
-  const [taskDeleteId, setTaskDeleteId] = useState(null);
   const [userDeleteId, setUserDeleteId] = useState(null);
   const [expandedAudit, setExpandedAudit] = useState(false);
   const [userFilter, setUserFilter] = useState("all");
@@ -186,7 +161,6 @@ export default function SuperAdminPage({ session, onLogout }) {
           badge: String(dashboard?.kpis?.pending_verifications || 0),
           badgeTone: "warn",
         },
-        { id: "section-tasks", label: "Task assign", icon: "task" },
       ],
     },
     {
@@ -206,7 +180,6 @@ export default function SuperAdminPage({ session, onLogout }) {
   ];
 
   const categoryAdmins = users.filter((user) => user.role === "category_admin");
-  const learnerUsers = users.filter((user) => user.role === "learner");
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -228,7 +201,7 @@ export default function SuperAdminPage({ session, onLogout }) {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   function changeSection(item) {
     setExportOpen(false);
@@ -402,27 +375,7 @@ export default function SuperAdminPage({ session, onLogout }) {
     }
   }
 
-  async function handleDeleteTask(taskId) {
-    try {
-      await deleteTask(taskId);
-      setTaskDeleteId(null);
-      showToast("Task removed.", "warning");
-      await load();
-    } catch (requestError) {
-      showToast(getErrorMessage(requestError, "Unable to remove task."), "error");
-    }
-  }
 
-  async function handleToggleTask(taskId, newStatus) {
-    // Optimistic update
-    updateTaskState(taskId, newStatus);
-    try {
-      await updateTask(taskId, { status: newStatus });
-    } catch (err) {
-      showToast(getErrorMessage(err, "Failed to update task status"), "error");
-      await load(); // Revert on failure
-    }
-  }
 
   async function handleDeleteUser(userId) {
     try {
@@ -499,11 +452,6 @@ export default function SuperAdminPage({ session, onLogout }) {
                           head = [["Name", "Email", "Role", "Scope"]];
                           body = (filteredUsers || []).map(u => [
                             u.full_name, u.email, u.role, u.category_scope || "N/A"
-                          ]);
-                        } else if (activeNav === "section-tasks") {
-                          head = [["Task", "Assignee", "Scope", "Due", "Status"]];
-                          body = (dashboard.tasks || []).map(t => [
-                            t.title, t.assigned_label, t.category_slug, t.due_at || "N/A", t.status
                           ]);
                         } else if (activeNav === "section-enrollments") {
                           head = [["Name", "Email", "Type", "Requested"]];
@@ -924,7 +872,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                   <Button
                     tone="ghost"
                     className="btn--block"
-                    onClick={() => scrollToSection({ id: "section-users" })}
+                    onClick={() => document.getElementById("section-users")?.scrollIntoView({ behavior: "smooth" })}
                   >
                     Manage all admins
                   </Button>
@@ -1325,35 +1273,6 @@ export default function SuperAdminPage({ session, onLogout }) {
           </section>
           )}
 
-          {activeNav === "section-tasks" && (
-          <section id="section-tasks">
-            <Panel
-              title="Cross-category task assignment"
-              subtitle={isMoodleSource ? "Hidden in Moodle-only mode" : "super-admin only"}
-              action={
-                !isMoodleSource ? (
-                  <button className="panel-link" type="button" onClick={() => setTaskModal({ open: true, item: null })}>
-                    + New task
-                  </button>
-                ) : null
-              }
-            >
-              {isMoodleSource ? (
-                <EmptyState title="Task data hidden" body={dashboard.notes?.tasks || "Task data is not sourced from Moodle."} />
-              ) : (
-                <div style={{ marginTop: 24 }}>
-                  <TaskBoardKanban 
-                    allTasks={dashboard.tasks || []} 
-                    onTaskStatusChange={handleToggleTask}
-                    onEdit={(task) => setTaskModal({ open: true, item: task })}
-                    onDelete={(taskId) => handleDeleteTask(taskId)}
-                  />
-                </div>
-              )}
-            </Panel>
-          </section>
-          )}
-
           {activeNav === "section-analytics" && (
           <section id="section-analytics">
             <Panel
@@ -1635,28 +1554,7 @@ export default function SuperAdminPage({ session, onLogout }) {
         }}
       />
 
-      <TaskEditorModal
-        open={taskModal.open}
-        item={taskModal.item}
-        learners={learnerUsers}
-        categories={dashboard.categories}
-        onClose={() => setTaskModal({ open: false, item: null })}
-        onSubmit={async (payload, isEdit) => {
-          try {
-            if (isEdit) {
-              await updateTask(taskModal.item.id, payload);
-              showToast("Task updated.", "success");
-            } else {
-              await createTask(payload);
-              showToast("Task assigned.", "success");
-            }
-            setTaskModal({ open: false, item: null });
-            await load();
-          } catch (requestError) {
-            showToast(getErrorMessage(requestError, "Unable to save task."), "error");
-          }
-        }}
-      />
+
     </>
   );
 }
@@ -2026,191 +1924,4 @@ function AdminEditorModal({ open, item, categories = [], allowedDomains = [], on
   );
 }
 
-function TaskEditorModal({ open, item, learners, categories = [], onClose, onSubmit }) {
-  const isEdit = Boolean(item);
-  const [form, setForm] = useState(TASK_INITIAL);
-  const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    const existingAssignee = item?.assigned_to_user_id || item?.assignment_scope || "all_new_learners";
-    setForm(
-      item
-        ? {
-            title: item.title || "",
-            description: item.description || "",
-            assignee: existingAssignee,
-            category_slug: item.category_slug || "all",
-            due_at: item.due_at || "",
-            status: item.status || "pending",
-            notes: item.notes || "",
-          }
-        : TASK_INITIAL
-    );
-    setErrors({});
-  }, [item, open]);
-
-  function updateField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: "" }));
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    const nextErrors = {};
-    if (!form.title.trim()) {
-      nextErrors.title = "Task title is required.";
-    }
-    if (!form.assignee) {
-      nextErrors.assignee = "Select who this task is assigned to.";
-    }
-    if (!form.due_at) {
-      nextErrors.due_at = "Due date is required.";
-    }
-    if (Object.keys(nextErrors).length) {
-      setErrors(nextErrors);
-      return;
-    }
-
-    const selectedLearner = learners.find((learner) => learner.id === form.assignee);
-    const selectedScope = ALL_SCOPE_OPTIONS.find((option) => option.value === form.assignee);
-
-    const payload = {
-      title: form.title,
-      description: form.description,
-      assigned_label: selectedLearner?.full_name || selectedScope?.label || "All learners",
-      assigned_to_user_id: selectedLearner?.id || null,
-      assignment_scope: selectedLearner ? "individual" : form.assignee,
-      category_slug: selectedLearner?.category_scope || form.category_slug,
-      due_at: form.due_at,
-      status: form.status,
-      notes: form.notes,
-      is_cross_category: true,
-    };
-
-    await onSubmit(payload, isEdit);
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={isEdit ? "Edit Task" : "Assign Cross-Category Task"}
-      description="Create tasks that span categories, admins, or onboarding cohorts."
-      footer={
-        <>
-          <Button tone="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button tone="primary" onClick={handleSubmit}>
-            {isEdit ? "Save changes" : "Assign Task"}
-          </Button>
-        </>
-      }
-    >
-      <form className="form-stack" onSubmit={handleSubmit}>
-        <label className="field">
-          <span className="field__label">Task title</span>
-          <input
-            className={`field__input ${errors.title ? "is-invalid" : ""}`}
-            value={form.title}
-            onChange={(event) => updateField("title", event.target.value)}
-          />
-          {errors.title ? <span className="field__error">{errors.title}</span> : null}
-        </label>
-        <label className="field">
-          <span className="field__label">Assign to</span>
-          <select
-            className={`field__select ${errors.assignee ? "is-invalid" : ""}`}
-            value={form.assignee}
-            onChange={(event) => updateField("assignee", event.target.value)}
-          >
-            {ALL_SCOPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-            {learners.map((learner) => (
-              <option key={learner.id} value={learner.id}>
-                {learner.full_name}
-              </option>
-            ))}
-          </select>
-          {errors.assignee ? <span className="field__error">{errors.assignee}</span> : null}
-        </label>
-        <div className="field-grid">
-          <label className="field">
-            <span className="field__label">Category scope</span>
-            <select
-              className="field__select"
-              value={form.category_slug}
-              onChange={(event) => updateField("category_slug", event.target.value)}
-              disabled={Boolean(learners.find((learner) => learner.id === form.assignee))}
-            >
-              <option value="all">All</option>
-              {categories.map((cat) => (
-                <option key={cat.slug} value={cat.slug}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field__label">Status</span>
-            <select
-              className="field__select"
-              value={form.status}
-              onChange={(event) => updateField("status", event.target.value)}
-            >
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="overdue">Overdue</option>
-            </select>
-          </label>
-        </div>
-        <label className="field">
-          <span className="field__label">Due date</span>
-          <input
-            className={`field__input ${errors.due_at ? "is-invalid" : ""}`}
-            value={form.due_at}
-            onChange={(event) => updateField("due_at", event.target.value)}
-            type="date"
-          />
-          {errors.due_at ? <span className="field__error">{errors.due_at}</span> : null}
-        </label>
-        <label className="field">
-          <span className="field__label">Description</span>
-          <textarea
-            className="field__textarea"
-            value={form.description}
-            onChange={(event) => updateField("description", event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span className="field__label">Notes</span>
-          <textarea
-            className="field__textarea"
-            value={form.notes}
-            onChange={(event) => updateField("notes", event.target.value)}
-          />
-        </label>
-      </form>
-    </Modal>
-  );
-}
-
-function auditAccent(value) {
-  if (value === "emerald") {
-    return "#059669";
-  }
-  if (value === "blue") {
-    return "#2563EB";
-  }
-  if (value === "violet") {
-    return "#7C3AED";
-  }
-  if (value === "amber") {
-    return "#F59E0B";
-  }
-  return "#DC2626";
-}

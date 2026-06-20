@@ -1,4 +1,4 @@
-import React, { Component, useDeferredValue, useEffect, useMemo, useState } from "react";
+import React, { Component, useDeferredValue, useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams, useLocation, useSearchParams } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -10,8 +10,6 @@ import {
   createTask,
   deleteCourse,
   deleteUser,
-  fetchAdminDashboard,
-  fetchVerifications,
   getErrorMessage,
   manualEnroll,
   rejectEnrollmentRequest,
@@ -20,7 +18,6 @@ import {
   updateCourse,
   updateTask,
 } from "../../services/client";
-import { ChartCanvas } from "../../components/common/charts";
 import { DashboardShell, TabBar, ProfileDropdown } from "../../layouts/DashboardLayout";
 import {
   Avatar,
@@ -28,7 +25,6 @@ import {
   Button,
   EmptyState,
   ErrorState,
-  Icon,
   IconButton,
   LoadingState,
   Modal,
@@ -43,12 +39,10 @@ import {
   getCompletionColor,
   getInitials,
   getScoreColor,
-  getStatusTone,
   titleize,
 } from "../../utils/formatters";
 import { useKpiPulse } from "../../hooks/useKpiPulse";
 import { ActivityFeedTab, SettingsTab, ReportsTab, PalTrackerTab, TasksTab, ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
-import { BrandingSettingsTab } from "../../components/dashboard/BrandingSettingsTab";
 import { useDashboardStore } from "../../store/dashboardStore";
 
 const COURSE_INITIAL = {
@@ -84,7 +78,7 @@ const tabs = [
   { id: "courses", label: "Course management" },
   { id: "learners", label: "Learners" },
   { id: "enrollment", label: "Enrollment" },
-  { id: "verifications", label: "Account Verifications" },
+
   { id: "pal", label: "PAL tracker" },
   { id: "tasks", label: "Tasks" },
   { id: "reports", label: "Reports" },
@@ -98,8 +92,6 @@ function CategoryAdminPageContent({ session, onLogout }) {
     dashboard, 
     dashboardLoading: loading, 
     dashboardError: error, 
-    verifications, 
-    verifLoading, 
     fetchDashboardData, 
     fetchVerificationsData,
     updateTaskState
@@ -139,7 +131,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
     users: orgType === 'company' ? 'Employees' : 'Students',
   };
 
-  const learners = dashboard?.learners?.rows || [];
+  const learners = useMemo(() => dashboard?.learners?.rows || [], [dashboard]);
   const totalLearners = dashboard?.learners?.total || 0;
   const filteredLearners = useMemo(() => {
     return learners.filter((learner) => {
@@ -163,25 +155,21 @@ function CategoryAdminPageContent({ session, onLogout }) {
 
   useEffect(() => {
     fetchDashboardData(slug);
-  }, [slug]);
+  }, [slug, fetchDashboardData]);
 
-  // Derived active tab from URL (needed before early returns for the useEffect below)
   const derivedActiveTab = searchParams.get("tab") || "overview";
   const derivedSegment = location.pathname.replace(/\/$/, "").split("/").pop();
   const resolvedTab = derivedSegment === "activity" ? "activity" : derivedSegment === "settings" ? "settings" : derivedSegment === "profile" ? "profile" : derivedActiveTab;
 
-  // Auto-load verifications when tab switches
+  const loadVerifications = useCallback(async () => {
+    await fetchVerificationsData(slug);
+  }, [fetchVerificationsData, slug]);
+
   useEffect(() => {
     if (resolvedTab === "verifications") {
       loadVerifications();
     }
-  }, [resolvedTab]);
-
-
-
-  async function loadVerifications() {
-    await fetchVerificationsData(slug);
-  }
+  }, [resolvedTab, loadVerifications]);
 
   async function handleVerification(id, action, reason = "") {
     try {
@@ -427,7 +415,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
   return (
     <>
       <DashboardShell
-        theme={dashboard.category?.slug || slug}
+        variant={dashboard.category?.slug || slug}
         brandMark={{ label: (dashboard.category?.name || "LMS").substring(0, 3).toUpperCase(), background: dashboard.category?.accent_color || "#2563EB" }}
         brandTitle="Telite LMS"
         brandSubtitle={`${dashboard.category?.name || slug} · admin panel`}
@@ -594,13 +582,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                   delta={kpiPulse?.active_learners || 0}
                   icon="users"
                 />
-                <StatCard
-                  label="Pending Verifications"
-                  value={dashboard?.kpis?.pending_verifications || 0}
-                  delta={kpiPulse?.pending_verifications || 0}
-                  icon="shield"
-                  tone="warn"
-                />
+
                 <StatCard
                   label={`Avg PAL Score (${labels.users})`}
                   value={formatPercent(dashboard?.kpis?.avg_pal_score || 0)}
@@ -1022,125 +1004,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
             </div>
           ) : null}
 
-          {activeTab === "verifications" ? (
-            <div className="dashboard-stack">
-              <Panel
-                title="Bulk Account Verification"
-                subtitle="Upload Excel/CSV to approve multiple signups at once"
-              >
-                <div className="bulk-verify-zone">
-                  <div className="bulk-verify-info">
-                    <div className="row-title">How it works</div>
-                    <p className="row-subtitle">Upload a file with a column named <strong>email</strong> or <strong>id_number</strong>. The system will match these against pending signups for your organization and approve them automatically.</p>
-                  </div>
-                  
-                  <form onSubmit={handleBulkUpload} className="bulk-verify-form">
-                    <div className="file-drop-zone">
-                      <input 
-                        type="file" 
-                        id="bulk-file-input"
-                        accept=".csv,.xlsx,.xls" 
-                        onChange={(e) => setBulkFile(e.target.files[0])}
-                      />
-                      <label htmlFor="bulk-file-input" className="file-drop-label">
-                        <i className="icon icon-upload" style={{ fontSize: 24, marginBottom: 8, display: 'block' }}></i>
-                        {bulkFile ? bulkFile.name : "Click or drag Excel/CSV file here to upload"}
-                      </label>
-                    </div>
-                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-                      <Button 
-                        tone="primary" 
-                        type="submit" 
-                        disabled={!bulkFile || bulkLoading}
-                        loading={bulkLoading}
-                        icon="shield"
-                      >
-                        Process Bulk Verification
-                      </Button>
-                    </div>
-                  </form>
 
-                  {bulkResult && (
-                    <div className="bulk-result-dashboard" style={{ marginTop: 24 }}>
-                      <div className="grid-3">
-                        <div className="stat-card">
-                          <div className="stat-card__label">Total Processed</div>
-                          <div className="stat-card__value">{bulkResult.total_processed}</div>
-                        </div>
-                        <div className="stat-card" style={{ borderLeft: '4px solid var(--emerald)' }}>
-                          <div className="stat-card__label">Approved</div>
-                          <div className="stat-card__value" style={{ color: 'var(--emerald)' }}>{bulkResult.approved_count}</div>
-                        </div>
-                        <div className="stat-card">
-                          <div className="stat-card__label">Ignored/Failed</div>
-                          <div className="stat-card__value">{bulkResult.ignored_count}</div>
-                        </div>
-                      </div>
-                      {bulkResult.errors?.length > 0 && (
-                        <div className="error-log" style={{ marginTop: 16 }}>
-                          <div className="row-title">Issues encountered:</div>
-                          <ul className="row-subtitle">
-                            {bulkResult.errors.map((err, i) => <li key={i}>{err}</li>)}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </Panel>
-
-              <Panel title="Pending Verifications" subtitle="Individual account review">
-                {verifLoading ? (
-                  <LoadingState title="Loading requests..." />
-                ) : verifications.length === 0 ? (
-                  <EmptyState title="No pending requests" body="All signups for your organization have been processed." />
-                ) : (
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>{labels.user}</th>
-                          <th>Role/Info</th>
-                          <th>{labels.id} / {labels.program}</th>
-                          <th>Domain</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {verifications.map((v) => (
-                          <tr key={v.id}>
-                            <td>
-                              <div className="row-title">{v.full_name}</div>
-                              <div className="row-subtitle">{v.email}</div>
-                            </td>
-                            <td>
-                              <Badge tone="brand">{titleize(v.signup_role)}</Badge>
-                              <div className="row-subtitle">{formatShortDate(v.created_at)}</div>
-                            </td>
-                            <td>
-                              <div className="row-title">{v.id_number || 'N/A'}</div>
-                              <div className="row-subtitle">{v.program} {v.branch ? `(${v.branch})` : ''}</div>
-                            </td>
-                            <td>
-                              <Badge tone={v.domain_type === 'official' ? 'success' : 'warn'}>
-                                {v.company_domain}
-                              </Badge>
-                            </td>
-                            <td>
-                              <div className="split-actions">
-                                <Button tone="success" size="small" onClick={() => handleVerification(v.id, 'approve')}>Approve</Button>
-                                <Button tone="danger" size="small" onClick={() => handleVerification(v.id, 'reject')}>Reject</Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </Panel>
-            </div>
-          ) : null}
 
           {activeTab === "pal" ? (
             <PalTrackerTab dashboard={dashboard} labels={labels} palExpanded={palExpanded} setPalExpanded={setPalExpanded} />

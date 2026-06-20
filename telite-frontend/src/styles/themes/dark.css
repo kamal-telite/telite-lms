@@ -1,0 +1,34 @@
+[data-theme="dark"] {
+  --primary-bg:     rgba(70,72,212,0.15);
+  --success:        #10b981;
+  --warning:        #d97706;
+  --error:          #dc2626;
+  --success-bg:     rgba(16,185,129,0.15);
+  --warning-bg:     rgba(249,128,18,0.15);
+  --error-bg:       rgba(186,26,26,0.15);
+
+  --surface-bg:       #07080F;
+  --surface-raised:   #0D1326;
+  --surface-sunken:   #121933;
+  --surface-3:        #1C2040;
+  --surface-card:     rgba(255,255,255,0.06);
+
+  --text-primary:     rgba(255,255,255,0.96);
+  --text-secondary:   rgba(255,255,255,0.72);
+  --text-muted:       rgba(255,255,255,0.48);
+  --text-inverse:     #111027;
+
+  --border-subtle:    rgba(255,255,255,0.08);
+  --border-strong:    rgba(70,72,212,0.35);
+
+  --shadow-card:      0 4px 20px rgba(0,0,0,0.25);
+  --shadow-hover:     0 12px 40px rgba(70,72,212,0.2);
+
+  --surface-0:        var(--surface-bg);
+  --surface-1:        var(--surface-raised);
+  --surface-2:        var(--surface-sunken);
+  --sidebar:          var(--surface-raised);
+  --text:             var(--text-primary);
+  --border:           var(--border-subtle);
+  --border-hover:     var(--border-strong);
+}

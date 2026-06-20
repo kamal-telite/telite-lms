@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════ */
 
 /* ── DESIGN TOKENS (dark-first) ── */
-:root {
+.landing-wrapper {
   /* Brand */
   --primary: #4648d4;
   --primary-dark: #2f2ebe;
@@ -12,32 +12,26 @@
   --primary-glow: rgba(70, 72, 212, 0.35);
   --navy: #07006c;
   --navy-deep: #040052;
-  --sidebar: #1e1b4b;
-  --amber: #f98012;
+  --sidebar: var(--surface-raised);
+  --amber: var(--warning);
   --amber-glow: rgba(249, 128, 18, 0.25);
-  --error: #ba1a1a;
-  --green: #10b981;
-  --font-display: 'Clash Display', 'Inter', sans-serif;
-  --font-body: 'Cabinet Grotesk', 'Inter', sans-serif;
+  --green: var(--success);
 
   /* Dark theme surfaces */
-  --bg: #07006c;
-  --surface-0: #07080F;
-  --surface-1: #0D1326;
-  --surface-2: #121933;
-  --surface-3: #1C2040;
-  --surface: #0D1326;
-  --surface-alt: #121933;
-  --surface-card: rgba(255,255,255,0.06);
+  --bg: var(--surface-bg);
+  --surface-0: var(--surface-bg);
+  --surface-1: var(--surface-raised);
+  --surface-2: var(--surface-sunken);
+  --surface: var(--surface-raised);
+  --surface-alt: var(--surface-sunken);
 
   /* Dark theme text */
-  --text: rgba(255,255,255,0.96);
-  --text-sec: rgba(255,255,255,0.72);
-  --text-muted: rgba(255,255,255,0.48);
+  --text: var(--text-primary);
+  --text-sec: var(--text-secondary);
 
   /* Dark theme borders & shadows */
-  --border: rgba(255,255,255,0.08);
-  --border-hover: rgba(70,72,212,0.4);
+  --border: var(--border-subtle);
+  --border-hover: var(--border-strong);
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.15);
   --shadow-md: 0 8px 24px rgba(0,0,0,0.2);
@@ -52,20 +46,7 @@
 }
 
 /* ── LIGHT THEME ── */
-[data-theme="light"] {
-  --bg: #f8f9ff;
-  --surface-0: #f8f9ff;
-  --surface-1: #ffffff;
-  --surface-2: #eef0ff;
-  --surface-3: #e4e7ff;
-  --surface: #f6f7ff;
-  --surface-alt: #eef0ff;
-  --surface-card: rgba(255,255,255,0.8);
-  --text: #0b1c30;
-  --text-sec: #374151;
-  --text-muted: #6b7280;
-  --border: rgba(70,72,212,0.09);
-  --border-hover: rgba(70,72,212,0.22);
+[data-theme="light"] .landing-wrapper {
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
   --shadow-sm: 0 2px 8px rgba(70,72,212,0.06);
   --shadow-md: 0 8px 24px rgba(70,72,212,0.08);

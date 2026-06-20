@@ -9,7 +9,7 @@ const BrandingContext = createContext({
   tenantSlug: null,
 });
 
-export function BrandingProvider({ session, children, preloadedConfig }) {
+export function BrandingProvider({ session, children, preloadedConfig, locationKey }) {
   const [branding, setBranding] = useState(preloadedConfig || null);
   const [loading, setLoading] = useState(false);
   const tenantSlug = getTenantSlugFromUrl(session?.user);
@@ -53,7 +53,7 @@ export function BrandingProvider({ session, children, preloadedConfig }) {
     return () => {
       cancelled = true;
     };
-  }, [tenantSlug]);
+  }, [tenantSlug, locationKey]);
 
   // Live preview postMessage listener
   useEffect(() => {

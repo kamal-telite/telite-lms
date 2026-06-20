@@ -2,6 +2,7 @@
  * Offline Sync Manager for SCORM/xAPI tracking.
  * Uses IndexedDB to store sync queues when offline.
  */
+import { api } from "../services/client";
 
 const DB_NAME = 'telite_offline_sync';
 const DB_VERSION = 1;
@@ -96,6 +97,20 @@ class OfflineSyncManager {
     });
   }
 
+  clearQueue() {
+    return new Promise((resolve) => {
+      if (!this.db) {
+        resolve(false);
+        return;
+      }
+      const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.clear();
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => resolve(false);
+    });
+  }
+
   async syncQueue() {
     if (this.syncInProgress || !this.isOnline || !this.db) return;
     this.syncInProgress = true;
@@ -141,22 +156,8 @@ class OfflineSyncManager {
   }
 
   async sendToServer(payload) {
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error('No auth token available');
-
-    const res = await fetch('/api/v1/player/tracking', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      throw new Error(`Server returned ${res.status}`);
-    }
-    return await res.json();
+    const { data } = await api.post('/api/v1/player/tracking', payload);
+    return data;
   }
 
   removeFromLocalDB(id) {

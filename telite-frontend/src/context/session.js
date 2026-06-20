@@ -13,6 +13,26 @@
 
 const USER_KEY = "telite_user";
 const ACCOUNTS_KEY = "telite_accounts"; // multi-account switcher
+const PRESERVED_LOCAL_STORAGE_KEYS = new Set(["telite_theme"]);
+const SESSION_LOCAL_STORAGE_KEYS = [
+  "lastRoute",
+  "lastDashboard",
+  "redirectAfterLogin",
+  "tenantSlug",
+  "activeTenant",
+  "selectedCategory",
+  "branding",
+  "categoryScope",
+  "organizationContext",
+  "currentTenant",
+  "telite_user",
+  "telite_accounts",
+  "telite_branding",
+  "telite_tenant",
+  "telite_category",
+  "telite_last_route",
+  "telite_last_dashboard",
+];
 
 // ── CSRF helpers ──────────────────────────────────────────────────────────────
 
@@ -98,6 +118,47 @@ export function clearSession() {
 }
 
 /**
+ * Clear all browser-side state that is scoped to an authenticated user/session.
+ * Keep non-auth preferences such as theme so logout does not reset personalization.
+ */
+export function clearClientSessionState() {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.clear();
+  } catch {
+    removeStorage(USER_KEY);
+    removeStorage(ACCOUNTS_KEY);
+  }
+
+  try {
+    SESSION_LOCAL_STORAGE_KEYS.forEach((key) => {
+      if (!PRESERVED_LOCAL_STORAGE_KEYS.has(key)) {
+        window.localStorage.removeItem(key);
+      }
+    });
+
+    Object.keys(window.localStorage).forEach((key) => {
+      const normalized = key.toLowerCase();
+      const isSessionLike =
+        normalized.includes("tenant") ||
+        normalized.includes("branding") ||
+        normalized.includes("category") ||
+        normalized.includes("dashboard") ||
+        normalized.includes("route") ||
+        normalized.includes("auth") ||
+        normalized.includes("session");
+
+      if (isSessionLike && !PRESERVED_LOCAL_STORAGE_KEYS.has(key)) {
+        window.localStorage.removeItem(key);
+      }
+    });
+  } catch {
+    // localStorage unavailable; nothing else to clear.
+  }
+}
+
+/**
  * Build a session object from the /auth/login or /auth/refresh response.
  * Tokens are NOT stored here — they arrive as HttpOnly cookies.
  */
@@ -113,6 +174,7 @@ export function buildSessionFromAuth(payload) {
       org_id: payload.org_id ?? null,
       is_platform_admin: payload.is_platform_admin ?? false,
       permissions: payload.permissions ?? [],
+      theme_preference: payload.theme_preference ?? "system",
     },
   };
 }
@@ -133,6 +195,7 @@ export function mergeAuthPayload(session, payload) {
       org_id: payload.org_id ?? session?.user?.org_id ?? null,
       is_platform_admin: payload.is_platform_admin ?? session?.user?.is_platform_admin ?? false,
       permissions: payload.permissions ?? session?.user?.permissions ?? [],
+      theme_preference: payload.theme_preference ?? session?.user?.theme_preference ?? "system",
     },
   };
 }
@@ -153,14 +216,10 @@ export function mergeSessionUser(session, user) {
 export function getDefaultRoute(user) {
   if (!user) return "/login";
 
-  if (user.is_platform_admin || user.role === "platform_admin") {
+  if (user.is_platform_admin === true) {
     return "/platform-admin";
   }
-  if (
-    user.role === "super_admin" ||
-    user.role === "college_super_admin" ||
-    user.role === "company_super_admin"
-  ) {
+  if (user.role === "super_admin") {
     return "/super-admin";
   }
   if (user.role === "category_admin") {

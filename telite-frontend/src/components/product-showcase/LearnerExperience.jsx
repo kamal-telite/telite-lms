@@ -19,7 +19,7 @@ export default function LearnerExperience() {
         <div className="welcome-msg">
           <span className="dash-label">My Path</span>
           <h3>Keep it up, Alex.</h3>
-          <p className="encouragement">You're in the top 5% of your cohort this week.</p>
+          <p className="encouragement">You&apos;re in the top 5% of your cohort this week.</p>
         </div>
         <div className="stats-pills">
            <div className="stat-pill">
@@ -70,7 +70,7 @@ export default function LearnerExperience() {
               </div>
               <div className="rec-item">
                 <div className="rec-icon">GO</div>
-                <p><strong>Ready:</strong> You've unlocked the <em>Advanced Routing</em> lab early.</p>
+                <p><strong>Ready:</strong> You&apos;ve unlocked the <em>Advanced Routing</em> lab early.</p>
               </div>
             </div>
           </div>

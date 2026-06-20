@@ -94,7 +94,7 @@ export default function AcceptInvitePage({ onAuthenticated }) {
       const session = buildSessionFromAuth(payload.data);
       onAuthenticated?.(session);
       showToast("Invitation accepted. Welcome!", "success");
-      navigate(getDefaultRoute(session.user), { replace: true });
+      window.location.replace(getDefaultRoute(session.user));
     } catch (error) {
       setInviteError(getErrorMessage(error, "Failed to accept invitation."));
     } finally {
@@ -103,7 +103,7 @@ export default function AcceptInvitePage({ onAuthenticated }) {
   }
 
   return (
-    <div className="login-page" data-theme="brand">
+    <div className="login-page" data-auth-variant="brand">
       <div className="login-page__glow login-page__glow--violet" />
       <div className="login-page__glow login-page__glow--blue" />
 

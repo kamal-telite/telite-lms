@@ -193,7 +193,7 @@ export default function Login({ onAuthenticated }) {
       const payload = await loginRequest(username, password);
       const session = buildSessionFromAuth(payload);
       onAuthenticated(session);
-      navigate(getDefaultRoute(session.user), { replace: true });
+      window.location.replace(getDefaultRoute(session.user));
     } catch (requestError) {
       setLoginError(getErrorMessage(requestError, "Invalid username or password."));
     } finally {
@@ -330,16 +330,7 @@ export default function Login({ onAuthenticated }) {
                   </button>
                 </form>
 
-                <div className="auth-create-link">
-                  Don't have an account?{" "}
-                  <Link
-                    to="/signup"
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
-                  >
-                    Create Account
-                  </Link>
-                </div>
+
               </>
             )}
 
@@ -370,7 +361,7 @@ export default function Login({ onAuthenticated }) {
                   Reset password
                 </div>
                 <div className="auth-modal-sub">
-                  Enter the email address on your account and we'll send you a reset link.
+                  Enter the email address on your account and we&apos;ll send you a reset link.
                 </div>
 
                 {forgotError ? (
@@ -442,7 +433,7 @@ export default function Login({ onAuthenticated }) {
                   registered, a password reset link has been sent. It expires in 15 minutes.
                 </div>
                 <div className="auth-modal-sub" style={{ marginBottom: 28 }}>
-                  Didn't receive it? Check your spam folder or{" "}
+                  Didn&apos;t receive it? Check your spam folder or{" "}
                   <button
                     type="button"
                     className="auth-inline-link"

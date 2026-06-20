@@ -29,8 +29,7 @@ export default function AccountSwitcher({ onAddAccount }) {
   const handleSwitch = (index) => {
     switchAccount(index);
     setIsOpen(false);
-    // Reload to ensure context and routers mount with correct user
-    window.location.href = getDefaultRoute(accounts[index].user);
+    window.location.replace(getDefaultRoute(accounts[index].user));
   };
 
   const handleSignOut = async (index, e) => {
@@ -45,16 +44,17 @@ export default function AccountSwitcher({ onAddAccount }) {
 
     const remaining = getAllAccounts();
     if (remaining.length === 0) {
-      window.location.href = '/login';
+      window.location.replace('/login');
     } else {
-      window.location.href = getDefaultRoute(remaining[getActiveAccountIndex()].user);
+      window.location.replace(getDefaultRoute(remaining[getActiveAccountIndex()].user));
     }
   };
 
-  const getRoleLabel = (role) => {
-    if (role === 'platform_admin') return 'Platform Admin';
-    if (role === 'super_admin') return 'Super Admin';
-    if (role === 'category_admin') return 'Category Admin';
+  const getRoleLabel = (user) => {
+    if (!user) return 'Learner';
+    if (user.is_platform_admin === true) return 'Platform Admin';
+    if (user.role === 'super_admin') return 'Super Admin';
+    if (user.role === 'category_admin') return 'Category Admin';
     return 'Learner';
   };
 
@@ -72,7 +72,7 @@ export default function AccountSwitcher({ onAddAccount }) {
             {activeAccount?.user?.name || 'User'}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            {getRoleLabel(activeAccount?.user?.role)}
+            {getRoleLabel(activeAccount?.user)}
           </p>
         </div>
       </button>
@@ -106,7 +106,7 @@ export default function AccountSwitcher({ onAddAccount }) {
                         {acc.user?.email}
                       </span>
                       <span className="text-xs font-medium text-blue-600 mt-0.5">
-                        {getRoleLabel(acc.user?.role)}
+                        {getRoleLabel(acc.user)}
                       </span>
                     </div>
                   </div>

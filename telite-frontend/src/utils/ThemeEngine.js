@@ -15,6 +15,7 @@ export class ThemeEngine {
     // 2. Secondary branding colors
     if (branding.secondary_color) {
       const secondary = branding.secondary_color.trim();
+      root.style.setProperty("--secondary", secondary);
       root.style.setProperty("--secondary-color", secondary);
     }
 
@@ -60,6 +61,7 @@ export class ThemeEngine {
     root.style.removeProperty("--primary");
     root.style.removeProperty("--primary-dark");
     root.style.removeProperty("--primary-light");
+    root.style.removeProperty("--secondary");
     root.style.removeProperty("--secondary-color");
     root.style.removeProperty("--font-body");
     root.style.removeProperty("--font-display");

@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Badge, Avatar, Button } from "../components/common/ui";
+import { Badge, Avatar } from "../components/common/ui";
 import { Icon } from "../components/common/icons";
 import AccountSwitcher from "../components/common/AccountSwitcher";
+import ThemeSelector from "../components/common/ThemeSelector";
 
 export function DashboardShell({
   theme = "brand",
+  variant,
   brandMark,
   brandTitle,
   brandSubtitle,
@@ -23,9 +25,10 @@ export function DashboardShell({
   onSessionChange,
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const dashboardVariant = variant || theme;
 
   return (
-    <div className={`dashboard-shell ${collapsed ? 'is-collapsed' : ''}`} data-theme={theme}>
+    <div className={`dashboard-shell ${collapsed ? 'is-collapsed' : ''}`} data-dashboard-variant={dashboardVariant}>
       <aside className={`dashboard-sidebar ${collapsed ? 'dashboard-sidebar--collapsed' : ''}`}>
         <div className="sidebar-brand">
           <div className="sidebar-brand__mark" style={{ background: brandMark.background }}>
@@ -199,6 +202,12 @@ export function ProfileDropdown({ profile, onLogout, onNavigate }) {
             <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('settings'); }}>⚙️ Settings</button>
             <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('notifications'); }}>🔔 Notifications</button>
             <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('help'); }}>❓ Help & Support</button>
+          </div>
+          <div style={{ padding: "10px 12px", borderTop: "1px solid var(--border)" }}>
+            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-muted)", fontWeight: 700, marginBottom: "8px" }}>
+              Appearance
+            </div>
+            <ThemeSelector compact />
           </div>
           <div style={{ padding: "8px", borderTop: "1px solid var(--border)" }}>
             <button type="button" className="dropdown-item" style={{ color: "var(--danger)" }} onClick={onLogout}>🚪 Log out</button>

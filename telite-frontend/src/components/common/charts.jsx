@@ -28,10 +28,10 @@ export function ChartCanvas({
         const centerY = (chartArea.top + chartArea.bottom) / 2;
         ctx.save();
         ctx.textAlign = "center";
-        ctx.fillStyle = "#0F172A";
+        ctx.fillStyle = "var(--text-primary)";
         ctx.font = "600 12px Geist, sans-serif";
         ctx.fillText(centerLabel.title, centerX, centerY - 4);
-        ctx.fillStyle = "#94A3B8";
+        ctx.fillStyle = "var(--text-muted)";
         ctx.font = "500 10px Geist Mono, monospace";
         ctx.fillText(centerLabel.subtitle, centerX, centerY + 14);
         ctx.restore();

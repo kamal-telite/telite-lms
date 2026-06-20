@@ -31,9 +31,9 @@ export default function PlatformAdminPage({ session, onLogout }) {
     admins: storeAdmins, loadAdmins,
     syncTenants: storeSyncTenants, triggerGlobalSync, settingsState
   } = useAdminStore();
-  const organizations = Array.isArray(storeOrganizations) ? storeOrganizations : [];
-  const admins = Array.isArray(storeAdmins) ? storeAdmins : [];
-  const syncTenants = Array.isArray(storeSyncTenants) ? storeSyncTenants : [];
+  const organizations = useMemo(() => Array.isArray(storeOrganizations) ? storeOrganizations : [], [storeOrganizations]);
+  const admins = useMemo(() => Array.isArray(storeAdmins) ? storeAdmins : [], [storeAdmins]);
+  const syncTenants = useMemo(() => Array.isArray(storeSyncTenants) ? storeSyncTenants : [], [storeSyncTenants]);
 
   useEffect(() => {
     loadOrganizations();
@@ -143,7 +143,7 @@ export default function PlatformAdminPage({ session, onLogout }) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigate, toggleSidebar, triggerGlobalSync, pathname, settingsState]);
+  }, [navigate, toggleSidebar, triggerGlobalSync, pathname, settingsState, showToast]);
   
   // Close popovers
   useEffect(() => {
@@ -481,7 +481,7 @@ function OverviewTab({ searchQuery }) {
           <div className="page-title">Platform Overview</div>
           <div className="page-sub">Global control center for all organizations</div>
         </div>
-        <div style={{display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: '12px', color: 'var(--tx2)'}}>
+        <div style={{display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: '12px', color: 'var(--tx2)'}}>
           <span className="material-symbols-outlined" style={{fontSize: '15px'}}>calendar_today</span>
           May 18, 2026
         </div>
@@ -648,7 +648,7 @@ function OrganizationsTab({ searchQuery, showConfirm, onOpenCreateOrg, onViewOrg
     try {
       await updateOrgStatus(org.id, newStatus);
       showToast(`${org.name} ${newStatus}`, 'success');
-    } catch (err) {
+    } catch (_err) {
       showToast('Failed to update status', 'error');
     }
   };
@@ -868,7 +868,7 @@ function AdminControlTab({ searchQuery, showConfirm, onOpenInvite }) {
     try {
       await updateAdminStatus(admin.id, nextStatus);
       showToast(`Admin ${nextStatus}`, 'success');
-    } catch (err) {
+    } catch (_err) {
       showToast('Failed to update admin status', 'error');
     }
   };
@@ -1331,10 +1331,10 @@ export function InviteAdminModal({ open, onClose, onInvited }) {
               <label className="field-label">Role</label>
               <select className="field-select" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
                 <option value="super_admin">Platform Super Admin</option>
-                <option value="org_admin">Organization Admin</option>
+                <option value="super_admin">Organization Admin</option>
               </select>
             </div>
-            {form.role === 'org_admin' && (
+            {form.role === 'super_admin' && (
               <div className="field-group">
                 <label className="field-label">Organization <span style={{color:'var(--red)'}}>*</span></label>
                 <select className="field-select" required value={form.org_id} onChange={e => setForm({...form, org_id: e.target.value})}>
@@ -1348,7 +1348,7 @@ export function InviteAdminModal({ open, onClose, onInvited }) {
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={submitting || (form.role === 'org_admin' && !form.org_id)} className="btn btn-primary">
+            <button type="submit" disabled={submitting || (form.role === 'super_admin' && !form.org_id)} className="btn btn-primary">
               <span className="material-symbols-outlined" style={{fontSize: '15px'}}>send</span> {submitting ? 'Sending...' : 'Send Invitation'}
             </button>
           </div>
@@ -1442,7 +1442,7 @@ export function AnalyticsTab({ searchQuery }) {
     if (!liveMonitorActive) {
       setBarChartData(chartPeriod === 'weekly' ? weeklyData : monthlyData);
     }
-  }, [chartPeriod, liveMonitorActive]);
+  }, [chartPeriod, liveMonitorActive, monthlyData, weeklyData]);
 
   // Live Monitor loop
   useEffect(() => {
@@ -1460,7 +1460,7 @@ export function AnalyticsTab({ searchQuery }) {
       clearInterval(interval);
     }
     return () => { if (interval) clearInterval(interval); };
-  }, [liveMonitorActive]);
+  }, [liveMonitorActive, showToast]);
 
   const handlePeriodChange = (e) => {
     setChartPeriod(e.target.value);
@@ -1498,7 +1498,7 @@ export function AnalyticsTab({ searchQuery }) {
       result = result.filter(o => o.name.toLowerCase().includes(q) || o.plan.toLowerCase().includes(q));
     }
     return result;
-  }, [healthFilter, searchQuery]);
+  }, [healthFilter, searchQuery, initialAnalyticsOrgs]);
 
   // Dynamic dropdown popup menu on row click
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -1547,7 +1547,7 @@ export function AnalyticsTab({ searchQuery }) {
       </div>
 
       {/* KPI Strip */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px', overflow: 'hidden' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px', overflow: 'hidden' }}>
         <div style={{ padding: '20px 24px', borderRight: '1px solid var(--border)' }}>
           <div style={{ fontSize: '12px', color: 'var(--tx2)', fontWeight: 500, marginBottom: '6px' }}>Total Active Users</div>
           <div style={{ fontSize: '26px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'var(--fm)', letterSpacing: '-.5px' }}>12,482</div>
@@ -1581,7 +1581,7 @@ export function AnalyticsTab({ searchQuery }) {
       {/* Charts Row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '16px', marginBottom: '20px' }}>
         {/* Bar Chart */}
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px' }}>
+        <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px' }}>
           <div style={{ display: 'flex', justifycontent: 'space-between', alignitems: 'flex-start', marginBottom: '16px', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx1)' }}>User Growth Trend</div>
@@ -1609,7 +1609,7 @@ export function AnalyticsTab({ searchQuery }) {
         </div>
 
         {/* Donut Chart */}
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px' }}>
+        <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px' }}>
           <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx1)', marginBottom: '4px' }}>Org Distribution</div>
           <div style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '16px' }}>Market segment breakdown</div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -1651,7 +1651,7 @@ export function AnalyticsTab({ searchQuery }) {
       </div>
 
       {/* Usage per Org Table */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'visible' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'visible' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx1)' }}>Usage per Organization</div>
           <div style={{ position: 'relative' }}>
@@ -1842,7 +1842,7 @@ export function AuditLogsTab({ searchQuery }) {
       );
     }
     return result;
-  }, [orgFilter, severityFilter, searchTarget, searchQuery]);
+  }, [orgFilter, severityFilter, searchTarget, searchQuery, initialAuditLogs]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -1878,7 +1878,7 @@ export function AuditLogsTab({ searchQuery }) {
       </div>
 
       {/* Live Filters */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px 18px', marginBottom: '16px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px 18px', marginBottom: '16px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         <div>
           <label className="field-label" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--tx3)' }}>Date Range</label>
           <select className="field-select" style={{ height: '34px' }} value={dateRange} onChange={e => setDateRange(e.target.value)}>
@@ -1911,7 +1911,7 @@ export function AuditLogsTab({ searchQuery }) {
       </div>
 
       {/* Expandable Data Table */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden', marginBottom: '16px' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden', marginBottom: '16px' }}>
         <table style={{ width: '100%' }}>
           <thead>
             <tr style={{ background: 'var(--page)' }}>
@@ -1990,7 +1990,7 @@ export function AuditLogsTab({ searchQuery }) {
 
       {/* Mission Control metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px', borderLeft: '4px solid var(--red)' }}>
+        <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px', borderLeft: '4px solid var(--red)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--red)' }}>Security Alerts</span>
             <span className="badge badge-red" style={{ fontSize: '10px' }}>CRITICAL</span>
@@ -2001,7 +2001,7 @@ export function AuditLogsTab({ searchQuery }) {
           </div>
           <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>Suspicious login attempts in Tokyo region.</div>
         </div>
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px', borderLeft: '4px solid var(--primary)' }}>
+        <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px', borderLeft: '4px solid var(--primary)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary)' }}>System Throughput</span>
             <span className="badge badge-green" style={{ fontSize: '10px' }}>HEALTHY</span>
@@ -2012,7 +2012,7 @@ export function AuditLogsTab({ searchQuery }) {
           </div>
           <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>Admin ops per hour within normal baseline.</div>
         </div>
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px', borderLeft: '4px solid var(--green)' }}>
+        <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px', borderLeft: '4px solid var(--green)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--green)' }}>Active Sessions</span>
             <span className="badge badge-green" style={{ fontSize: '10px' }}>STABLE</span>
@@ -2102,7 +2102,7 @@ export function FeatureFlagsTab() {
       </div>
 
       {/* Feature Matrix Table */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden', marginBottom: '20px' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden', marginBottom: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '260px repeat(6, 1fr)', borderBottom: '1px solid var(--border)', background: 'var(--page)', position: 'sticky', top: '52px', zIndex: 10 }}>
           <div style={{ padding: '12px 18px', fontSize: '11px', fontWeight: 700, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Organization</div>
           {featureColumns.map((c, i) => (
@@ -2152,7 +2152,7 @@ export function FeatureFlagsTab() {
       </div>
 
       {/* Legend */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
           <span className="material-symbols-outlined" style={{ color: 'var(--primary)', fontSize: '18px' }}>info</span>
           <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx1)' }}>Configuration Legend</span>
@@ -2169,7 +2169,7 @@ export function FeatureFlagsTab() {
             <div style={{ width: '4px', height: '48px', background: 'var(--border)', borderRadius: '4px', flexShrink: 0, marginTop: '2px' }}></div>
             <div>
               <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--tx1)', marginBottom: '4px' }}>Inactive State (OFF)</div>
-              <div style={{ fontSize: '12px', color: 'var(--tx2)', lineHeight: '1.55' }}>Disables the module. Users will see a 'Coming Soon' placeholder or the entry point hidden.</div>
+              <div style={{ fontSize: '12px', color: 'var(--tx2)', lineHeight: '1.55' }}>Disables the module. Users will see a &apos;Coming Soon&apos; placeholder or the entry point hidden.</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -2243,7 +2243,7 @@ export function SettingsTab() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
         {/* General Settings */}
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '24px' }}>
+        <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--primary-lt)', display: 'flex', alignItems: 'center', justifycontent: 'center', justifyContent: 'center' }}>
               <span className="material-symbols-outlined" style={{ color: 'var(--primary)', fontSize: '18px' }}>tune</span>
@@ -2279,7 +2279,7 @@ export function SettingsTab() {
         </div>
 
         {/* Security Settings */}
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '24px' }}>
+        <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifycontent: 'center', justifyContent: 'center' }}>
               <span className="material-symbols-outlined" style={{ color: '#2563EB', fontSize: '18px' }}>security</span>
@@ -2304,7 +2304,7 @@ export function SettingsTab() {
       </div>
 
       {/* Notifications settings */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '24px' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
           <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--amber-bg)', display: 'flex', alignItems: 'center', justifycontent: 'center', justifyContent: 'center' }}>
             <span className="material-symbols-outlined" style={{ color: 'var(--amber)', fontSize: '18px' }}>notifications</span>
@@ -2418,7 +2418,7 @@ export function MoodleSyncTab({ searchQuery }) {
       result = result.filter(l => l.tenant.toLowerCase().includes(q) || l.event.toLowerCase().includes(q));
     }
     return result;
-  }, [logCatFilter, logStatusFilter, logSearch, searchQuery]);
+  }, [logCatFilter, logStatusFilter, logSearch, searchQuery, syncLogHistory]);
 
   const handleExportSyncCSV = () => {
     const headers = ['Timestamp', 'Category ID', 'Tenant', 'Event', 'Status', 'Duration'];
@@ -2446,7 +2446,7 @@ export function MoodleSyncTab({ searchQuery }) {
       </div>
 
       {/* Gateway Status Bar */}
-      <div id="gatewayBar" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '16px', flexWrap: 'wrap' }}>
+      <div id="gatewayBar" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <div id="gatewayDot" style={{ width: '10px', height: '10px', borderRadius: '50%', background: isSyncing ? 'var(--amber)' : 'var(--green)', boxShadow: '0 0 0 0 rgba(5,150,105,.4)', animation: 'gatewayPulse 2s infinite' }}></div>
@@ -2482,7 +2482,7 @@ export function MoodleSyncTab({ searchQuery }) {
       {activeSyncTab === 'control' && (
         <div className="sync-tab-panel" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '16px' }}>
           {/* Tenant Mapping Table */}
-          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
+          <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--tx1)' }}>Tenant Mapping</div>
             </div>
@@ -2563,7 +2563,7 @@ export function MoodleSyncTab({ searchQuery }) {
 
           {/* Timeline Logs Sidebar */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '16px' }}>
+            <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--tx1)' }}>Sync Logs</div>
                 <span className="badge badge-indigo" style={{ fontSize: '10px' }}>{currentSyncCat}</span>
@@ -2592,7 +2592,7 @@ export function MoodleSyncTab({ searchQuery }) {
                 View Detailed Log
               </button>
             </div>
-            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '16px' }}>
+            <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '16px' }}>
               <div style={{ fontSize: '10px', fontWeight: '700', color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: '8px' }}>Health Metric</div>
               <div style={{ fontSize: '32px', fontWeight: '700', color: 'var(--primary)', fontFamily: 'var(--fm)', lineHeight: 1 }}>
                 <span>{healthPerCat[currentSyncCat]}</span>
@@ -2609,7 +2609,7 @@ export function MoodleSyncTab({ searchQuery }) {
 
       {/* Sync Logs tab panel */}
       {activeSyncTab === 'logs' && (
-        <div className="sync-tab-panel" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', marginBottom: '16px' }}>
+        <div className="sync-tab-panel" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', marginBottom: '16px' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border2)', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
             <div>
               <label className="field-label" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--tx3)' }}>Date Range</label>
@@ -2685,21 +2685,21 @@ export function MoodleSyncTab({ searchQuery }) {
       {activeSyncTab === 'reports' && (
         <div className="sync-tab-panel">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '20px' }}>
-            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
+            <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
               <div style={{ fontSize: '12px', color: 'var(--tx2)', fontWeight: 500, marginBottom: '6px' }}>Total Syncs (30 days)</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
                 <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'var(--fm)' }}>284</div>
                 <span className="badge badge-indigo" style={{ fontSize: '10px' }}>+12%</span>
               </div>
             </div>
-            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
+            <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
               <div style={{ fontSize: '12px', color: 'var(--tx2)', fontWeight: 500, marginBottom: '6px' }}>Avg Sync Time</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
                 <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--tx1)', fontFamily: 'var(--fm)' }}>1.4s</div>
                 <span className="badge badge-gray" style={{ fontSize: '10px' }}>Stable</span>
               </div>
             </div>
-            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
+            <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
               <div style={{ fontSize: '12px', color: 'var(--tx2)', fontWeight: 500, marginBottom: '6px' }}>Failed Syncs</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
                 <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--tx1)', fontFamily: 'var(--fm)' }}>6</div>
@@ -2709,7 +2709,7 @@ export function MoodleSyncTab({ searchQuery }) {
           </div>
 
           {/* Bar Success percentage Chart */}
-          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px', marginBottom: '16px' }}>
+          <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px', marginBottom: '16px' }}>
             <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--tx1)', marginBottom: '4px' }}>Sync Success Rate — Last 14 Days</div>
             <div style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '20px' }}>Daily sync completion percentage</div>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', gap: '6px', height: '120px', padding: '0 4px' }}>
@@ -2725,7 +2725,7 @@ export function MoodleSyncTab({ searchQuery }) {
           </div>
 
           {/* Category Health Table */}
-          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
+          <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border2)', fontSize: '14px', fontWeight: '700', color: 'var(--tx1)' }}>Category Health Summary</div>
             <table style={{ width: '100%' }}>
               <thead>
@@ -2913,7 +2913,7 @@ export function HelpTab({ onOpenOrgModal, onOpenInviteModal, onNavigate }) {
             <span className="material-symbols-outlined" style={{ color: 'var(--primary)' }}>keyboard</span>
             <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx1)' }}>Global Keyboard Shortcuts</span>
           </div>
-          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
+          <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
             <table style={{ width: '100%' }}>
               <thead>
                 <tr style={{ background: 'var(--page)' }}>
@@ -2938,7 +2938,7 @@ export function HelpTab({ onOpenOrgModal, onOpenInviteModal, onNavigate }) {
         {/* Right Column: Contact + Status + Quick Links */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Contact Support */}
-          <div id="helpContactCard" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
+          <div id="helpContactCard" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--tx1)', marginBottom: '14px' }}>Contact Support</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--page)', borderRadius: 'var(--r)' }}>
@@ -2981,7 +2981,7 @@ export function HelpTab({ onOpenOrgModal, onOpenInviteModal, onNavigate }) {
           </div>
 
           {/* System Status pulsing monitors */}
-          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
+          <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--tx1)' }}>System Status</div>
               <span className="badge badge-green" style={{ fontSize: '10px' }}>ALL SYSTEMS LIVE</span>
@@ -3007,7 +3007,7 @@ export function HelpTab({ onOpenOrgModal, onOpenInviteModal, onNavigate }) {
           </div>
 
           {/* Quick links card */}
-          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
+          <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '18px' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: '10px' }}>Admin Quick Links</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div onClick={() => onNavigate("dashboard")} className="help-ql-row">Overview Dashboard <span className="material-symbols-outlined help-ql-arrow">arrow_forward</span></div>
@@ -3019,7 +3019,7 @@ export function HelpTab({ onOpenOrgModal, onOpenInviteModal, onNavigate }) {
       </div>
 
       {/* Changelog Footer Strip */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: '16px', marginTop: '20px', flexWrap: 'wrap' }}>
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: '16px', marginTop: '20px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingRight: '16px', borderRight: '1px solid var(--border)', flexShrink: 0 }}>
           <span style={{ background: 'var(--primary)', color: '#fff', padding: '3px 10px', borderRadius: '6px', fontFamily: 'var(--fm)', fontSize: '11px', fontWeight: 700 }}>v5.1.0</span>
           <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Latest Update</span>

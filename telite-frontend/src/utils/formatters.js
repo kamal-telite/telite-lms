@@ -104,9 +104,7 @@ export function getRoleLabel(user) {
   if (user.role === "category_admin") {
     return user.category_scope ? titleize(user.category_scope) : "Category Admin";
   }
-  if (user.role === "moodle_user") {
-    return "Moodle User";
-  }
+
   if (user.role && user.role !== "learner") {
     return titleize(user.role);
   }

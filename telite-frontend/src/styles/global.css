@@ -1,27 +1,27 @@
 :root {
-  --bg: #f8f9fb;
-  --surface: #ffffff;
-  --surface-2: #f2f4f8;
-  --surface-3: #eef0f5;
-  --border: #e4e7ef;
-  --border-strong: #cdd2e0;
+  --bg: var(--surface-bg);
+  --surface: var(--surface-raised);
+  --surface-2: var(--surface-sunken);
+  --border: var(--border-subtle);
 
   --brand: #2563eb;
   --brand-light: #eff4ff;
   --brand-mid: #bfdbfe;
   --brand-dark: #1d4ed8;
 
-  --emerald: #059669;
-  --emerald-light: #ecfdf5;
-  --emerald-mid: #a7f3d0;
+  --emerald: var(--success);
+  --emerald-light: var(--success-bg);
+  --emerald-mid: var(--success-bg);
 
-  --amber: #d97706;
-  --amber-light: #fffbeb;
-  --amber-mid: #fde68a;
+  --amber: var(--warning);
+  --amber-light: var(--warning-bg);
+  --amber-mid: var(--warning-bg);
 
-  --red: #dc2626;
-  --red-light: #fef2f2;
-  --red-mid: #fecaca;
+  --red: var(--error);
+  --red-light: var(--error-bg);
+  --red-mid: var(--error-bg);
+  --danger: var(--error);
+  --danger-light: var(--error-bg);
 
   --violet: #7c3aed;
   --violet-light: #f5f3ff;
@@ -31,10 +31,7 @@
   --teal-light: #ecfeff;
   --teal-mid: #a5f3fc;
 
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --text-placeholder: #cbd5e1;
+  --text-placeholder: var(--text-muted);
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -101,34 +98,6 @@ textarea {
 a {
   color: inherit;
   text-decoration: none;
-}
-
-[data-theme="super"] {
-  --theme-accent: var(--violet);
-  --theme-accent-light: var(--violet-light);
-  --theme-accent-mid: var(--violet-mid);
-  --theme-accent-dark: #6d28d9;
-}
-
-[data-theme="ats"] {
-  --theme-accent: var(--brand);
-  --theme-accent-light: var(--brand-light);
-  --theme-accent-mid: var(--brand-mid);
-  --theme-accent-dark: var(--brand-dark);
-}
-
-[data-theme="stats"] {
-  --theme-accent: var(--teal);
-  --theme-accent-light: var(--teal-light);
-  --theme-accent-mid: var(--teal-mid);
-  --theme-accent-dark: #0e7490;
-}
-
-[data-theme="learner"] {
-  --theme-accent: var(--violet);
-  --theme-accent-light: var(--violet-light);
-  --theme-accent-mid: var(--violet-mid);
-  --theme-accent-dark: #6d28d9;
 }
 
 .dashboard-shell {

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { Avatar, Badge, Button, EmptyState, StatCard, Panel, useToast } from "../common/ui";
+import { Avatar, Badge, Button, EmptyState, Panel, useToast } from "../common/ui";
 import { TaskBoardKanban } from "./TaskBoard";
 import { ChartCanvas } from "../common/charts";
 import { Icon } from "../common/icons";
@@ -86,7 +86,7 @@ export function ActivityFeedTab({ events = [] }) {
 }
 
 export function SettingsTab({ dashboard }) {
-  const [moodleStatus, setMoodleStatus] = useState("connected");
+  const [moodleStatus] = useState("connected");
   const { showToast } = useToast();
 
   return (
@@ -422,7 +422,7 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
           <div className="activity-list">
             {atRiskStudents.length > 0 ? atRiskStudents.map((learner) => (
               <div className="activity-item" key={learner.id}>
-                <Avatar initials={getInitials(learner.full_name)} gradient={["#ef4444", "#991b1b"]} size={32} />
+                <Avatar initials={getInitials(learner.full_name)} gradient={["var(--error)", "var(--error)"]} size={32} />
                 <div style={{ flex: 1 }}>
                   <div className="row-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {learner.full_name}
@@ -462,8 +462,8 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-              x: { border: { display: false }, grid: { display: false }, ticks: { color: "#475569" } },
-              y: { min: 0, max: 100, border: { display: false }, grid: { color: "#F2F4F8" }, ticks: { color: "#94A3B8" } },
+              x: { border: { display: false }, grid: { display: false }, ticks: { color: "var(--text-secondary)" } },
+              y: { min: 0, max: 100, border: { display: false }, grid: { color: "var(--border-subtle)" }, ticks: { color: "var(--text-muted)" } },
             },
           }}
         />
@@ -487,8 +487,8 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-              x: { border: { display: false }, grid: { display: false }, ticks: { color: "#475569", font: { family: "Geist", size: 10 } } },
-              y: { min: 0, max: 100, border: { display: false }, grid: { color: "#F2F4F8" }, ticks: { color: "#94A3B8", font: { family: "Geist Mono", size: 10 } } },
+              x: { border: { display: false }, grid: { display: false }, ticks: { color: "var(--text-secondary)", font: { family: "Geist", size: 10 } } },
+              y: { min: 0, max: 100, border: { display: false }, grid: { color: "var(--border-subtle)" }, ticks: { color: "var(--text-muted)", font: { family: "Geist Mono", size: 10 } } },
             },
           }}
         />
@@ -678,7 +678,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
           {activeTab === "general" && (
             <div className="dashboard-stack">
               <div style={{ display: "flex", gap: 24, alignItems: "center", marginBottom: 24 }}>
-                <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "#059669"]} size={80} />
+                <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "var(--success)"]} size={80} />
                 <div>
                   <Button tone="ghost" style={{ marginBottom: 8 }}>Upload new photo</Button>
                   <div className="muted" style={{ fontSize: 12 }}>JPG, GIF or PNG. Max size of 800K</div>

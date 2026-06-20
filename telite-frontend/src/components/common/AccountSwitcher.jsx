@@ -30,6 +30,15 @@ function roleLabel(account) {
   return String(account?.role || "user").replaceAll("_", " ");
 }
 
+function routerNavigate(to, replace = true) {
+  if (replace) {
+    window.location.replace(to);
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent("telite:router-navigate", { detail: { to, replace } }));
+}
+
 export default function AccountSwitcher({ session, onSessionChange }) {
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
@@ -74,7 +83,7 @@ export default function AccountSwitcher({ session, onSessionChange }) {
       onSessionChange?.(nextSession);
       setAccounts(getAccounts());
       setOpen(false);
-      window.location.assign(getDefaultRoute(nextSession.user));
+      routerNavigate(getDefaultRoute(nextSession.user));
     } catch (error) {
       showToast(getErrorMessage(error, "Add this account again to switch to it."), "warning");
     } finally {
@@ -96,7 +105,7 @@ export default function AccountSwitcher({ session, onSessionChange }) {
       setAccounts(getAccounts());
       setOpen(false);
       showToast("Account added and switched.", "success");
-      window.location.assign(getDefaultRoute(nextSession.user));
+      routerNavigate(getDefaultRoute(nextSession.user));
     } catch (error) {
       showToast(getErrorMessage(error, "Could not add account."), "error");
     } finally {

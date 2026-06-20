@@ -54,7 +54,7 @@ export default function ResetPasswordPage() {
 
   if (!token) {
     return (
-      <div className="login-page" data-theme="brand">
+      <div className="login-page" data-auth-variant="brand">
         <div className="login-shell">
           <section className="login-card" style={{ marginTop: "10vh", marginInline: "auto" }}>
             <div className="login-card__header">
@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="login-page" data-theme="brand">
+    <div className="login-page" data-auth-variant="brand">
       <div className="login-page__glow login-page__glow--violet" />
       <div className="login-page__glow login-page__glow--blue" />
 

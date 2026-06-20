@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDefaultRoute } from "../../context/session";
+import { useTheme } from "../../providers/ThemeProvider";
 import CommandPalette from "./components/CommandPalette";
 import "../../styles/landing.css";
 import { Line } from "react-chartjs-2";
@@ -426,7 +427,7 @@ export default function LandingPage({ session }) {
   const [activeTab, setActiveTab] = useState("college");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  const { resolvedTheme, toggleTheme } = useTheme();
   const vantaHeroRef = useRef(null);
   const vantaCtaRef = useRef(null);
   const heroTypedRef = useRef(null);
@@ -445,16 +446,6 @@ export default function LandingPage({ session }) {
   const [showSupportWidget, setShowSupportWidget] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSuccess, setNewsletterSuccess] = useState(false);
-
-  // Theme toggle
-  const toggleTheme = useCallback(() => {
-    setIsDark(prev => {
-      const next = !prev;
-      document.documentElement.dataset.theme = next ? '' : 'light';
-      document.body.style.background = next ? '#07006c' : '#f8f9ff';
-      return next;
-    });
-  }, []);
 
   // Cmd+K keyboard shortcut for command palette
   useEffect(() => {
@@ -826,7 +817,7 @@ export default function LandingPage({ session }) {
           <span className="sticky-cta-text">Transform your learning operations with Telite LMS.</span>
           <div className="sticky-cta-actions">
             <button className="btn-sticky-contact magnetic" onClick={() => setShowContactModal(true)}>Book a Demo</button>
-            <Link to="/signup" className="btn-sticky-primary magnetic">Get Started Free</Link>
+            <Link to="/login" className="btn-sticky-primary magnetic">Get Started Free</Link>
           </div>
         </div>
       </div>
@@ -855,11 +846,11 @@ export default function LandingPage({ session }) {
             <span>Commands</span><kbd>⌘K</kbd>
           </button>
           <button className="theme-btn magnetic" onClick={toggleTheme} aria-label="Toggle Theme">
-            {isDark ? '☀️' : '🌙'}
+            {resolvedTheme === "dark" ? '☀️' : '🌙'}
           </button>
           {dashboardLink ? <Link to={dashboardLink} className="btn-primary magnetic">Go to Dashboard</Link> : <>
             <Link to="/login" className="btn-ghost">Sign in</Link>
-            <Link to="/signup" className="btn-primary magnetic">Get started free</Link>
+            <Link to="/login" className="btn-primary magnetic">Get started free</Link>
           </>}
         </div>
 
@@ -892,7 +883,7 @@ export default function LandingPage({ session }) {
         <div className="mobile-drawer-actions">
           {dashboardLink ? <Link to={dashboardLink} className="btn-drawer-primary" onClick={() => setIsMobileMenuOpen(false)}>Go to Dashboard</Link> : <>
             <Link to="/login" className="btn-drawer-ghost" onClick={() => setIsMobileMenuOpen(false)}>Sign in</Link>
-            <Link to="/signup" className="btn-drawer-primary" onClick={() => setIsMobileMenuOpen(false)}>Get started free</Link>
+            <Link to="/login" className="btn-drawer-primary" onClick={() => setIsMobileMenuOpen(false)}>Get started free</Link>
           </>}
         </div>
       </div>
@@ -913,7 +904,7 @@ export default function LandingPage({ session }) {
             </h1>
             <p className="hero-sub">Streamline education and training with role-based dashboards, real-time tracking, and seamless LMS integration.</p>
             <div className="hero-ctas">
-              <Link to={dashboardLink || "/signup"} className="btn-hero-primary magnetic">{dashboardLink ? "Go to Dashboard" : "Get started free"}</Link>
+              <Link to={dashboardLink || "/login"} className="btn-hero-primary magnetic">{dashboardLink ? "Go to Dashboard" : "Get started free"}</Link>
               <a href="#features" className="btn-hero-ghost magnetic">Explore features</a>
             </div>
             <div className="hero-ticker">
@@ -993,7 +984,7 @@ export default function LandingPage({ session }) {
           <div className="ai-showcase-left">
             <span className="section-eyebrow ai-glow-text">AI Diagnostics</span>
             <h2 className="section-title text-light">Predictive learning<br />intelligence</h2>
-            <p className="section-sub text-light-muted">Telite doesn't just record scores; our proactive machine learning layer analyzes cognitive habits, identifies fatigue patterns, and alerts instructors before a learner falls behind.</p>
+            <p className="section-sub text-light-muted">Telite doesn&apos;t just record scores; our proactive machine learning layer analyzes cognitive habits, identifies fatigue patterns, and alerts instructors before a learner falls behind.</p>
             
             <div className="ai-features-list">
               <div className="ai-feat-item">
@@ -1045,7 +1036,7 @@ export default function LandingPage({ session }) {
               </div>
               <div className="ai-card-remedial">
                 <div className="ai-remedial-title">AI Suggested Remedial Action</div>
-                <p className="ai-remedial-desc">Insert micro-conceptual recap quiz covering "Symmetric Cipher Blocks" and delay Module 4 by 48 hours.</p>
+                <p className="ai-remedial-desc">Insert micro-conceptual recap quiz covering &quot;Symmetric Cipher Blocks&quot; and delay Module 4 by 48 hours.</p>
                 <button className="btn-ai-action">Approve Path</button>
               </div>
             </div>
@@ -1346,7 +1337,7 @@ export default function LandingPage({ session }) {
       {/* ── TESTIMONIALS ── */}
       <section id="testimonials">
         <div className="header-wrap"><span className="section-eyebrow">Testimonials</span><h2 className="section-title">Trusted by learning teams</h2></div>
-        <div className="marquee-outer"><div className="marquee-track">{[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => <div className="testi-card" key={`${t.name}-${idx}`}><div className="stars">{Array.from({ length: t.stars }).map((_, i) => <span key={i} className="star">★</span>)}</div><p className="testi-quote">"{t.quote}"</p><div className="testi-author"><div className="testi-avatar">{t.name.split(" ").map((n) => n[0]).join("")}</div><div><div className="testi-name">{t.name}</div><div className="testi-role">{t.role}</div></div></div></div>)}</div></div>
+        <div className="marquee-outer"><div className="marquee-track">{[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => <div className="testi-card" key={`${t.name}-${idx}`}><div className="stars">{Array.from({ length: t.stars }).map((_, i) => <span key={i} className="star">★</span>)}</div><p className="testi-quote">&quot;{t.quote}&quot;</p><div className="testi-author"><div className="testi-avatar">{t.name.split(" ").map((n) => n[0]).join("")}</div><div><div className="testi-name">{t.name}</div><div className="testi-role">{t.role}</div></div></div></div>)}</div></div>
       </section>
 
       {/* ── PRICING ── */}
@@ -1393,7 +1384,7 @@ export default function LandingPage({ session }) {
                   ))}
                 </ul>
                 <Link
-                  to={dashboardLink || (p.price.monthly === "Custom" ? "#" : "/signup")}
+                  to={dashboardLink || (p.price.monthly === "Custom" ? "#" : "/login")}
                   className={`btn-plan magnetic ${p.highlight ? "btn-plan-white" : p.price.monthly === "Custom" ? "btn-plan-ghost" : "btn-plan-outline"}`}
                   onClick={(e) => {
                     if (p.price.monthly === "Custom") {
@@ -1436,7 +1427,7 @@ export default function LandingPage({ session }) {
           <h2 className="cta-title">Ready to modernise your<br />learning operations?</h2>
           <p className="cta-sub">Join thousands of colleges and companies already using Telite LMS.</p>
           <div className="cta-btns">
-            <Link to={dashboardLink || "/signup"} className="btn-cta-white magnetic">{dashboardLink ? "Go to Dashboard" : "Get started free"}</Link>
+            <Link to={dashboardLink || "/login"} className="btn-cta-white magnetic">{dashboardLink ? "Go to Dashboard" : "Get started free"}</Link>
             <a href="#features" className="btn-cta-outline magnetic">Explore features</a>
           </div>
         </div>

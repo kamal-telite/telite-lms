@@ -177,7 +177,7 @@ export default function CategoryStatsPage({ session, onLogout }) {
   return (
     <>
       <DashboardShell
-        theme="stats"
+        variant="stats"
         brandMark={{ label: "ATS", background: "linear-gradient(135deg, #0891B2, #2563EB)" }}
         brandTitle="Telite LMS"
         brandSubtitle="ats · stats panel"

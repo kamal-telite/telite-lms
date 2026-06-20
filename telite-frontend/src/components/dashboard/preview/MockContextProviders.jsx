@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import React, { createContext, useMemo } from 'react';
+
 
 // We override the Auth and App contexts to provide mock data for the preview shell.
 export const MockAuthContext = createContext(null);

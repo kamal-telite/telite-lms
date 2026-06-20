@@ -6,13 +6,13 @@
  * - CSRF token read from telite_csrf_token cookie, sent as X-CSRF-Token header
  * - No JWT tokens read from or written to localStorage
  * - Token refresh uses the HttpOnly refresh cookie (no body token needed)
- * - Automatic redirect to /login on 401 after failed refresh
+ * - Emits telite:auth-expired on 401 after failed refresh so the router owns navigation
  */
 
 import axios from "axios";
 import {
   buildSessionFromAuth,
-  clearSession,
+  clearClientSessionState,
   getCsrfToken,
   getSession,
   mergeAuthPayload,
@@ -91,9 +91,9 @@ api.interceptors.response.use(
         return api(original);
       } catch (refreshError) {
         _processQueue(refreshError);
-        clearSession();
-        if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-          window.location.assign("/login");
+        clearClientSessionState();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("telite:auth-expired"));
         }
         return Promise.reject(refreshError);
       } finally {
@@ -140,6 +140,14 @@ export async function logoutRequest() {
 
 export async function fetchMe() {
   return unwrap(await api.get("/auth/me"));
+}
+
+export async function updateThemePreference(themePreference) {
+  return unwrap(
+    await api.patch("/auth/preferences/theme", {
+      theme_preference: themePreference,
+    })
+  );
 }
 
 export async function forgotPassword(email) {
@@ -337,7 +345,7 @@ export async function fetchEnrollmentRequests(params = {}) {
 }
 
 export async function manualEnroll(payload) {
-  return unwrap(await api.post("/enrol/manual", payload));
+  return unwrap(await api.post("/api/v1/enrol/manual", payload));
 }
 
 export async function selfEnroll(payload) {
@@ -445,7 +453,14 @@ export async function submitSignupRequest(payload) {
 }
 
 export async function fetchVerifications(params = {}) {
-  return unwrap(await api.get("/admin/verifications", { params }));
+  try {
+    return unwrap(await api.get("/admin/verifications", { params }));
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      return { verifications: [] };
+    }
+    throw error;
+  }
 }
 
 export async function fetchVerificationDetail(id) {

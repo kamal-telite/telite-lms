@@ -25,7 +25,7 @@ const ROLE_CAPABILITIES = {
     "version.view", "version.create", "version.rollback",
     "audit.view", "audit.export"
   ],
-  org_admin: [
+  super_admin: [
     "block.create", "block.edit", "block.delete",
     "module.create", "module.edit", "module.delete",
     "section.create", "section.edit", "section.delete",
@@ -36,6 +36,9 @@ const ROLE_CAPABILITIES = {
     "audit.view", "audit.export", "permission.manage"
   ]
 };
+
+// Temporary compatibility alias for one release cycle
+ROLE_CAPABILITIES.org_admin = ROLE_CAPABILITIES.super_admin;
 
 export function useCapability() {
   const session = getSession();

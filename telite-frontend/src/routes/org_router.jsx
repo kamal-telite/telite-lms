@@ -21,7 +21,7 @@ export default function OrgRouter({ session, onLogout }) {
             <Route
               path="admin/*"
               element={
-                <ProtectedRoute session={session} allowRoles={["super_admin", "category_admin"]}>
+                <ProtectedRoute session={session} allowRoles={["category_admin"]}>
                   <CategoryAdminPage session={session} onLogout={onLogout} />
                 </ProtectedRoute>
               }
@@ -29,7 +29,7 @@ export default function OrgRouter({ session, onLogout }) {
             <Route
               path="stats"
               element={
-                <ProtectedRoute session={session} allowRoles={["super_admin", "category_admin"]}>
+                <ProtectedRoute session={session} allowRoles={["category_admin"]}>
                   <CategoryStatsPage session={session} onLogout={onLogout} />
                 </ProtectedRoute>
               }
@@ -37,7 +37,7 @@ export default function OrgRouter({ session, onLogout }) {
             <Route
               path="builder/:course_id"
               element={
-                <ProtectedRoute session={session} allowRoles={["super_admin", "category_admin"]}>
+                <ProtectedRoute session={session} allowRoles={["category_admin"]}>
                   <CourseBuilderPage session={session} onLogout={onLogout} />
                 </ProtectedRoute>
               }
@@ -45,7 +45,7 @@ export default function OrgRouter({ session, onLogout }) {
             <Route
               path="paths/:pathId"
               element={
-                <ProtectedRoute session={session} allowRoles={["super_admin", "category_admin"]}>
+                <ProtectedRoute session={session} allowRoles={["category_admin"]}>
                   <LearningPathBuilder session={session} onLogout={onLogout} />
                 </ProtectedRoute>
               }

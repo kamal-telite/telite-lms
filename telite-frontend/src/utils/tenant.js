@@ -47,7 +47,10 @@ export function getTenantSlugFromUrl(sessionUser) {
   }
 
   // 4. Logged-in Session Profile scope
-  if (sessionUser?.category_scope) {
+  if (
+    sessionUser?.category_scope &&
+    ["learner", "category_admin"].includes(sessionUser?.role)
+  ) {
     return sessionUser.category_scope.toLowerCase().trim();
   }
 
