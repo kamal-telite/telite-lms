@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import TokenData, auth_router, get_current_user
 from app.api.routes.dashboard import dashboard_router
-from app.api.routes.enrolments import enrol_router
+from app.api.routes.enrolments import enrol_router, v1_enrol_router
 from app.api.routes.management import management_router
 from app.api.routes.pal import pal_router
 from app.api.routes.payments import payment_router
@@ -147,11 +147,14 @@ def create_app() -> FastAPI:
         return response
 
     from app.api.routes.learner import learner_router
+    from app.api.routes.assignments import assignment_router
     from app.api.routes.player_api import player_router
     from app.api.routes.authoring import authoring_router
     app.include_router(auth_router)
+    app.include_router(assignment_router, prefix="/api/v1")
     app.include_router(learner_router, prefix="/api/v1")
     app.include_router(player_router, prefix="/api/v1")
+    app.include_router(v1_enrol_router, prefix="/api/v1")
     app.include_router(authoring_router)
     app.include_router(dashboard_router)
     app.include_router(management_router)

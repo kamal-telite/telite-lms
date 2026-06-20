@@ -35,8 +35,12 @@ from app.core.security import (
 from app.core.rate_limiter import clear_attempts, is_limited, record_attempt
 from app.services.email import send_password_reset_email
 from app.core.password_utils import verify_password
+from sqlalchemy import or_, select, update, text
 from sqlalchemy.orm import Session
-from app.db.engine import apply_platform_context, apply_tenant_context, db_session, platform_db_session
+
+from app.db.rls import set_rls_context
+from app.db.engine import db_session
+from app.models.user import User
 from app.repositories.user_repo import UserRepository, fetch_user_by_id
 from app.repositories.auth_repo import AuthRepository
 
@@ -49,6 +53,7 @@ FORGOT_PASSWORD_WINDOW_SECONDS = int(os.getenv("TELITE_FORGOT_PASSWORD_WINDOW_SE
 RESET_PASSWORD_LIMIT = int(os.getenv("TELITE_RESET_PASSWORD_LIMIT", "5"))
 RESET_PASSWORD_WINDOW_SECONDS = int(os.getenv("TELITE_RESET_PASSWORD_WINDOW_SECONDS", "900"))
 REFRESH_TOKEN_DAYS = int(os.getenv("TELITE_REFRESH_TOKEN_DAYS", "14"))
+THEME_PREFERENCES = {"light", "dark", "system"}
 
 # Cookie settings — tighten in production
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
@@ -174,6 +179,7 @@ class TokenData(BaseModel):
     Phase 4: includes permissions list for fast frontend checks.
     """
     id: str
+    username: str | None = None
     email: str
     role: str
     full_name: str
@@ -181,6 +187,7 @@ class TokenData(BaseModel):
     org_id: int | None = None
     is_platform_admin: bool = False
     permissions: list[str] = []
+    theme_preference: str = "system"
 
     def has_permission(self, permission: str) -> bool:
         """Fast permission check without DB lookup."""
@@ -194,6 +201,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user_id: str
+    username: str | None = None
     role: str
     name: str
     email: str
@@ -201,6 +209,7 @@ class TokenResponse(BaseModel):
     org_id: int | None = None
     is_platform_admin: bool = False
     permissions: list[str] = []
+    theme_preference: str = "system"
 
 
 class RefreshRequest(BaseModel):
@@ -220,11 +229,15 @@ class ResetPasswordRequest(BaseModel):
     password: str
 
 
+class ThemePreferenceRequest(BaseModel):
+    theme_preference: str
+
+
 # ── Core auth functions ───────────────────────────────────────────────────────
 
 def authenticate_user(db: Session, identifier: str, password: str):
     repo = UserRepository(db)
-    user = repo.get_by_identifier(identifier, include_hash=True)
+    user = repo.get_by_identifier_for_auth(identifier)
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -253,7 +266,11 @@ def get_current_user(
 
     Phase 4: permissions list populated from JWT claims.
     """
-    token = cookie_token or bearer_token
+    bearer = bearer_token.strip() if bearer_token else None
+    if bearer and bearer.lower() in {"null", "undefined", "none"}:
+        bearer = None
+
+    token = bearer or cookie_token
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -262,10 +279,16 @@ def get_current_user(
         )
 
     payload = decode_token(token, token_type="access")
-    if payload.get("is_platform_admin"):
-        apply_platform_context(db)
-    elif payload.get("org_id") is not None:
-        apply_tenant_context(db, int(payload["org_id"]))
+    
+    org_id = payload.get("org_id")
+    is_platform_admin = payload.get("is_platform_admin", False)
+    
+    if org_id is not None:
+        set_rls_context(db, org_id)
+    elif is_platform_admin:
+        db.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token payload: no tenant context")
 
     repo = UserRepository(db)
     user = repo.get_by_id(payload["sub"])
@@ -274,6 +297,7 @@ def get_current_user(
 
     return TokenData(
         id=user.id,
+        username=payload.get("username") or user.username,
         email=payload.get("email") or user.email,
         role=payload.get("role") or user.role,
         full_name=payload.get("name") or user.full_name,
@@ -281,6 +305,7 @@ def get_current_user(
         org_id=payload.get("org_id", user.org_id),
         is_platform_admin=bool(payload.get("is_platform_admin", user.is_platform_admin)),
         permissions=payload.get("permissions", []),
+        theme_preference=user.theme_preference or "system",
     )
 
 
@@ -362,20 +387,19 @@ def ensure_org_access(current_user: TokenData, target_org_id: int | None) -> int
 
 # ── Token helpers ─────────────────────────────────────────────────────────────
 
-def _build_token_response(user: dict[str, Any], refresh_token: str, db: Session | None = None) -> TokenResponse:
+def _build_token_response(user: dict[str, Any], refresh_token: str) -> TokenResponse:
     from app.core.permissions import resolve_permissions
-    access_token = create_access_token(create_access_payload(user, db))
+    access_token = create_access_token(create_access_payload(user))
     permissions = resolve_permissions(
         user["role"],
         bool(user.get("is_platform_admin")),
         user.get("category_scope"),
-        user.get("org_id"),
-        db
     )
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         user_id=user["id"],
+        username=user.get("username"),
         role=user["role"],
         name=user["full_name"],
         email=user["email"],
@@ -383,6 +407,7 @@ def _build_token_response(user: dict[str, Any], refresh_token: str, db: Session 
         org_id=user.get("org_id"),
         is_platform_admin=bool(user.get("is_platform_admin")),
         permissions=permissions,
+        theme_preference=user.get("theme_preference") or "system",
     )
 
 
@@ -395,32 +420,40 @@ def issue_login_response(
     """Issue tokens, persist session, set cookies, return response body."""
     user_dict = {
         "id": user.id,
+        "username": user.username,
         "email": user.email,
         "role": user.role,
         "full_name": user.full_name,
         "category_scope": user.category_scope,
         "org_id": user.org_id,
         "is_platform_admin": user.is_platform_admin,
+        "theme_preference": user.theme_preference or "system",
     }
     refresh_token = create_refresh_token(create_refresh_payload(user_dict))
     expires_at = (
         datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS)
     ).strftime("%Y-%m-%d %H:%M:%S")
     
-    auth_repo = AuthRepository(db)
-    auth_repo.create_session(
-        user_id=user.id,
-        org_id=user.org_id,
-        refresh_token=refresh_token,
-        expires_at=expires_at,
-    )
-    
-    user_repo = UserRepository(db)
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    user_repo.update_last_login(user.id, now_str)
+    try:
+        set_rls_context(db, user.org_id)
 
-    token_response = _build_token_response(user_dict, refresh_token, db)
+        auth_repo = AuthRepository(db)
+        auth_repo.create_session(
+            user_id=user.id,
+            org_id=user.org_id,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+        )
+        
+        user_repo = UserRepository(db)
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        user_repo.update_last_login(user.id, now_str)
+    finally:
+        db.execute(text("SELECT set_config('app.current_org_id', '', true)"))
+
+    token_response = _build_token_response(user_dict, refresh_token)
     csrf_token = generate_csrf_token()
+
 
     # Set HttpOnly cookies
     _set_auth_cookies(
@@ -444,7 +477,7 @@ def login(
     request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(platform_db_session),
+    db: Session = Depends(db_session),
 ) -> TokenResponse:
     client_ip = _client_ip(request)
     ip_key = _rate_key("auth-login-ip", client_ip)
@@ -472,38 +505,45 @@ def refresh(
     response: Response,
     body: RefreshRequest | None = None,
     cookie_refresh: str | None = Cookie(default=None, alias="telite_refresh_token"),
-    db: Session = Depends(platform_db_session),
+    db: Session = Depends(db_session),
 ) -> TokenResponse:
-    # Prefer cookie, fall back to body
     refresh_token = cookie_refresh or (body.refresh_token if body else None)
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token required")
 
     payload = decode_token(refresh_token, token_type="refresh")
-    session = get_session_by_token(refresh_token)
-    if not session:
-        raise HTTPException(status_code=401, detail="Refresh token has been revoked")
 
-    user = fetch_user_by_id(payload["sub"])
-    if not user or not user["is_active"]:
-        raise HTTPException(status_code=401, detail="User is inactive")
+    from app.repositories.auth_repo import AuthRepository
+    from app.repositories.user_repo import UserRepository
+    from app.db.rls import set_rls_context
+    from sqlalchemy import text
 
-    session_org_id = session.get("org_id") or payload.get("org_id")
-    if session_org_id is not None:
-        user = dict(user)
-        user["org_id"] = session_org_id
-        user["organization_id"] = session_org_id
+    org_id = payload.get("org_id")
+    is_platform_admin = payload.get("is_platform_admin", False)
 
-    token_response = _build_token_response(user, refresh_token, db)
-    csrf_token = generate_csrf_token()
-    _set_auth_cookies(
-        response,
-        token_response.access_token,
-        refresh_token,
-        csrf_token,
-        account_user_id=user["id"],
-    )
-    return token_response
+    try:
+        if org_id is not None:
+            set_rls_context(db, org_id)
+        elif is_platform_admin:
+            db.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
+        else:
+            raise HTTPException(status_code=401, detail="Invalid token payload: no tenant context")
+
+        auth_repo = AuthRepository(db)
+        session = auth_repo.get_by_token(refresh_token)
+        if not session:
+            raise HTTPException(status_code=401, detail="Refresh token has been revoked or not found")
+
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_id(payload["sub"])
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User is inactive")
+
+        return issue_login_response(db, user, response)
+
+    finally:
+        db.execute(text("SELECT set_config('app.current_org_id', '', true)"))
+        db.execute(text("SELECT set_config('app.bypass_rls', 'off', true)"))
 
 
 @auth_router.post("/logout")
@@ -512,16 +552,34 @@ def logout(
     body: LogoutRequest | None = None,
     current_user: TokenData = Depends(get_current_user),
     cookie_refresh: str | None = Cookie(default=None, alias="telite_refresh_token"),
+    db: Session = Depends(db_session),
 ) -> dict[str, str]:
     refresh_token = cookie_refresh or (body.refresh_token if body else None)
     if refresh_token:
-        revoke_session(refresh_token)
+        from app.repositories.auth_repo import AuthRepository
+        from app.db.rls import set_rls_context
+        from sqlalchemy import text
+        try:
+            if current_user.org_id is not None:
+                set_rls_context(db, current_user.org_id)
+            elif current_user.is_platform_admin:
+                db.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
+                
+            AuthRepository(db).revoke_session(refresh_token)
+        finally:
+            db.execute(text("SELECT set_config('app.current_org_id', '', true)"))
+            db.execute(text("SELECT set_config('app.bypass_rls', 'off', true)"))
+
     _clear_auth_cookies(response)
     return {"status": "logged_out", "user_id": current_user.id}
 
 
 @auth_router.post("/forgot-password")
-def forgot_password(body: ForgotPasswordRequest, request: Request) -> dict[str, str]:
+def forgot_password(
+    body: ForgotPasswordRequest, 
+    request: Request,
+    db: Session = Depends(db_session),
+) -> dict[str, str]:
     client_ip = _client_ip(request)
     ip_key = _rate_key("auth-forgot-password-ip", client_ip)
     email_key = _rate_key("auth-forgot-password-email", body.email)
@@ -534,20 +592,25 @@ def forgot_password(body: ForgotPasswordRequest, request: Request) -> dict[str, 
     record_attempt(ip_key, window_seconds=FORGOT_PASSWORD_WINDOW_SECONDS)
     record_attempt(email_key, window_seconds=FORGOT_PASSWORD_WINDOW_SECONDS)
 
-    reset_request = create_password_reset_token(body.email)
-    if reset_request:
-        delivered = send_password_reset_email(
-            to_email=reset_request["email"],
-            name=reset_request["full_name"],
-            token=reset_request["token"],
-            expires_at=reset_request["expires_at"],
-        )
-        if reset_request.get("id") is not None:
-            record_password_reset_delivery(
-                reset_request["id"],
-                delivered=delivered,
-                error=None if delivered else "SMTP not configured or delivery failed",
+    from app.repositories.user_repo import UserRepository
+    from app.repositories.auth_repo import AuthRepository
+    from sqlalchemy import text
+    try:
+        db.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_email(body.email)
+        
+        if user and user.is_active:
+            auth_repo = AuthRepository(db)
+            reset_record = auth_repo.create_password_reset_token(user.id)
+            send_password_reset_email(
+                to_email=user.email,
+                name=user.full_name,
+                token=reset_record.token,
+                expires_at=reset_record.expires_at,
             )
+    finally:
+        db.execute(text("SELECT set_config('app.bypass_rls', 'off', true)"))
 
     # Always return the same message to prevent email enumeration
     return {
@@ -557,7 +620,11 @@ def forgot_password(body: ForgotPasswordRequest, request: Request) -> dict[str, 
 
 
 @auth_router.post("/reset-password")
-def reset_password(body: ResetPasswordRequest, request: Request) -> dict[str, str]:
+def reset_password(
+    body: ResetPasswordRequest, 
+    request: Request,
+    db: Session = Depends(db_session),
+) -> dict[str, str]:
     client_ip = _client_ip(request)
     ip_key = _rate_key("auth-reset-password-ip", client_ip)
 
@@ -567,28 +634,74 @@ def reset_password(body: ResetPasswordRequest, request: Request) -> dict[str, st
 
     record_attempt(ip_key, window_seconds=RESET_PASSWORD_WINDOW_SECONDS)
 
+    from app.repositories.auth_repo import AuthRepository
+    from app.repositories.user_repo import UserRepository
+    from sqlalchemy import text
+    import datetime
+    
     try:
-        user = reset_password_with_token(body.token, body.password)
+        db.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
+        auth_repo = AuthRepository(db)
+        token_record = auth_repo.get_password_reset_token(body.token)
+        
+        if not token_record or token_record.used_at is not None:
+            raise ValueError("Invalid or expired reset token.")
+            
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        if token_record.expires_at < now:
+            raise ValueError("Reset token has expired.")
+            
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_id(token_record.user_id)
+        if not user or not user.is_active:
+            raise ValueError("Invalid user state.")
+            
+        auth_repo.mark_password_reset_token_used(token_record.id)
+        user_repo.update_password(user, body.password)
+        auth_repo.revoke_all_for_user(user.id)
+        user_id = user.id
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        db.execute(text("SELECT set_config('app.bypass_rls', 'off', true)"))
 
     clear_attempts(ip_key)
-    return {"status": "password_updated", "user_id": user["id"]}
+    return {"status": "password_updated", "user_id": user_id}
 
 
 @auth_router.get("/me")
 def get_me(current_user: TokenData = Depends(get_current_user)) -> dict[str, Any]:
     return {
         "user_id": current_user.id,
-        "id": current_user.id,
-        "username": current_user.email.split("@", 1)[0],
+        "username": current_user.username,
         "email": current_user.email,
         "name": current_user.full_name,
-        "full_name": current_user.full_name,
         "role": current_user.role,
         "category_scope": current_user.category_scope,
         "org_id": current_user.org_id,
-        "is_platform_admin": bool(current_user.is_platform_admin),
+        "is_platform_admin": current_user.is_platform_admin,
         "is_active": True,
         "permissions": current_user.permissions,
+        "theme_preference": current_user.theme_preference,
+    }
+
+
+@auth_router.patch("/preferences/theme")
+def update_theme_preference(
+    body: ThemePreferenceRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
+) -> dict[str, str]:
+    theme_preference = body.theme_preference.strip().lower()
+    if theme_preference not in THEME_PREFERENCES:
+        raise HTTPException(
+            status_code=400,
+            detail="theme_preference must be one of: light, dark, system",
+        )
+
+    UserRepository(db).update_theme_preference(current_user.id, theme_preference)
+    db.commit()
+    return {
+        "user_id": current_user.id,
+        "theme_preference": theme_preference,
     }

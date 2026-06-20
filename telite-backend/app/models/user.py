@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Float, Integer, String, Text
+from sqlalchemy import Boolean, Float, Integer, String, Text, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -10,6 +10,16 @@ from app.models.base import Base, TenantMixin, TimestampMixin
 
 class User(Base, TenantMixin, TimestampMixin):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'suspended', 'disabled')",
+            name="chk_users_status",
+        ),
+        CheckConstraint(
+            "theme_preference IN ('light', 'dark', 'system')",
+            name="chk_users_theme_preference",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
@@ -24,6 +34,7 @@ class User(Base, TenantMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    theme_preference: Mapped[str] = mapped_column(String(20), nullable=False, default="system")
 
     # PAL metrics
     pal_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
@@ -45,6 +56,7 @@ class User(Base, TenantMixin, TimestampMixin):
     program: Mapped[str | None] = mapped_column(String(100), nullable=True)
     branch: Mapped[str | None] = mapped_column(String(100), nullable=True)
     id_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # DEPRECATED (Phase 6 Moodle Retirement)
     moodle_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_login: Mapped[str | None] = mapped_column(String(20), nullable=True)
     invited_via: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -77,6 +89,7 @@ class User(Base, TenantMixin, TimestampMixin):
             "is_active": self.is_active,
             "is_platform_admin": self.is_platform_admin,
             "status": self.status,
+            "theme_preference": self.theme_preference,
             "org_id": self.org_id,
             "pal_score": self.pal_score,
             "streak_days": self.streak_days,

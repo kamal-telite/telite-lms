@@ -14,6 +14,7 @@ from app.repositories.org_repo import OrgRepository
 from app.repositories.invite_repo import InviteRepository
 from app.repositories.notification_repo import NotificationRepository
 from app.services.email import send_invitation_email
+from app.services.user_provisioning import UserProvisioningService, ProvisioningError
 
 logger = logging.getLogger("telite.management")
 management_router = APIRouter(tags=["Management"])
@@ -60,9 +61,18 @@ class AdminPayload(BaseModel):
     category_scope: str | None = None
 
 class InviteAdminPayload(BaseModel):
+    username: str
     email: str
     role: str
     category_scope: str | None = None
+    full_name: str | None = None
+
+class InviteLearnerPayload(BaseModel):
+    username: str
+    email: str
+    full_name: str
+    category_scope: str | None = None
+    course_ids: list[str] = Field(default_factory=list)
 
 class CoursePayload(BaseModel):
     name: str
@@ -228,32 +238,28 @@ def post_admin(
                 existing.category_scope = body.category_scope
             if body.password:
                 user_repo.update_password(existing, body.password)
-            user = existing
+            db.commit()
+            return existing.to_dict()
         else:
-            if not body.password:
-                from app.core.password_utils import generate_secure_password
-                from app.core.runtime import is_production_like
+            if not body.username:
+                raise HTTPException(status_code=400, detail="username is required")
 
-                if is_production_like():
-                    raise HTTPException(
-                        status_code=400,
-                        detail="password is required when creating a user",
-                    )
-                create_password = generate_secure_password(16)
-            else:
-                create_password = body.password
-
-            user = user_repo.create_user(
-                email=body.email,
-                full_name=body.full_name,
-                role=body.role,
-                org_id=scoped_org_id,
-                password=create_password,
-                category_scope=body.category_scope,
-                username=body.username
-            )
-        db.commit()
-        return user.to_dict()
+            provision_svc = UserProvisioningService(db)
+            try:
+                inv = provision_svc.invite_admin(
+                    email=body.email,
+                    username=body.username,
+                    full_name=body.full_name,
+                    role=body.role,
+                    org_id=scoped_org_id,
+                    actor=actor,
+                    category_scope=body.category_scope,
+                )
+                db.commit()
+                return inv.to_dict()
+            except ProvisioningError as pe:
+                db.rollback()
+                raise HTTPException(status_code=409, detail=str(pe))
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
@@ -311,34 +317,113 @@ def api_invite_admin(
         raise HTTPException(status_code=404, detail="Organization not found")
         
     try:
-        invite_repo = InviteRepository(db)
-        invitation = invite_repo.create_invitation(
-            org_id=scoped_org_id,
+        provision_svc = UserProvisioningService(db)
+        invitation = provision_svc.invite_admin(
             email=payload.email,
+            username=payload.username,
+            full_name=payload.full_name or payload.email.split("@")[0],
             role=payload.role,
-            invited_by=actor.id,
+            org_id=scoped_org_id,
+            actor=actor,
             category_scope=payload.category_scope,
         )
+        invitation_id = invitation.id
+        invitation_payload = invitation.to_dict()
         db.commit()
+    except ProvisioningError as pe:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(pe))
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc))
         
     delivered = send_invitation_email(
-        to_email=invitation.email,
+        to_email=invitation_payload["email"],
         org_name=org.name,
-        role=invitation.role,
-        token=invitation.token,
-        expires_at=invitation.expires_at.isoformat(),
+        org_domain=org.domain,
+        role=invitation_payload["role"],
+        token=invitation_payload["token"],
+        expires_at=str(invitation_payload["expires_at"]),
     )
     
     try:
-        invite_repo.record_delivery(invitation.id, delivered=delivered)
+        invite_repo = InviteRepository(db)
+        invite_repo.record_delivery(invitation_id, delivered=delivered)
         db.commit()
+        invitation_payload["delivery_status"] = "delivered" if delivered else "failed"
     except:
         db.rollback()
     
-    return {"message": "Invitation sent successfully", "invitation": invitation.to_dict()}
+    return {"message": "Invitation sent successfully", "invitation": invitation_payload}
+
+@management_router.post("/learners/invite", status_code=201)
+def api_invite_learner(
+    payload: InviteLearnerPayload,
+    org_id: int | None = Query(default=None, alias="orgId"),
+    current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
+):
+    user_repo = UserRepository(db)
+    actor = user_repo.get_by_id(current_user.id)
+    if not actor:
+        raise HTTPException(status_code=404, detail="Actor not found")
+        
+    scoped_org_id = resolve_org_scope(current_user, org_id)
+    org_repo = OrgRepository(db)
+    org = org_repo.get_by_id(scoped_org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+        
+    try:
+        provision_svc = UserProvisioningService(db)
+        invitation = provision_svc.invite_learner(
+            email=payload.email,
+            username=payload.username,
+            full_name=payload.full_name,
+            role="learner",
+            org_id=scoped_org_id,
+            actor=actor,
+            category_scope=payload.category_scope,
+            course_ids=payload.course_ids,
+        )
+        invitation_id = invitation.id
+        invitation_payload = invitation.to_dict()
+        db.commit()
+    except ProvisioningError as pe:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(pe))
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc))
+        
+    delivered = send_invitation_email(
+        to_email=invitation_payload["email"],
+        org_name=org.name,
+        org_domain=org.domain,
+        role=invitation_payload["role"],
+        token=invitation_payload["token"],
+        expires_at=str(invitation_payload["expires_at"]),
+    )
+    
+    try:
+        invite_repo = InviteRepository(db)
+        invite_repo.record_delivery(invitation_id, delivered=delivered)
+        db.commit()
+        invitation_payload["delivery_status"] = "delivered" if delivered else "failed"
+    except:
+        db.rollback()
+    
+    return {"message": "Learner invitation sent successfully", "invitation": invitation_payload}
+
+@management_router.post("/learners/reinvite/{invitation_id}", status_code=200)
+def api_reinvite_learner(
+    invitation_id: int,
+    org_id: int | None = Query(default=None, alias="orgId"),
+    current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
+):
+    """Reserved for reinviting a learner. Implementation pending."""
+    raise HTTPException(status_code=501, detail="Not implemented yet")
 
 @management_router.delete("/admins/{user_id}")
 def delete_admin(
@@ -492,22 +577,36 @@ def get_users(
         if role and role not in visible_roles:
             raise HTTPException(status_code=403, detail="Super admins cannot view platform admin users.")
             
+    from sqlalchemy import select, or_
+    from app.models.user import User
+
     offset = (page - 1) * page_size
-    users = user_repo.list_by_org(
-        scoped_org_id,
-        role=role,
-        roles=visible_roles if role is None else None,
-        exclude_platform_admins=not current_user.is_platform_admin,
-        search=query,
-        limit=page_size,
-        offset=offset,
-    )
+    stmt = select(User).where(User.org_id == scoped_org_id)
     
-    # Optional category filtering
-    if category_slug:
-        users = [u for u in users if u.category_scope == category_slug]
+    if role:
+        stmt = stmt.where(User.role == role)
+    elif visible_roles:
+        stmt = stmt.where(User.role.in_(visible_roles))
         
-    return {"users": [u.to_dict() for u in users], "total": len(users)}
+    if not current_user.is_platform_admin:
+        stmt = stmt.where(User.is_platform_admin == False)
+        
+    if query:
+        search_filter = f"%{query}%"
+        stmt = stmt.where(or_(
+            User.full_name.ilike(search_filter),
+            User.email.ilike(search_filter),
+            User.username.ilike(search_filter)
+        ))
+        
+    if category_slug:
+        stmt = stmt.where(User.category_scope == category_slug)
+
+    total = len(db.scalars(stmt).all())
+    stmt = stmt.limit(page_size).offset(offset)
+    users = db.scalars(stmt).all()
+        
+    return {"users": [u.to_dict() for u in users], "total": total}
 
 def _can_access_user(viewer: TokenData, target: Any) -> bool:
     if viewer.is_platform_admin:

@@ -20,8 +20,7 @@ class Organization(Base, TimestampMixin):
     slug: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     plan: Mapped[str] = mapped_column(String(50), nullable=False, default="free")
-
-    # Moodle integration
+    # DEPRECATED (Phase 6 Moodle Retirement)
     moodle_category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     moodle_tenant_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
@@ -33,9 +32,9 @@ class Organization(Base, TimestampMixin):
     branding: Mapped["OrganizationBranding"] = relationship(  # type: ignore[name-defined]
         "OrganizationBranding",
         back_populates="organization",
-        foreign_keys="OrganizationBranding.organization_id",
         uselist=False,
         cascade="all, delete-orphan",
+        foreign_keys="OrganizationBranding.organization_id",
     )
 
     # Relationships

@@ -1,9 +1,7 @@
 """
 AuthRepository — session and password reset token data access.
 
-Replaces: create_session, get_session_by_token, revoke_session,
-revoke_sessions_for_user, update_last_login, create_password_reset_token,
-validate_password_reset_token, reset_password_with_token, etc.
+Replaces deprecated store.py session helpers.
 """
 
 from __future__ import annotations

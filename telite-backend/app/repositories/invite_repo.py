@@ -67,6 +67,20 @@ class InviteRepository(BaseRepository[OrgInvitation]):
         self.session.flush()
         return inv
 
+    def record_delivery(self, invitation_id: int, delivered: bool, error: str | None = None) -> OrgInvitation:
+        inv = self.get_by_id(invitation_id)
+        if not inv:
+            raise ValueError("Invitation not found.")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        inv.delivery_attempted_at = now
+        inv.delivery_status = "delivered" if delivered else "failed"
+        if delivered:
+            inv.delivered_at = now
+        if error:
+            inv.delivery_error = error
+        self.session.flush()
+        return inv
+
     def revoke_invitation(self, invitation_id: int, revoked_by: str | None = None, reason: str | None = None) -> OrgInvitation:
         inv = self.get_by_id(invitation_id)
         if not inv:

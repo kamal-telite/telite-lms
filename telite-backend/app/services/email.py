@@ -1,12 +1,10 @@
 import os
 import smtplib
-import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 
-logger = logging.getLogger("telite.email")
 load_dotenv()
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -14,7 +12,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 FROM_NAME = os.getenv("FROM_NAME", "Telite LMS")
-APP_URL = os.getenv("TELITE_APP_URL", f"http://localhost:{os.getenv('FRONTEND_PORT', '3000')}").rstrip("/")
+APP_URL = os.getenv("TELITE_APP_URL", "http://localhost:5173").rstrip("/")
 
 
 def send_welcome_email(
@@ -156,11 +154,19 @@ def send_invitation_email(
     *,
     to_email: str,
     org_name: str,
+    org_domain: str,
     role: str,
     token: str,
     expires_at: str,
 ) -> bool:
-    invite_url = f"{APP_URL}/set-password?token={token}"
+    protocol = "http" if "localhost" in org_domain else "https"
+    base_url = f"{protocol}://{org_domain}"
+    if "localhost" in org_domain and "localhost:" in APP_URL:
+        # append port for local dev
+        port = APP_URL.split("localhost:")[1].split("/")[0]
+        base_url = f"{protocol}://{org_domain}:{port}"
+        
+    invite_url = f"{base_url}/set-password?token={token}"
     if not SMTP_USER or not SMTP_PASSWORD:
         print(
             "\n".join(
@@ -570,21 +576,6 @@ def send_signup_rejection_email(to_email: str, name: str, role: str, reason: str
 
         print(f"[EMAIL SENT] Rejection email sent to {to_email}")
         return True
-    except Exception as e:
-        logger.error(f"Failed to send signup rejection email: {e}")
-        return False
-
-
-def _dispatch_notification_email(to_email: str, name: str, title: str, body: str, notif_type: str = "info") -> bool:
-    """Generic email sender for notifications."""
-    try:
-        # Placeholder for actual generic email sending logic
-        logger.info(f"Dispatching {notif_type} notification email to {to_email} with title '{title}'")
-        # Just pretend it sends successfully unless SMTP_USER is blank during tests
-        import os
-        if os.getenv("SMTP_USER", "") == "":
-            raise RuntimeError("SMTP not configured")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to dispatch notification email: {e}")
+    except Exception as exc:
+        print(f"[EMAIL ERROR] Rejection email failed: {exc}")
         return False

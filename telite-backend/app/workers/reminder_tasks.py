@@ -130,7 +130,7 @@ def publication_reminders(self) -> dict:
                         learners = tenant_session.execute(
                             text(
                                 "SELECT email, full_name FROM users "
-                                "WHERE org_id = :org_id AND role IN ('learner', 'student') "
+                                "WHERE org_id = :org_id AND role = 'learner' "
                                 "AND is_active = true AND email IS NOT NULL"
                             ),
                             {"org_id": org_id}

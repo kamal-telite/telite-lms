@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Sequence
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select, update, text
 from sqlalchemy.orm import Session
 
 from app.models.user import User
@@ -30,7 +30,7 @@ def role_gradients(role: str | None) -> tuple[str, str]:
         return ("from-emerald-600 to-teal-600", "text-white")
     if role == "reviewer":
         return ("from-amber-500 to-orange-500", "text-white")
-    if role in ("learner", "student"):
+    if role == "learner":
         return ("from-slate-100 to-slate-200", "text-slate-800")
     return ("from-slate-100 to-slate-200", "text-slate-800")
 
@@ -55,6 +55,21 @@ class UserRepository(BaseRepository[User]):
         )
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def get_by_identifier_for_auth(self, identifier: str) -> User | None:
+        """Find user by email or username, bypassing RLS for authentication bootstrap."""
+        ident = identifier.strip().lower()
+
+        try:
+            self.session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+
+            stmt = select(User).where(
+                or_(User.email == ident, User.username == ident)
+            )
+
+            return self.session.execute(stmt).scalar_one_or_none()
+        finally:
+            self.session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+
     def get_platform_admin(self) -> User | None:
         stmt = select(User).where(User.is_platform_admin.is_(True)).limit(1)
         return self.session.execute(stmt).scalar_one_or_none()
@@ -63,27 +78,18 @@ class UserRepository(BaseRepository[User]):
 
     def list_by_org(
         self,
-        org_id: int | None,
+        org_id: int,
         *,
         role: str | None = None,
-        roles: Sequence[str] | None = None,
-        exclude_platform_admins: bool = False,
         is_active: bool | None = None,
         search: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[User]:
-        stmt = select(User)
-
-        if org_id is not None:
-            stmt = stmt.where(User.org_id == org_id)
+        stmt = select(User).where(User.org_id == org_id)
 
         if role is not None:
             stmt = stmt.where(User.role == role)
-        if roles is not None:
-            stmt = stmt.where(User.role.in_(list(roles)))
-        if exclude_platform_admins:
-            stmt = stmt.where(User.is_platform_admin.is_(False), User.role != "platform_admin")
         if is_active is not None:
             stmt = stmt.where(User.is_active == is_active)
         if search:
@@ -99,34 +105,14 @@ class UserRepository(BaseRepository[User]):
         stmt = stmt.order_by(User.full_name).limit(limit).offset(offset)
         return self.session.execute(stmt).scalars().all()
 
-    def list_admins_by_org(
-        self,
-        org_id: int | None,
-        *,
-        roles: Sequence[str] | None = None,
-        is_active: bool | None = True,
-        search: str | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-    ) -> Sequence[User]:
-        stmt = select(User)
-        if org_id is not None:
-            stmt = stmt.where(User.org_id == org_id)
-        stmt = stmt.where(User.role.in_(list(roles or ["super_admin", "category_admin"])))
-        if is_active is not None:
-            stmt = stmt.where(User.is_active.is_(is_active))
-        if search:
-            term = f"%{search.lower()}%"
-            stmt = stmt.where(
-                or_(
-                    User.full_name.ilike(term),
-                    User.email.ilike(term),
-                    User.username.ilike(term),
-                )
-            )
-        stmt = stmt.order_by(User.full_name).offset(offset)
-        if limit is not None:
-            stmt = stmt.limit(limit)
+    def list_admins_by_org(self, org_id: int) -> Sequence[User]:
+        stmt = (
+            select(User)
+            .where(User.org_id == org_id)
+            .where(User.role.in_(["super_admin", "category_admin"]))
+            .where(User.is_active.is_(True))
+            .order_by(User.full_name)
+        )
         return self.session.execute(stmt).scalars().all()
 
     def count_active_learners(self, org_id: int | None = None) -> int:
@@ -146,18 +132,20 @@ class UserRepository(BaseRepository[User]):
         full_name: str,
         role: str,
         org_id: int,
-        password: str,
+        password: str | None = None,
+        password_hash: str | None = None,
         category_scope: str | None = None,
         username: str | None = None,
         is_platform_admin: bool = False,
         **extra: Any,
     ) -> User:
-        """Create a new user with hashed password."""
+        """Create a new user with hashed password or provided hash."""
         email = email.lower().strip()
         if username is None:
             username = self._build_unique_username(email, full_name)
 
         grad_start, grad_end = role_gradients(role)
+        final_hash = password_hash or (hash_password(password) if password else "")
         user = User(
             id=f"user-{uuid.uuid4().hex[:12]}",
             username=username,
@@ -165,7 +153,7 @@ class UserRepository(BaseRepository[User]):
             full_name=full_name,
             role=role,
             category_scope=category_scope,
-            password_hash=hash_password(password),
+            password_hash=final_hash,
             avatar_initials=initials(full_name),
             gradient_start=grad_start,
             gradient_end=grad_end,
@@ -199,6 +187,12 @@ class UserRepository(BaseRepository[User]):
         user.gradient_end = grad_end
         self.session.flush()
         return user
+
+    def update_theme_preference(self, user_id: str, theme_preference: str) -> None:
+        self.session.execute(
+            update(User).where(User.id == user_id).values(theme_preference=theme_preference)
+        )
+        self.session.flush()
 
 
 
