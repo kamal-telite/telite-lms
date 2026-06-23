@@ -1,0 +1,25 @@
+warning: in the working copy of '.github/workflows/ci.yml', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml[m
+[1mindex ea425a0..01bfa1f 100644[m
+[1m--- a/.github/workflows/ci.yml[m
+[1m+++ b/.github/workflows/ci.yml[m
+[36m@@ -40,8 +40,8 @@[m [mjobs:[m
+     env:[m
+       ENVIRONMENT: development[m
+       PYTHONPATH: .[m
+[31m-      TELITE_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci[m
+[31m-      TELITE_TEST_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci[m
+[32m+[m[32m      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci[m
+[32m+[m[32m      TELITE_TEST_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci[m
+       TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use[m
+       TELITE_PASSWORD_SALT: ci-test-password-salt[m
+       REDIS_ENABLED: "false"[m
+[36m@@ -156,7 +156,7 @@[m [mjobs:[m
+           --health-retries 10[m
+     env:[m
+       ENVIRONMENT: development[m
+[31m-      TELITE_DATABASE_URL: postgresql://telite_ci:telite_ci_password@localhost:5432/telite_migration_ci[m
+[32m+[m[32m      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_migration_ci[m
+       TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use[m
+       TELITE_PASSWORD_SALT: ci-test-password-salt[m
+       REDIS_ENABLED: "false"[m

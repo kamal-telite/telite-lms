@@ -145,3 +145,20 @@ context.md
 *.rej
 *.orig
 /scripts/
+
+# Local one-off probe and rewrite scripts
+/fix_*.py
+/insert_*.py
+/rewrite*.py
+/frontend_api_calls.*
+/frontend_moodle_usage.txt
+/moodle_db_audit.*
+/telite-backend/check_imports.py
+/telite-backend/fix_routes.py
+/telite-backend/inspect_db.py
+/telite-backend/run_rls.py
+/telite-backend/test_e2e_publishing_attempt.py
+/telite-backend/test_publishing_integration.py
+/telite-backend/test_question_*.py
+/telite-backend/test_rls_phase_b1.py
+/telite-backend/verify_out.txt
