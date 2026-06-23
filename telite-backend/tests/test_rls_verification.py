@@ -1,7 +1,7 @@
 import os
 
+import httpx
 import pytest
-import requests
 from dotenv import load_dotenv
 
 pytestmark = pytest.mark.skipif(
@@ -13,7 +13,7 @@ load_dotenv()
 BASE_URL = os.getenv("TELITE_LIVE_API_BASE_URL") or f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '8001')}"
 
 def get_token(username, password):
-    response = requests.post(
+    response = httpx.post(
         f"{BASE_URL}/auth/login",
         data={"username": username, "password": password},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
@@ -29,7 +29,7 @@ def test_cross_tenant_isolation_courses():
     token_b = get_token("lr_tenantb", "password")
 
     # Get Tenant A's courses
-    resp_a = requests.get(
+    resp_a = httpx.get(
         f"{BASE_URL}/api/v1/learner/courses",
         headers={"Authorization": f"Bearer {token_a}"}
     )
@@ -39,7 +39,7 @@ def test_cross_tenant_isolation_courses():
     course_a_id = next(c["id"] for c in courses_a if c["name"] == "Course A")
 
     # Get Tenant B's courses
-    resp_b = requests.get(
+    resp_b = httpx.get(
         f"{BASE_URL}/api/v1/learner/courses",
         headers={"Authorization": f"Bearer {token_b}"}
     )
@@ -48,7 +48,7 @@ def test_cross_tenant_isolation_courses():
     assert not any(c["id"] == course_a_id for c in courses_b), "Tenant B should not see Tenant A's courses"
 
     # Tenant B attempts to fetch Tenant A's specific course
-    resp_b_direct = requests.get(
+    resp_b_direct = httpx.get(
         f"{BASE_URL}/api/v1/learner/courses/{course_a_id}",
         headers={"Authorization": f"Bearer {token_b}"}
     )
