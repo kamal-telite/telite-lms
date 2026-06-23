@@ -847,6 +847,11 @@ function AdminControlTab({ searchQuery, showConfirm, onOpenInvite }) {
     }
   };
 
+  const formatDateTime = (value) => {
+    if (!value) return 'N/A';
+    return String(value).replace('T', ' ').slice(0, 16);
+  };
+
   const formatInviteTimestamp = (invite) => {
     const value = invite.last_sent_at || invite.delivery_attempted_at || invite.created_at;
     if (!value) return '—';
@@ -1068,9 +1073,15 @@ function AdminControlTab({ searchQuery, showConfirm, onOpenInvite }) {
                           <div>
                             <div style={{fontWeight: 600, fontSize: '13px'}}>{a.full_name || a.name || a.email}</div>
                             <div style={{fontSize: '11px', color: 'var(--tx3)'}}>{a.email}</div>
-                            {isPending && a.delivery_error ? (
-                              <div style={{fontSize: '11px', color: 'var(--red)', marginTop: '2px'}}>
-                                {a.delivery_error}
+                            {isPending ? (
+                              <div style={{fontSize: '11px', color: 'var(--tx3)', marginTop: '4px', lineHeight: 1.45}}>
+                                <div>Delivery: {a.delivery_status || 'pending'}</div>
+                                <div>Delivered: {formatDateTime(a.delivered_at)}</div>
+                                <div>Resends: {a.resend_count || 0}</div>
+                                <div>Last resent: {formatDateTime(a.last_resent_at)}</div>
+                                {a.delivery_error ? (
+                                  <div style={{color: 'var(--red)'}}>Failed reason: {a.delivery_error}</div>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
@@ -1142,7 +1153,7 @@ export function CreateOrganizationModal({ open, onClose, onCreated }) {
   const { showToast } = useToast();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "college", domain: "", slug: "", super_admin_email: "", moodle_setup: "manual" });
+  const [form, setForm] = useState({ name: "", type: "college", domain: "", slug: "", super_admin_email: "" });
 
   if (!open) return null;
 
@@ -1209,12 +1220,22 @@ export function CreateOrganizationModal({ open, onClose, onCreated }) {
 
           {step === 3 && (
             <div>
+              <div className="invite-hint">
+                <span className="material-symbols-outlined" style={{fontSize: '15px', verticalAlign: 'middle'}}>fact_check</span>
+                TELITE will create the organization in the native platform. The super admin invitation is sent after creation when an email is provided.
+              </div>
               <div className="field-group">
-                <label className="field-label">Moodle Setup Mode</label>
-                <select value={form.moodle_setup} onChange={e => setForm({...form, moodle_setup: e.target.value})} className="field-select">
-                  <option value="manual">Manual Configuration</option>
-                  <option value="auto">Automatic (Create Moodle Category)</option>
-                </select>
+                <label className="field-label">Organization</label>
+                <div style={{fontSize: '13px', fontWeight: 600}}>{form.name.trim() || 'N/A'}</div>
+                <div style={{fontSize: '12px', color: 'var(--tx3)', marginTop: '3px'}}>
+                  {form.type} - {form.domain.trim() || 'N/A'}
+                </div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">Super Admin Invitation</label>
+                <div style={{fontSize: '13px', fontWeight: 600}}>
+                  {form.super_admin_email.trim() || 'No invitation email provided'}
+                </div>
               </div>
             </div>
           )}
@@ -1235,7 +1256,6 @@ export function CreateOrganizationModal({ open, onClose, onCreated }) {
                   await platformApi.createOrganization({
                     name: form.name.trim(), type: form.type, domain: form.domain.trim(),
                     slug: form.slug.trim() || null, super_admin_email: form.super_admin_email.trim() || null,
-                    moodle_setup: form.moodle_setup,
                   });
                   showToast("Organization created", "success");
                   onCreated?.();
@@ -1263,12 +1283,12 @@ export function InviteAdminModal({ open, onClose, onInvited }) {
   const [orgs, setOrgs] = useState([]);
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ org_id: "", email: "", role: "super_admin", name: "" });
+  const [form, setForm] = useState({ org_id: "", email: "", role: "super_admin" });
 
   useEffect(() => {
     if (!open) return;
     setSubmitting(false);
-    setForm({ org_id: "", email: "", role: "super_admin", name: "" });
+    setForm({ org_id: "", email: "", role: "super_admin" });
     setLoadingOrgs(true);
     platformApi.listOrganizations({ limit: 100 })
       .then(res => {
@@ -1324,13 +1344,8 @@ export function InviteAdminModal({ open, onClose, onInvited }) {
               <input className="field-input" type="email" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="admin@university.edu" />
             </div>
             <div className="field-group">
-              <label className="field-label">Full Name <span style={{color:'var(--red)'}}>*</span></label>
-              <input className="field-input" required value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Dr. Priya Sharma" />
-            </div>
-            <div className="field-group">
               <label className="field-label">Role</label>
               <select className="field-select" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-                <option value="super_admin">Platform Super Admin</option>
                 <option value="super_admin">Organization Admin</option>
               </select>
             </div>

@@ -20,6 +20,9 @@ import { api, getErrorMessage } from "../../services/client";
 import { useAutosave } from "../../hooks/useAutosave";
 import { validateBlocks } from "../../services/validationEngine";
 import { MediaLibrary } from "./MediaLibrary";
+import QuestionBankPicker from "../../components/authoring/QuestionBankPicker";
+import { useParams } from "react-router-dom";
+import { checkStaleQuestions } from "../../services/client";
 
 function blockKey(block) {
   return block.id || block._tempId;
@@ -56,7 +59,10 @@ function SortableBlock({
   quizOptions = [],
   quizLoading = false,
   quizError = null,
+  slug,
 }) {
+  const [bankPickerOpen, setBankPickerOpen] = useState(false);
+  const [staleQuestions, setStaleQuestions] = useState({});
   const {
     attributes,
     listeners,
@@ -66,14 +72,28 @@ function SortableBlock({
     isDragging,
   } = useSortable({ id: `block-${blockKey(block)}` });
 
-  const settings = block.settings || {};
-  const isLocked = Boolean(settings.locked);
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     ...(isDragging ? { zIndex: 1 } : {}),
   };
+
+  const isLocked = Boolean(block.settings?.locked);
+
+  // Stale questions check
+  useEffect(() => {
+    if (block.block_type === "quiz" && block.settings?.questions?.length > 0) {
+      const bankRefs = block.settings.questions
+        .filter(q => q.type === "bank_reference" && q.question_id && q.version_id)
+        .map(q => ({ question_id: q.question_id, version_id: q.version_id }));
+        
+      if (bankRefs.length > 0) {
+        checkStaleQuestions(bankRefs).then(data => {
+          setStaleQuestions(data);
+        }).catch(err => console.error("Failed to check stale questions", err));
+      }
+    }
+  }, [block.block_type, block.settings?.questions]);
 
   const className = `builder-block ${isSelected ? "builder-block--selected" : ""} ${isDragging ? "builder-block--dragging" : ""} ${isHighlighted ? "builder-block--highlight" : ""}`;
 
@@ -602,67 +622,110 @@ function SortableBlock({
                     Remove
                   </Button>
                 </div>
-                <textarea
-                  className="field__input"
-                  style={{ minHeight: "70px", resize: "vertical" }}
-                  placeholder="Question text..."
-                  value={question.text || ""}
-                  onChange={(e) => updateQuizQuestion(qIndex, { text: e.target.value })}
-                  disabled={isLocked}
-                />
-                <label className="field">
-                  <span className="field__label">Points</span>
-                  <input
-                    className="field__input"
-                    type="number"
-                    min="1"
-                    value={question.points ?? 10}
-                    onChange={(e) => updateQuizQuestion(qIndex, { points: Number(e.target.value) })}
-                    disabled={isLocked}
-                  />
-                </label>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {(question.options || []).map((option, optionIndex) => (
-                    <div key={option.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "8px", alignItems: "center" }}>
-                      <input
-                        type="radio"
-                        name={`correct-${question.id}`}
-                        checked={question.correct_option_id === option.id}
-                        onChange={() => updateQuizQuestion(qIndex, { correct_option_id: option.id })}
-                        disabled={isLocked}
-                        aria-label={`Mark option ${optionIndex + 1} correct`}
-                      />
+
+                {question.type === "bank_reference" ? (
+                  <div style={{ padding: 12, background: "var(--surface-base)", border: "1px solid var(--border-subtle)", borderRadius: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1, paddingRight: 16 }}>
+                        <div style={{ fontWeight: 500, marginBottom: 8 }}>
+                          {question.snapshot?.question_text || `Question Bank Reference #${question.question_id}`}
+                        </div>
+                        <div style={{ display: "flex", gap: 12, fontSize: 13, color: "var(--text-secondary)" }}>
+                          {question.snapshot?.question_type ? <span>Type: {question.snapshot.question_type}</span> : null}
+                          {question.snapshot?.points ? <span>Points: {question.snapshot.points}</span> : null}
+                        </div>
+                        {staleQuestions[question.question_id]?.is_stale && (
+                          <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--color-warn)", fontSize: 13 }}>
+                            <span className="icon">⚠️</span>
+                            Newer version available (v{staleQuestions[question.question_id].latest_version_id})
+                          </div>
+                        )}
+                      </div>
+                      <Badge tone="accent">Bank Ref v{question.version_id}</Badge>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      className="field__input"
+                      style={{ minHeight: "70px", resize: "vertical" }}
+                      placeholder="Question text..."
+                      value={question.text || ""}
+                      onChange={(e) => updateQuizQuestion(qIndex, { text: e.target.value })}
+                      disabled={isLocked}
+                    />
+                    <label className="field">
+                      <span className="field__label">Points</span>
                       <input
                         className="field__input"
-                        placeholder={`Option ${optionIndex + 1}`}
-                        value={option.text || ""}
-                        onChange={(e) => updateQuizOption(qIndex, optionIndex, e.target.value)}
+                        type="number"
+                        min="1"
+                        value={question.points ?? 10}
+                        onChange={(e) => updateQuizQuestion(qIndex, { points: Number(e.target.value) })}
                         disabled={isLocked}
                       />
-                      <Button
-                        tone="destructive"
-                        size="small"
-                        disabled={isLocked || (question.options || []).length <= 2}
-                        onClick={() => removeQuizOption(qIndex, optionIndex)}
-                      >
-                        Remove
+                    </label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {(question.options || []).map((option, optionIndex) => (
+                        <div key={option.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "8px", alignItems: "center" }}>
+                          <input
+                            type="radio"
+                            name={`correct-${question.id}`}
+                            checked={question.correct_option_id === option.id}
+                            onChange={() => updateQuizQuestion(qIndex, { correct_option_id: option.id })}
+                            disabled={isLocked}
+                            aria-label={`Mark option ${optionIndex + 1} correct`}
+                          />
+                          <input
+                            className="field__input"
+                            placeholder={`Option ${optionIndex + 1}`}
+                            value={option.text || ""}
+                            onChange={(e) => updateQuizOption(qIndex, optionIndex, e.target.value)}
+                            disabled={isLocked}
+                          />
+                          <Button
+                            tone="destructive"
+                            size="small"
+                            disabled={isLocked || (question.options || []).length <= 2}
+                            onClick={() => removeQuizOption(qIndex, optionIndex)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                      <Button tone="neutral" size="small" disabled={isLocked} onClick={() => addQuizOption(qIndex)}>
+                        + Add Option
                       </Button>
                     </div>
-                  ))}
-                  <Button tone="neutral" size="small" disabled={isLocked} onClick={() => addQuizOption(qIndex)}>
-                    + Add Option
-                  </Button>
-                </div>
+                  </>
+                )}
               </div>
             ))}
 
-            <Button
-              tone="neutral"
-              disabled={isLocked}
-              onClick={() => handleSettingsChange("questions", [...(settings.questions || []), createNativeQuizQuestion()])}
-            >
-              + Add Question
-            </Button>
+            <div className="split-actions" style={{ justifyContent: "flex-start" }}>
+              <Button
+                tone="neutral"
+                disabled={isLocked}
+                onClick={() => handleSettingsChange("questions", [...(settings.questions || []), createNativeQuizQuestion()])}
+              >
+                + Add Native Question
+              </Button>
+              <Button
+                tone="primary"
+                disabled={isLocked}
+                onClick={() => setBankPickerOpen(true)}
+              >
+                + Import from Bank
+              </Button>
+            </div>
+            <QuestionBankPicker 
+              open={bankPickerOpen} 
+              onClose={() => setBankPickerOpen(false)} 
+              slug={slug}
+              onImport={(references) => {
+                handleSettingsChange("questions", [...(settings.questions || []), ...references]);
+              }}
+            />
           </div>
         )}
       </div>
@@ -684,6 +747,7 @@ export function LessonBlockEditor({
   onSaveStateChange,
 }) {
   const { showToast } = useToast();
+  const { slug } = useParams();
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

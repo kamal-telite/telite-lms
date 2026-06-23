@@ -420,8 +420,44 @@ export async function fetchPalDistribution(slug) {
 
 // ── Notifications & Settings ──────────────────────────────────────────────────
 
-export async function fetchNotifications() {
-  return unwrap(await api.get("/notifications"));
+export async function fetchNotifications(params = {}) {
+  return unwrap(await api.get("/api/v1/notifications", { params }));
+}
+
+export async function fetchUnreadNotificationCount() {
+  return unwrap(await api.get("/api/v1/notifications/unread-count"));
+}
+
+export async function markNotificationRead(id) {
+  return unwrap(await api.patch(`/api/v1/notifications/${id}/read`));
+}
+
+export async function markAllNotificationsRead() {
+  return unwrap(await api.post("/api/v1/notifications/read-all"));
+}
+
+export async function fetchMyAnnouncements() {
+  return unwrap(await api.get("/api/v1/announcements/my"));
+}
+
+export async function markAnnouncementRead(id) {
+  return unwrap(await api.patch(`/api/v1/announcements/${id}/read`));
+}
+
+export async function fetchAnnouncements() {
+  return unwrap(await api.get("/api/v1/announcements"));
+}
+
+export async function createAnnouncement(payload) {
+  return unwrap(await api.post("/api/v1/announcements", payload));
+}
+
+export async function updateAnnouncement(id, payload) {
+  return unwrap(await api.patch(`/api/v1/announcements/${id}`, payload));
+}
+
+export async function deleteAnnouncement(id) {
+  return unwrap(await api.delete(`/api/v1/announcements/${id}`));
 }
 
 export async function fetchSettings() {
@@ -489,4 +525,95 @@ export async function bulkUploadVerifications(file) {
 
 export async function fetchVerificationStats() {
   return unwrap(await api.get("/admin/verifications/stats"));
+}
+
+export async function previewBulkEnrollments(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const token = localStorage.getItem('token');
+  const res = await fetch('/api/v1/enrol/bulk/preview', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Bulk preview failed');
+  }
+  return res.json();
+}
+
+export async function executeBulkEnrollments(rows) {
+  const token = localStorage.getItem('token');
+  const res = await fetch('/api/v1/enrol/bulk/execute', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ rows })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Bulk execute failed');
+  }
+  return res.json();
+}
+
+// --- Question Banks ---
+
+export async function getQuestionBanks(slug) {
+  return unwrap(
+    await api.get("/api/v1/question-banks", {
+      params: slug ? { category_slug: slug } : {},
+    })
+  );
+}
+
+export async function createQuestionBank(slug, name) {
+  return unwrap(
+    await api.post(
+      "/api/v1/question-banks",
+      { name },
+      { params: slug ? { category_slug: slug } : {} }
+    )
+  );
+}
+
+export async function getQuestions(bankId) {
+  const data = unwrap(await api.get(`/api/v1/question-banks/${bankId}/questions`));
+  return Array.isArray(data) ? data : data.items || [];
+}
+
+export async function createQuestion(bankId, payload) {
+  return unwrap(await api.post(`/api/v1/question-banks/${bankId}/questions`, payload));
+}
+
+export async function updateDraftQuestion(bankId, questionId, payload) {
+  return unwrap(
+    await api.put(`/api/v1/question-banks/${bankId}/questions/${questionId}/draft`, payload)
+  );
+}
+
+export async function publishQuestion(bankId, questionId) {
+  return unwrap(await api.post(`/api/v1/question-banks/${bankId}/questions/${questionId}/publish`));
+}
+
+export async function createNewDraft(bankId, questionId) {
+  return unwrap(await api.post(`/api/v1/question-banks/${bankId}/questions/${questionId}/drafts`));
+}
+
+export async function archiveDraftQuestion(bankId, questionId) {
+  return unwrap(await api.delete(`/api/v1/question-banks/${bankId}/questions/${questionId}/draft`));
+}
+
+export async function getQuestionVersions(bankId, questionId) {
+  return unwrap(await api.get(`/api/v1/question-banks/${bankId}/questions/${questionId}/versions`));
+}
+
+export async function checkStaleQuestions(items) {
+  return unwrap(await api.post("/api/v1/question-banks/check-stale", { items }));
 }

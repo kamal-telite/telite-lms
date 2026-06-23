@@ -10,6 +10,7 @@ export const platformApi = {
 
   // Admins
   listAdmins: () => api.get("/api/platform/admins"),
+  listAdminInvitations: (params) => api.get("/api/platform/admins/invitations", { params }),
   inviteAdmin: (payload) => api.post("/api/platform/admins/invite", payload),
   resendAdminInvitation: (invitationId) => api.post(`/api/platform/admins/invitations/${invitationId}/resend`),
   revokeAdminInvitation: (invitationId) => api.delete(`/api/platform/admins/invitations/${invitationId}`),

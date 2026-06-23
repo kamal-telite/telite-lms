@@ -93,6 +93,13 @@ const iconMap = {
       <path d="M5 21h14" />
     </>
   ),
+  upload: () => (
+    <>
+      <path d="M12 21V9" />
+      <path d="m7 14 5-5 5 5" />
+      <path d="M5 3h14" />
+    </>
+  ),
   plus: () => (
     <>
       <path d="M12 5v14" />
@@ -134,6 +141,7 @@ const iconMap = {
   ),
   check: () => <path d="m5 13 4 4L19 7" />,
   chevronDown: () => <path d="m6 9 6 6 6-6" />,
+  chevronLeft: () => <path d="m15 6-6 6 6 6" />,
   chevronRight: () => <path d="m9 6 6 6-6 6" />,
   search: () => (
     <>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { launchCourse, startTask, submitTaskWork } from "../../services/client";
+import { fetchMyAnnouncements, launchCourse, markAnnouncementRead, startTask, submitTaskWork } from "../../services/client";
+import { api, getErrorMessage } from "../../services/client";
 import { DashboardShell, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { Avatar, Badge, Button, ErrorState, LoadingState, Panel, StatCard, useToast, EmptyState, IconButton } from "../../components/common/ui";
 import { ChartCanvas } from "../../components/common/charts";
@@ -101,12 +102,14 @@ export default function LearnerPage({ session, onLogout }) {
   const [submissionDrafts, setSubmissionDrafts] = useState({});
   const [launchingCourseId, setLaunchingCourseId] = useState(null);
   const [activeCourseId, setActiveCourseId] = useState(null);
+  const [certifyingCourseId, setCertifyingCourseId] = useState(null);
 
   // Tabs for sub-pages
   const [courseFilter, setCourseFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState("all");
   const [showNotifications, setShowNotifications] = useState(false);
   const [animateProgress, setAnimateProgress] = useState(false);
+  const [announcementState, setAnnouncementState] = useState({ items: [], loading: false, error: "" });
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: "", email: "", organization_id: "1" });
@@ -124,6 +127,31 @@ export default function LearnerPage({ session, onLogout }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadAnnouncements() {
+      setAnnouncementState((current) => ({ ...current, loading: true, error: "" }));
+      try {
+        const response = await fetchMyAnnouncements();
+        if (!ignore) {
+          setAnnouncementState({
+            items: Array.isArray(response.items) ? response.items : [],
+            loading: false,
+            error: "",
+          });
+        }
+      } catch (requestError) {
+        if (!ignore) {
+          setAnnouncementState({ items: [], loading: false, error: "Unable to load announcements." });
+        }
+      }
+    }
+    loadAnnouncements();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading && data) {
@@ -195,6 +223,39 @@ export default function LearnerPage({ session, onLogout }) {
     }
   }
 
+  async function handleCertificate(courseId) {
+    if (!courseId) return;
+    setCertifyingCourseId(courseId);
+    try {
+      const response = await api.post(`/api/certificates/${courseId}/issue`);
+      const cert = response.data?.certificate;
+      showToast("Certificate ready.", "success");
+      if (cert?.verification_token) {
+        window.open(`/public/verify/${cert.verification_token}`, "_blank");
+      }
+    } catch (requestError) {
+      showToast(getErrorMessage(requestError, "Unable to issue certificate."), "error");
+    } finally {
+      setCertifyingCourseId(null);
+    }
+  }
+
+  async function handleReadAnnouncement(announcementId) {
+    try {
+      await markAnnouncementRead(announcementId);
+      setAnnouncementState((current) => ({
+        ...current,
+        items: current.items.map((item) =>
+          item.id === announcementId
+            ? { ...item, is_read: true, read_at: item.read_at || new Date().toISOString() }
+            : item
+        ),
+      }));
+    } catch (requestError) {
+      showToast(getErrorMessage(requestError, "Unable to mark announcement as read."), "error");
+    }
+  }
+
   if (loading) {
     return <LoadingState title="Loading learning portal..." body="Preparing your courses, PAL progress, and tasks." />;
   }
@@ -221,6 +282,7 @@ export default function LearnerPage({ session, onLogout }) {
         { id: "section-courses", label: "My Courses", icon: "course" },
         { id: "section-pal", label: "PAL Progress", icon: "leaderboard" },
         { id: "section-tasks", label: "Tasks", icon: "task", badge: String(tasks.filter(t => t.status === "pending" || t.status === "overdue").length || 0), badgeTone: "warn" },
+        { id: "section-announcements", label: "Announcements", icon: "bell", badge: String(announcementState.items.filter((item) => !item.is_read).length || 0), badgeTone: "brand" },
       ],
     },
     {
@@ -580,8 +642,8 @@ export default function LearnerPage({ session, onLogout }) {
                       <div className="row-title">{course.name}</div>
                       <div className="row-subtitle">Completed {formatPercent(course.completion_pct)}</div>
                     </div>
-                    <Button tone="primary" onClick={() => window.open(`/api/certificates/${course.id}`, '_blank')}>
-                      Download PDF
+                    <Button tone="primary" onClick={() => handleCertificate(course.id)} disabled={certifyingCourseId === course.id}>
+                      {certifyingCourseId === course.id ? "Preparing..." : "View Certificate"}
                     </Button>
                   </div>
                 ))}
@@ -589,6 +651,47 @@ export default function LearnerPage({ session, onLogout }) {
                   <EmptyState title="No certificates yet" body="Complete your first course to earn a certificate." style={{ gridColumn: "1 / -1" }} />
                 )}
               </div>
+            </Panel>
+          </section>
+        )}
+
+        {/* ANNOUNCEMENTS PAGE */}
+        {activeNav === "section-announcements" && (
+          <section id="section-announcements">
+            <Panel title="Announcements" subtitle="Updates from your organization">
+              {announcementState.loading ? (
+                <LoadingState title="Loading announcements..." body="Checking the latest messages." />
+              ) : announcementState.error ? (
+                <ErrorState body={announcementState.error} action={<Button tone="primary" onClick={() => window.location.reload()}>Retry</Button>} />
+              ) : announcementState.items.length === 0 ? (
+                <EmptyState title="No announcements yet" body="Organization announcements will appear here." />
+              ) : (
+                <div className="dashboard-stack">
+                  {announcementState.items.map((announcement) => (
+                    <article className="soft-card" key={announcement.id}>
+                      <div className="split-actions" style={{ alignItems: "flex-start" }}>
+                        <div>
+                          <div className="row-title">{announcement.title}</div>
+                          <div className="row-subtitle">
+                            {announcement.published_at ? formatMonthDate(announcement.published_at) : "Published"}
+                          </div>
+                        </div>
+                        <Badge tone={announcement.is_read ? "neutral" : "brand"}>
+                          {announcement.is_read ? "Read" : "Unread"}
+                        </Badge>
+                      </div>
+                      <p className="muted" style={{ marginTop: 12 }}>{announcement.body}</p>
+                      {!announcement.is_read ? (
+                        <div style={{ marginTop: 14 }}>
+                          <Button size="small" tone="primary" onClick={() => handleReadAnnouncement(announcement.id)}>
+                            Mark read
+                          </Button>
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              )}
             </Panel>
           </section>
         )}

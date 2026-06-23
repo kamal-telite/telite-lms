@@ -46,10 +46,13 @@ export const useAdminStore = create((set, get) => ({
   pendingInvitations: [],
   loadAdmins: async () => {
     try {
-      const res = await platformApi.listAdmins();
+      const [adminsRes, invitationsRes] = await Promise.all([
+        platformApi.listAdmins(),
+        platformApi.listAdminInvitations(),
+      ]);
       set({
-        admins: Array.isArray(res.data?.admins) ? res.data.admins : [],
-        pendingInvitations: Array.isArray(res.data?.pending_invitations) ? res.data.pending_invitations : [],
+        admins: Array.isArray(adminsRes.data?.admins) ? adminsRes.data.admins : [],
+        pendingInvitations: Array.isArray(invitationsRes.data?.pending_invitations) ? invitationsRes.data.pending_invitations : [],
       });
     } catch (err) {
       console.error("Failed to load admins:", err);

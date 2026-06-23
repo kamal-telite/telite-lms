@@ -41,6 +41,10 @@ import {
   getScoreColor,
   titleize,
 } from "../../utils/formatters";
+import {
+  getCourseEnrollmentDisabledReason,
+  toggleEnrollmentCourseSelection,
+} from "../../utils/enrollmentCourses";
 import { useKpiPulse } from "../../hooks/useKpiPulse";
 import { ActivityFeedTab, SettingsTab, ReportsTab, PalTrackerTab, TasksTab, ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
 import { useDashboardStore } from "../../store/dashboardStore";
@@ -343,6 +347,8 @@ function CategoryAdminPageContent({ session, onLogout }) {
       label: "Management",
       items: [
         { id: "courses", label: "Courses", icon: "course", badge: String(dashboard.kpis.total_courses), badgeTone: "brand" },
+        { id: "question_banks", label: "Question banks", icon: "database" },
+        { id: "announcements", label: "Announcements", icon: "bell" },
         { id: "learners", label: "Learners", icon: "users", badge: String(dashboard.kpis.active_learners), badgeTone: "brand" },
         { id: "enrollment", label: "Enrollment", icon: "enrollments", badge: String(dashboard.kpis.pending_enrollment), badgeTone: "warn" },
         { id: "verifications", label: "Verifications", icon: "shield", badge: String(dashboard.kpis.pending_verifications || 0), badgeTone: "warn" },
@@ -432,6 +438,14 @@ function CategoryAdminPageContent({ session, onLogout }) {
           }
           if (item.id === "settings") {
             navigate(`/categories/${slug}/admin/settings`);
+            return;
+          }
+          if (item.id === "question_banks") {
+            navigate(`/categories/${slug}/question-banks`);
+            return;
+          }
+          if (item.id === "announcements") {
+            navigate(`/categories/${slug}/announcements`);
             return;
           }
           const mapped = {
@@ -974,23 +988,26 @@ function CategoryAdminPageContent({ session, onLogout }) {
                   <div className="field">
                     <span className="field__label">Courses to enroll in</span>
                     <div className="checkbox-grid">
-                      {(dashboard?.courses || []).map((course) => (
-                        <label className="radio-pill" key={course.id}>
-                          <input
-                            type="checkbox"
-                            checked={manualForm.course_ids.includes(course.id)}
-                            onChange={() =>
-                              setManualForm((current) => ({
-                                ...current,
-                                course_ids: current.course_ids.includes(course.id)
-                                  ? current.course_ids.filter((value) => value !== course.id)
-                                  : [...current.course_ids, course.id],
-                              }))
-                            }
-                          />
-                          {course.name}
-                        </label>
-                      ))}
+                      {(dashboard?.courses || []).map((course) => {
+                        const disabledReason = getCourseEnrollmentDisabledReason(course);
+                        return (
+                          <label className={`radio-pill ${disabledReason ? "is-disabled" : ""}`} key={course.id} title={disabledReason || undefined}>
+                            <input
+                              type="checkbox"
+                              disabled={Boolean(disabledReason)}
+                              checked={manualForm.course_ids.includes(course.id)}
+                              onChange={() =>
+                                setManualForm((current) => ({
+                                  ...current,
+                                  course_ids: toggleEnrollmentCourseSelection(current.course_ids, course),
+                                }))
+                              }
+                            />
+                            <span>{course.name}</span>
+                            {disabledReason ? <span className="field__help">{disabledReason}</span> : null}
+                          </label>
+                        );
+                      })}
                     </div>
                     {manualErrors.course_ids ? <span className="field__error">{manualErrors.course_ids}</span> : null}
                   </div>
@@ -1431,23 +1448,26 @@ function LearnerEditorModal({ open, seed, courses, onClose, onSubmit }) {
         <div className="field">
           <span className="field__label">Courses</span>
           <div className="checkbox-grid">
-            {courses.map((course) => (
-              <label className="radio-pill" key={course.id}>
-                <input
-                  type="checkbox"
-                  checked={form.course_ids.includes(course.id)}
-                  onChange={() =>
-                    updateField(
-                      "course_ids",
-                      form.course_ids.includes(course.id)
-                        ? form.course_ids.filter((value) => value !== course.id)
-                        : [...form.course_ids, course.id]
-                    )
-                  }
-                />
-                {course.name}
-              </label>
-            ))}
+            {courses.map((course) => {
+              const disabledReason = getCourseEnrollmentDisabledReason(course);
+              return (
+                <label className={`radio-pill ${disabledReason ? "is-disabled" : ""}`} key={course.id} title={disabledReason || undefined}>
+                  <input
+                    type="checkbox"
+                    disabled={Boolean(disabledReason)}
+                    checked={form.course_ids.includes(course.id)}
+                    onChange={() =>
+                      updateField(
+                        "course_ids",
+                        toggleEnrollmentCourseSelection(form.course_ids, course)
+                      )
+                    }
+                  />
+                  <span>{course.name}</span>
+                  {disabledReason ? <span className="field__help">{disabledReason}</span> : null}
+                </label>
+              );
+            })}
           </div>
           {errors.course_ids ? <span className="field__error">{errors.course_ids}</span> : null}
         </div>

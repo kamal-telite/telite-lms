@@ -6,7 +6,10 @@ const SuperAdminPage = lazy(() => import("../pages/super-admin/SuperAdminPage"))
 const CategoryAdminPage = lazy(() => import("../pages/company/CategoryAdminPage"));
 const CategoryStatsPage = lazy(() => import("../pages/super-admin/CategoryStatsPage"));
 const CourseBuilderPage = lazy(() => import("../pages/authoring/CourseBuilderPage"));
-const LearningPathBuilder = lazy(() => import("../pages/authoring/LearningPathBuilder"));
+const LearningPathBuilder = lazy(() => import('../pages/authoring/LearningPathBuilder'));
+const QuestionBankManagerPage = lazy(() => import('../pages/authoring/QuestionBankManagerPage'));
+const AnnouncementManagementPage = lazy(() => import('../pages/authoring/AnnouncementManagementPage'));
+const BulkEnrollmentPage = lazy(() => import('../pages/super-admin/BulkEnrollmentPage'));
 
 export default function OrgRouter({ session, onLogout }) {
   const location = useLocation();
@@ -47,6 +50,22 @@ export default function OrgRouter({ session, onLogout }) {
               element={
                 <ProtectedRoute session={session} allowRoles={["category_admin"]}>
                   <LearningPathBuilder session={session} onLogout={onLogout} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="question-banks/*"
+              element={
+                <ProtectedRoute session={session} allowRoles={["category_admin"]}>
+                  <QuestionBankManagerPage session={session} onLogout={onLogout} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="announcements"
+              element={
+                <ProtectedRoute session={session} allowRoles={["category_admin"]}>
+                  <AnnouncementManagementPage session={session} onLogout={onLogout} />
                 </ProtectedRoute>
               }
             />

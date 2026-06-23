@@ -24,6 +24,7 @@ import {
 import { ChartCanvas } from "../../components/common/charts";
 import { DashboardShell, SectionTitle, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
+import BulkEnrollmentPage from "./BulkEnrollmentPage";
 import { BrandingSettingsTab } from "../../components/dashboard/BrandingSettingsTab";
 
 import { useSuperAdminStore } from "../../store/dashboardStore";
@@ -147,6 +148,7 @@ export default function SuperAdminPage({ session, onLogout }) {
         },
         { id: "section-admin", label: "Admin control", icon: "shield" },
         { id: "section-users", label: "All users", icon: "users" },
+          { id: "section-bulk-enrollment", label: "Bulk Enrollment", icon: "upload" },
         {
           id: "section-enrollments",
           label: "Enrollments",

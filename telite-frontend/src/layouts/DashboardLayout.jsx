@@ -3,6 +3,7 @@ import { Badge, Avatar } from "../components/common/ui";
 import { Icon } from "../components/common/icons";
 import AccountSwitcher from "../components/common/AccountSwitcher";
 import ThemeSelector from "../components/common/ThemeSelector";
+import NotificationBell from "../components/common/NotificationBell";
 
 export function DashboardShell({
   theme = "brand",
@@ -95,11 +96,15 @@ export function DashboardShell({
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
-          <div className="topbar__actions">
+          <div className="topbar__actions" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-8)' }}>
             {topbarBadge ? <Badge tone={topbarBadge.tone}>{topbarBadge.label}</Badge> : null}
             {topbarActions}
             {session ? (
-              <AccountSwitcher session={session} onSessionChange={onSessionChange} />
+              <>
+                <NotificationBell />
+                <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
+                <AccountSwitcher session={session} onSessionChange={onSessionChange} />
+              </>
             ) : null}
           </div>
         </header>
