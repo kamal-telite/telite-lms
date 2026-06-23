@@ -111,10 +111,10 @@ def _download_url_for(asset: MediaAsset) -> str:
     return generate_presigned_download_url(asset.object_key)
 
 def _usage_count(db: Session, asset_id: int, org_id: int) -> int:
-    return db.query(LessonBlock).filter(
-        LessonBlock.media_asset_id == asset_id,
-        LessonBlock.org_id == org_id,
-        LessonBlock.deleted_at.is_(None),
+    from app.models.media_asset_usage import MediaAssetUsage
+    return db.query(MediaAssetUsage).filter(
+        MediaAssetUsage.media_asset_id == asset_id,
+        MediaAssetUsage.org_id == org_id
     ).count()
 
 def _asset_response(db: Session, asset: MediaAsset, usage_count: int | None = None) -> dict:
@@ -344,13 +344,14 @@ def list_assets(
     usage_counts = {}
     if assets:
         from sqlalchemy import func
+        from app.models.media_asset_usage import MediaAssetUsage
         counts_query = db.query(
-            LessonBlock.media_asset_id,
-            func.count(LessonBlock.id)
+            MediaAssetUsage.media_asset_id,
+            func.count(MediaAssetUsage.id)
         ).filter(
-            LessonBlock.media_asset_id.in_([a.id for a in assets]),
-            LessonBlock.deleted_at.is_(None)
-        ).group_by(LessonBlock.media_asset_id).all()
+            MediaAssetUsage.media_asset_id.in_([a.id for a in assets]),
+            MediaAssetUsage.org_id == current_user.org_id
+        ).group_by(MediaAssetUsage.media_asset_id).all()
         for aid, count in counts_query:
             usage_counts[aid] = count
     
@@ -500,40 +501,55 @@ def get_asset_usage(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    query = (
-        db.query(
-            LessonBlock.id.label("block_id"),
-            LessonBlock.block_type.label("block_type"),
-            CourseModule.id.label("module_id"),
-            CourseModule.title.label("module_title"),
-            CourseSection.id.label("section_id"),
-            CourseSection.title.label("section_title"),
-            Course.id.label("course_id"),
-            Course.name.label("course_title")
-        )
-        .join(CourseModule, LessonBlock.module_id == CourseModule.id)
-        .outerjoin(CourseSection, CourseModule.section_id == CourseSection.id)
-        .join(Course, CourseModule.course_id == Course.id)
-        .filter(
-            LessonBlock.media_asset_id == asset_id,
-            LessonBlock.org_id == current_user.org_id,
-            LessonBlock.deleted_at.is_(None)
-        )
-    )
+    from app.models.media_asset_usage import MediaAssetUsage
+    
+    usages = db.query(MediaAssetUsage).filter(
+        MediaAssetUsage.media_asset_id == asset_id,
+        MediaAssetUsage.org_id == current_user.org_id
+    ).all()
     
     results = []
-    for row in query.all():
-        results.append({
-            "block_id": row.block_id,
-            "block_type": row.block_type,
-            "module_id": row.module_id,
-            "module_title": row.module_title,
-            "section_id": row.section_id,
-            "section_title": row.section_title or (f"Section {row.section_id}" if row.section_id else "Unassigned Section"),
-            "course_id": row.course_id,
-            "course_title": row.course_title
-        })
+    
+    # Pre-fetch LessonBlocks for batch resolving
+    lesson_block_ids = [int(u.entity_id) for u in usages if u.entity_type == "lesson_block" and str(u.entity_id).isdigit()]
+    if lesson_block_ids:
+        query = (
+            db.query(
+                LessonBlock.id.label("block_id"),
+                LessonBlock.block_type.label("block_type"),
+                CourseModule.id.label("module_id"),
+                CourseModule.title.label("module_title"),
+                CourseSection.id.label("section_id"),
+                CourseSection.title.label("section_title"),
+                Course.id.label("course_id"),
+                Course.name.label("course_title")
+            )
+            .join(CourseModule, LessonBlock.module_id == CourseModule.id)
+            .outerjoin(CourseSection, CourseModule.section_id == CourseSection.id)
+            .join(Course, CourseModule.course_id == Course.id)
+            .filter(LessonBlock.id.in_(lesson_block_ids))
+        )
         
+        block_map = {row.block_id: row for row in query.all()}
+        
+        for u in usages:
+            if u.entity_type == "lesson_block" and str(u.entity_id).isdigit():
+                b_id = int(u.entity_id)
+                if b_id in block_map:
+                    row = block_map[b_id]
+                    results.append({
+                        "usage_context": u.usage_context,
+                        "entity_type": "lesson_block",
+                        "block_id": row.block_id,
+                        "block_type": row.block_type,
+                        "module_id": row.module_id,
+                        "module_title": row.module_title,
+                        "section_id": row.section_id,
+                        "section_title": row.section_title or (f"Section {row.section_id}" if row.section_id else "Unassigned Section"),
+                        "course_id": row.course_id,
+                        "course_title": row.course_title
+                    })
+    
     return {"usage": results}
 
 @media_router.get("/h5p/{asset_id}/{file_path:path}")

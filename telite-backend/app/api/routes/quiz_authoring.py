@@ -7,7 +7,6 @@ from app.api.auth import get_current_user, require_admin, TokenData
 from app.db.engine import db_session
 from app.models.question_bank import QuestionBank
 from app.models.question import Question, QuestionVersion
-from app.models.quiz_models import QuizSettings, QuizDefinition
 from app.models.rubric import GradingRubric, RubricCriteria
 
 def _native_quiz_engine_only():
@@ -83,39 +82,6 @@ def create_question(
     question.current_version_id = version.id
     db.commit()
     return {"question_id": question.id, "version_id": version.id}
-
-class QuizSettingsUpdate(BaseModel):
-    time_limit: Optional[int] = None
-    passing_score: Optional[float] = None
-    attempt_limit: Optional[int] = None
-    show_answers: bool = False
-    show_score: bool = True
-    shuffle_questions: bool = False
-    shuffle_options: bool = False
-    cooldown_minutes: Optional[int] = None
-    review_mode: str = "score_only"
-
-@quiz_authoring_router.put("/quizzes/{quiz_id}/settings", dependencies=[Depends(require_admin)])
-def update_quiz_settings(
-    quiz_id: int,
-    request: QuizSettingsUpdate,
-    db: Session = Depends(db_session),
-    current_user: TokenData = Depends(get_current_user)
-):
-    quiz = db.query(QuizDefinition).filter(QuizDefinition.id == quiz_id, QuizDefinition.org_id == current_user.org_id).first()
-    if not quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
-        
-    settings = db.query(QuizSettings).filter(QuizSettings.quiz_id == quiz_id).first()
-    if not settings:
-        settings = QuizSettings(quiz_id=quiz_id)
-        db.add(settings)
-        
-    for key, value in request.dict(exclude_unset=True).items():
-        setattr(settings, key, value)
-        
-    db.commit()
-    return {"success": True}
 
 class RubricCreate(BaseModel):
     name: str

@@ -86,19 +86,9 @@ def require_capability(permission_key: str) -> Callable:
         db: Session = Depends(db_session),
         current_user: TokenData = Depends(get_current_user)
     ):
-        # Super admin has unrestricted access
-        if current_user.role == "super_admin":
-            return current_user
+        from app.core.rbac import has_permission
 
-        # Fetch the capability for the user's current active role and organization
-        capability = db.query(RolePermission).filter(
-            RolePermission.org_id == current_user.org_id,
-            RolePermission.role == current_user.role,
-            RolePermission.permission_key == permission_key,
-            RolePermission.enabled == True
-        ).first()
-
-        if not capability:
+        if not has_permission(current_user, permission_key):
             # Explicitly log permission denial
             AuditService.log(
                 db=db,

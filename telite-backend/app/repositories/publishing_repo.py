@@ -36,7 +36,9 @@ class PublishingRepository(BaseRepository):
         return self.session.execute(stmt).scalar_one_or_none()
 
     def create_version(self, course_id: str, org_id: int, version_number: int, parent_version_id: int | None = None, snapshot: dict | None = None) -> CourseVersion:
+        import uuid
         version = CourseVersion(
+            id=uuid.uuid4().hex,
             course_id=course_id,
             org_id=org_id,
             version_number=version_number,
@@ -83,6 +85,51 @@ class PublishingRepository(BaseRepository):
         blocks_by_module = {}
         for block in blocks:
             settings = copy.deepcopy(block.metadata_json) if block.metadata_json else {}
+            
+            # Resolve Question Bank references (Hybrid Model)
+            if block.block_type == "quiz" and "questions" in settings:
+                from app.models.question import QuestionVersion
+                from datetime import datetime, timezone
+                
+                hydrated_questions = []
+                for q in settings["questions"]:
+                    if q.get("type") == "bank_reference":
+                        version_id = q.get("version_id")
+                        if version_id:
+                            q_version = self.session.execute(
+                                select(QuestionVersion).where(
+                                    QuestionVersion.id == version_id,
+                                    QuestionVersion.org_id == org_id
+                                )
+                            ).scalar_one_or_none()
+                            
+                            if not q_version:
+                                raise ValueError(f"Referenced QuestionVersion {version_id} not found.")
+                            if q_version.status != "PUBLISHED":
+                                raise ValueError(f"Cannot publish course: Quiz block references non-PUBLISHED QuestionVersion {version_id}.")
+
+                            options = copy.deepcopy(q_version.options_json or [])
+                            correct_answers = copy.deepcopy(q_version.correct_answer_json or [])
+                            correct_option_id = correct_answers[0] if correct_answers else None
+
+                            # Hydrate the full payload into the question object
+                            q = {
+                                "source": "question_bank",
+                                "id": f"qbank-{q_version.question_id}-v{q_version.id}",
+                                "text": q_version.question_text,
+                                "options": options,
+                                "correct_option_id": correct_option_id,
+                                "question_id": q_version.question_id,
+                                "version_id": q_version.id,
+                                "question_type": q_version.question_type,
+                                "question_text": q_version.question_text,
+                                "options_json": q_version.options_json,
+                                "correct_answer_json": q_version.correct_answer_json,
+                                "points": q_version.points,
+                                "hydrated_at": datetime.now(timezone.utc).isoformat()
+                            }
+                    hydrated_questions.append(q)
+                settings["questions"] = hydrated_questions
             blocks_by_module.setdefault(block.module_id, []).append({
                 "id": block.id,
                 "module_id": block.module_id,

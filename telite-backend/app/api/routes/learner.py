@@ -12,6 +12,8 @@ from app.db.engine import db_session
 from app.repositories.learner_repo import LearnerRepository
 from app.repositories.enrollment_repo import EnrollmentRepository
 from app.repositories.progress_repo import ProgressRepository
+from app.services.completion_policy_service import CompletionPolicyService
+from app.services.gradebook_service import GradebookService
 from app.services.learning_path_unlock_service import LearningPathUnlockService
 from app.models.learner_event import LearnerEvent
 from app.models.course_progress import CourseProgress
@@ -333,31 +335,32 @@ def update_progress(
     completion_percentage = (completed_count / total_modules * 100.0) if total_modules else 0.0
     course_progress.completion_percentage = completion_percentage
 
-    if total_modules and completed_count == total_modules:
-        if course_progress.status != "completed":
-            course_progress.status = "completed"
-            if not course_progress.completed_at:
-                course_progress.completed_at = datetime.utcnow()
-            course_progress.completion_percentage = 100.0
-            
-            # Emit COURSE_COMPLETED event
-            db.add(LearnerEvent(
-                user_id=current_user.id,
-                course_id=req.course_id,
-                event_type="COURSE_COMPLETED",
-                schema_version="1.0",
-                payload_json={},
-                created_at=datetime.utcnow(),
-                org_id=current_user.org_id
-            ))
-    else:
+    if not total_modules or completed_count != total_modules:
         course_progress.status = "in_progress"
         course_progress.completed_at = None
+
+    evaluation = CompletionPolicyService(db).evaluate_course_completion(
+        user_id=current_user.id,
+        course_id=req.course_id,
+        org_id=current_user.org_id,
+        course_progress=course_progress,
+    )
+    if evaluation.completed_now:
+        # Emit COURSE_COMPLETED only when policy-driven academic completion transitions.
+        db.add(LearnerEvent(
+            user_id=current_user.id,
+            course_id=req.course_id,
+            event_type="COURSE_COMPLETED",
+            schema_version="1.0",
+            payload_json=evaluation.to_event_payload(),
+            created_at=datetime.utcnow(),
+            org_id=current_user.org_id
+        ))
 
     progress_repo.upsert_course_progress(course_progress)
     db.commit()
 
-    if course_progress.status == "completed":
+    if evaluation.completed_now:
         from app.models.learning_path import LearningPathCourse
         unlock_svc = LearningPathUnlockService(db)
         
@@ -597,7 +600,7 @@ async def submit_quiz(
             bp.status = "completed"
             bp.completed_at = datetime.utcnow()
             
-    db.add(LearnerEvent(
+    quiz_event = LearnerEvent(
         user_id=current_user.id, course_id=course_id, module_id=block.get("module_id"), block_id=block_id,
         event_type="QUIZ_SUBMITTED", schema_version="1.0",
         payload_json={
@@ -610,7 +613,50 @@ async def submit_quiz(
             "attempt_number": prior_attempts + 1,
             "max_attempts": max_attempts,
         }, created_at=datetime.utcnow(), org_id=current_user.org_id
-    ))
+    )
+    db.add(quiz_event)
+    db.flush()
+
+    gradebook = GradebookService(db)
+    grade_item = gradebook.ensure_quiz_grade_item(
+        org_id=current_user.org_id,
+        course_id=course_id,
+        block_id=block_id,
+        title=block.get("content") or settings.get("title") or "Quiz",
+        settings=settings,
+        actor_user_id=current_user.id,
+    )
+    gradebook.upsert_current_result(
+        org_id=current_user.org_id,
+        course_id=course_id,
+        course_version_id=gradebook.course_version_token(
+            user_id=current_user.id,
+            course_id=course_id,
+            org_id=current_user.org_id,
+        ),
+        grade_item=grade_item,
+        user_id=current_user.id,
+        source_type="quiz_submission",
+        source_id=str(quiz_event.id),
+        attempt_number=prior_attempts + 1,
+        points_awarded=float(awarded_points),
+        points_possible=float(total_points),
+        percentage=float(score),
+        status="graded",
+        graded_by=None,
+        graded_at=quiz_event.created_at,
+        feedback=None,
+        metadata={
+            "passed": passed,
+            "correct": correct,
+            "total": total,
+            "attempt_number": prior_attempts + 1,
+            "max_attempts": max_attempts,
+            "attempt_strategy": (grade_item.grading_policy_json or {}).get("attempt_strategy", "best"),
+            "question_results": question_results,
+            "source_event_id": quiz_event.id,
+        },
+    )
     db.commit()
     
     return {

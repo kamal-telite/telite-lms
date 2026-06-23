@@ -1,7 +1,7 @@
 import hashlib
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,7 @@ class CertificateService:
     def __init__(self, db: Session):
         self.db = db
 
-    def generate_certificate(self, user: User, course: Course, org_id: int) -> Certificate:
+    def generate_certificate(self, user: User, course: Course, org_id: int) -> tuple[Certificate, bool]:
         """
         Generate a new certificate for the user and course.
         1. Generates verification token and hash
@@ -42,7 +42,7 @@ class CertificateService:
         ).first()
         
         if existing_cert:
-            return existing_cert
+            return existing_cert, False
             
         # 1. Generate token and hash
         token = uuid.uuid4().hex
@@ -74,13 +74,13 @@ class CertificateService:
             verification_token=token,
             qr_code_url=qr_url,
             issued_version=1,
-            issued_at=datetime.utcnow()
+            issued_at=datetime.now(timezone.utc)
         )
         self.db.add(cert)
         self.db.commit()
         self.db.refresh(cert)
         
-        return cert
+        return cert, True
 
     def verify_certificate(self, token: str) -> dict[str, Any] | None:
         """Verify a certificate by token."""

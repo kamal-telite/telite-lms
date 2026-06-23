@@ -103,7 +103,53 @@ class BuilderRepository(BaseRepository):
     def save_block(self, block: LessonBlock) -> LessonBlock:
         self.session.add(block)
         self.session.flush()
+        self._sync_media_usages(block)
         return block
+
+    def _sync_media_usages(self, block: LessonBlock) -> None:
+        from sqlalchemy import delete
+        from app.models.media_asset_usage import MediaAssetUsage
+        
+        # Clear existing usages for this block
+        self.session.execute(
+            delete(MediaAssetUsage).where(
+                MediaAssetUsage.entity_type == "lesson_block",
+                MediaAssetUsage.entity_id == str(block.id),
+                MediaAssetUsage.org_id == block.org_id
+            )
+        )
+        
+        usages_to_add = []
+        
+        # 1. Explicit foreign key
+        if block.media_asset_id:
+            usages_to_add.append(
+                MediaAssetUsage(
+                    media_asset_id=block.media_asset_id,
+                    org_id=block.org_id,
+                    entity_type="lesson_block",
+                    entity_id=str(block.id),
+                    usage_context="primary_asset"
+                )
+            )
+            
+        # 2. Known structured references in metadata_json
+        if block.metadata_json:
+            asset_id = block.metadata_json.get("asset_id")
+            if asset_id and str(asset_id).isdigit():
+                usages_to_add.append(
+                    MediaAssetUsage(
+                        media_asset_id=int(asset_id),
+                        org_id=block.org_id,
+                        entity_type="lesson_block",
+                        entity_id=str(block.id),
+                        usage_context="metadata_reference"
+                    )
+                )
+        
+        if usages_to_add:
+            self.session.add_all(usages_to_add)
+            self.session.flush()
 
     def delete_block(self, block: LessonBlock, deleted_by: str | None = None) -> None:
         block.deleted_at = datetime.now(timezone.utc)

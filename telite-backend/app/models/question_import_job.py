@@ -1,0 +1,14 @@
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, JSON
+from app.models.base import Base
+
+class QuestionImportJob(Base):
+    __tablename__ = "question_import_jobs"
+    
+    id = Column(String(50), primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(50), ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), nullable=False, default="UPLOADED") # UPLOADED, VALIDATED, READY_TO_COMMIT, COMMITTED, FAILED
+    error_log = Column(Text, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

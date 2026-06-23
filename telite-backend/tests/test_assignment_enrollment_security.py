@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 from fastapi import HTTPException
@@ -10,6 +11,7 @@ from app.models.course import Course
 from app.models.course_module import CourseModule
 from app.models.enrollment import EnrollmentRequest
 from app.models.lesson_block import LessonBlock
+from app.models.notification import Notification
 from app.models.organization import Organization
 from app.models.user import User
 from app.services.assignment_service import AssignmentService, set_assignment_actor_context
@@ -167,6 +169,31 @@ def test_category_admin_grading_is_category_scoped(db_session):
     graded = service.grade(submission.id, admin, grade=92, feedback="Strong work", returned=False)
     assert graded["submission"]["status"] == "graded"
     assert graded["submission"]["grade"] == 92
+
+    notification = db_session.query(Notification).filter(
+        Notification.user_id == context["learner"].id,
+        Notification.type == "assignment_graded",
+        Notification.source_type == "assignment",
+        Notification.source_id == str(submission.id),
+    ).one()
+    metadata = json.loads(notification.metadata_json)
+    assert notification.title == "Assignment Graded"
+    assert notification.is_read is False
+    assert metadata == {
+        "route": f"/learner/courses/{context['course'].id}/assignments/{context['block'].id}",
+        "route_name": "learner_assignment",
+        "course_id": context["course"].id,
+        "block_id": context["block"].id,
+        "submission_id": submission.id,
+    }
+
+    service.grade(submission.id, admin, grade=95, feedback="Updated score", returned=False)
+    notifications = db_session.query(Notification).filter(
+        Notification.user_id == context["learner"].id,
+        Notification.type == "assignment_graded",
+        Notification.source_id == str(submission.id),
+    ).all()
+    assert len(notifications) == 2
 
     wrong_scope = token(
         "wrong-scope-admin",

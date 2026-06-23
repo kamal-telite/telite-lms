@@ -75,6 +75,19 @@ class Permission:
     H5P_DELETE = "h5p.delete"
     H5P_VIEW = "h5p.view"
 
+    # Question Bank-level
+    ORG_MANAGE_BANKS = "org.manage_banks"
+    AUTHORING_MANAGE_QUESTIONS = "authoring.manage_questions"
+    AUTHORING_PUBLISH_QUESTIONS = "authoring.publish_questions"
+
+    # Gradebook-level
+    GRADEBOOK_VIEW = "gradebook.view"
+    GRADEBOOK_RELEASE = "gradebook.release"
+    GRADEBOOK_LOCK = "gradebook.lock"
+    GRADEBOOK_OVERRIDE = "gradebook.override"
+    GRADEBOOK_AUDIT_VIEW = "gradebook.audit.view"
+    GRADEBOOK_LEARNER_VIEW = "gradebook.learner.view"
+
 
 # ── Role → Permission matrix ──────────────────────────────────────────────────
 
@@ -110,6 +123,11 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.H5P_EDIT,
         Permission.H5P_DELETE,
         Permission.H5P_VIEW,
+        Permission.ORG_MANAGE_BANKS,
+        Permission.AUTHORING_MANAGE_QUESTIONS,
+        Permission.AUTHORING_PUBLISH_QUESTIONS,
+        Permission.GRADEBOOK_VIEW,
+        Permission.GRADEBOOK_AUDIT_VIEW,
     },
     "super_admin": {
         Permission.ORG_MANAGE_USERS,
@@ -139,6 +157,14 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.H5P_EDIT,
         Permission.H5P_DELETE,
         Permission.H5P_VIEW,
+        Permission.ORG_MANAGE_BANKS,
+        Permission.AUTHORING_MANAGE_QUESTIONS,
+        Permission.AUTHORING_PUBLISH_QUESTIONS,
+        Permission.GRADEBOOK_VIEW,
+        Permission.GRADEBOOK_RELEASE,
+        Permission.GRADEBOOK_LOCK,
+        Permission.GRADEBOOK_OVERRIDE,
+        Permission.GRADEBOOK_AUDIT_VIEW,
     },
     "category_admin": {
         Permission.CAT_MANAGE_COURSES,
@@ -158,6 +184,14 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.H5P_EDIT,
         Permission.H5P_DELETE,
         Permission.H5P_VIEW,
+        Permission.ORG_MANAGE_BANKS,
+        Permission.AUTHORING_MANAGE_QUESTIONS,
+        Permission.AUTHORING_PUBLISH_QUESTIONS,
+        Permission.GRADEBOOK_VIEW,
+        Permission.GRADEBOOK_RELEASE,
+        Permission.GRADEBOOK_LOCK,
+        Permission.GRADEBOOK_OVERRIDE,
+        Permission.GRADEBOOK_AUDIT_VIEW,
     },
     "author": {
         Permission.AUTHORING_MANAGE_BLOCKS,
@@ -172,6 +206,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.H5P_EDIT,
         Permission.H5P_DELETE,
         Permission.H5P_VIEW,
+        Permission.AUTHORING_MANAGE_QUESTIONS,
     },
     "reviewer": {
         Permission.AUTHORING_APPROVE_REJECT,
@@ -186,6 +221,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,
         Permission.H5P_VIEW,
+        Permission.GRADEBOOK_LEARNER_VIEW,
     },
 }
 

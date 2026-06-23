@@ -146,6 +146,8 @@ class BlockValidator(BaseValidator):
                 results.append(ValidationResultItem(type="missing_questions", severity="error", section_id=sec_id, module_id=module.id, block_id=block.id, message=f"Quiz block #{b_num} in '{mod_title}' has no questions.", fix_target=fix_target))
             else:
                 for q_idx, q in enumerate(questions):
+                    if q.get("type") == "bank_reference":
+                        continue
                     if not q.get("text") or not q.get("text").strip():
                         results.append(ValidationResultItem(type="empty_question", severity="error", section_id=sec_id, module_id=module.id, block_id=block.id, message=f"Question {q_idx + 1} in Quiz block #{b_num} has empty text.", fix_target=fix_target))
                     options = q.get("options", [])

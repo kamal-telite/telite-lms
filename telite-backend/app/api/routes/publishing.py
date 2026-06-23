@@ -45,7 +45,7 @@ def execute_workflow_action(
 
     # Define legal state transitions
     VALID_TRANSITIONS = {
-        "submit_for_review": ["draft", "rejected"],
+        "submit_for_review": ["draft", "rejected", "published"],
         "approve":           ["review"],
         "reject":            ["review"],
         "publish":           ["approved"],
@@ -132,6 +132,63 @@ def execute_workflow_action(
     )
     review_payload = review.to_dict()
     version_payload = version.to_dict() if version else None
+    
+    # [N4B] Dispatch Course Published / Rejected Notifications
+    from app.repositories.notification_repo import NotificationRepository
+    from app.models.notification import NotificationType
+    from app.core.notification_payloads import course_authoring_metadata, course_published_idempotency_key
+    
+    if action in ["publish", "reject"]:
+        notif_repo = NotificationRepository(db)
+        
+        # Determine the author: Look for the most recent "submit_for_review" action
+        # If not found, fall back to the current user (if they are self-publishing/self-rejecting)
+        submit_action = db.query(CourseReview).filter(
+            CourseReview.course_id == course_id,
+            CourseReview.action == "submit_for_review"
+        ).order_by(CourseReview.reviewed_at.desc()).first()
+        
+        author_id = submit_action.reviewed_by if submit_action else current_user.id
+        
+        if action == "publish":
+            metadata = course_authoring_metadata(
+                category_slug=course.category_slug,
+                course_id=course_id,
+                course_version_id=version.id if version else None,
+                version_number=version.version_number if version else None,
+            )
+            idempotency_key = course_published_idempotency_key(
+                user_id=author_id,
+                course_version_id=version.id if version else None,
+                course_id=course_id,
+                version_number=version.version_number if version else None,
+            )
+            notif_repo.create_once(
+                user_id=author_id,
+                org_id=current_user.org_id,
+                title="Course Published",
+                body=f"Your course '{course.name}' has been published.",
+                notif_type=NotificationType.COURSE_PUBLISHED,
+                source_type="course",
+                source_id=course_id,
+                metadata=metadata,
+                idempotency_key=idempotency_key,
+            )
+        elif action == "reject":
+            notif_repo.create(
+                user_id=author_id,
+                org_id=current_user.org_id,
+                title="Course Requires Changes",
+                body=f"Your course '{course.name}' was returned for revision.",
+                notif_type=NotificationType.COURSE_REJECTED,
+                source_type="course",
+                source_id=course_id,
+                metadata=course_authoring_metadata(
+                    category_slug=course.category_slug,
+                    course_id=course_id,
+                ),
+            )
+    
     db.commit()
 
     return {

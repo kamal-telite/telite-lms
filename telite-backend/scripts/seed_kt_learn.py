@@ -68,6 +68,16 @@ EXPECTED = {
 }
 
 DELETE_ORDER = [
+    "assignment_submissions",
+    "task_submissions",
+    "task_reviews",
+    "task_assignments",
+    "certificates",
+    "question_import_jobs",
+    "question_tag_map",
+    "question_tags",
+    "question_categories",
+    "role_permissions",
     "lesson_block_progress",
     "module_progress",
     "course_progress",
@@ -128,7 +138,7 @@ USERS = [
         "username": "globaladmin",
         "email": "globaladmin@ktlearn.local",
         "full_name": "Global Admin",
-        "role": "super_admin",
+        "role": "platform_admin",
         "password": "GlobalAdmin@1234",
         "is_platform_admin": True,
         "category_scope": None,
@@ -213,14 +223,20 @@ ENROLLMENTS = [
 
 def delete_all(session: Session) -> None:
     print("\nDeleting all existing data...")
-    for table in DELETE_ORDER:
+    try:
+        session.execute(text("TRUNCATE TABLE organizations CASCADE"))
+        print("   - All data truncated via CASCADE from organizations.")
+    except Exception as exc:
+        print(f"   ! organizations: skipped ({exc.__class__.__name__})")
+    
+    # Truncate any remaining platform-level tables that might not cascade from organizations
+    for table in ["question_banks", "questions", "question_versions", "users", "categories", "courses"]:
         try:
             with session.begin_nested():
-                result = session.execute(text(f"DELETE FROM {table}"))
-                if result.rowcount > 0:
-                    print(f"   - {table}: {result.rowcount} rows deleted")
-        except Exception as exc:
-            print(f"   ! {table}: skipped ({exc.__class__.__name__})")
+                session.execute(text(f"TRUNCATE TABLE {table} CASCADE"))
+        except Exception:
+            pass
+            
     session.commit()
     print("   Done.\n")
 
@@ -259,14 +275,14 @@ def seed_kt_learn(session: Session) -> None:
                 INSERT INTO users (
                     id, username, email, full_name, role, category_scope, password_hash,
                     avatar_initials, gradient_start, gradient_end,
-                    is_active, is_platform_admin, status, org_id, created_at,
+                    is_active, is_platform_admin, status, theme_preference, org_id, created_at,
                     pal_score, pal_completion_pct, pal_quiz_avg, pal_time_spent_hours,
                     pal_task_completion_pct, streak_days, courses_completed, total_courses,
                     course_progress_json
                 ) VALUES (
                     :id, :username, :email, :full_name, :role, :category_scope, :pw_hash,
                     :initials, '#2563EB', '#111827',
-                    true, :is_platform, 'active', 1, :now,
+                    true, :is_platform, 'active', 'system', 1, :now,
                     0, 0, 0, 0, 0, 0, 0, 0, '[]'
                 )
                 """
@@ -306,10 +322,10 @@ def seed_kt_learn(session: Session) -> None:
                 """
                 INSERT INTO categories (
                     id, name, slug, status, accent_color, admin_user_id,
-                    planned_courses, org_id, org_type, created_at
+                    planned_courses, avg_pal_target, org_id, org_type, created_at
                 ) VALUES (
                     :id, :name, :slug, 'active', :accent_color, :admin_uid,
-                    :planned_courses, 1, 'company', :now
+                    :planned_courses, 0.0, 1, 'company', :now
                 )
                 """
             ),
@@ -337,12 +353,12 @@ def seed_kt_learn(session: Session) -> None:
                     id, category_slug, name, slug, description, status, tier,
                     module_count, modules_json, lessons_count, hours,
                     enrolled_count, completion_rate, completion_count, avg_quiz_score,
-                    org_id, created_at
+                    price_paise, org_id, created_at
                 ) VALUES (
                     :id, :cat_slug, :name, :slug, :description, 'published', 'Basic',
                     3, '[]', 3, 10,
                     0, 0, 0, 0,
-                    1, :now
+                    0, 1, :now
                 )
                 """
             ),
@@ -427,10 +443,10 @@ def seed_kt_learn(session: Session) -> None:
             text(
                 """
                 INSERT INTO enrollment_requests (
-                    id, full_name, email, category_slug, request_type, status,
+                    id, full_name, email, category_slug, request_type, status, domain_verified,
                     requested_at, reviewed_by, reviewed_at, org_id, created_at
                 ) VALUES (
-                    :id, :full_name, :email, :category_slug, 'manual', 'approved',
+                    :id, :full_name, :email, :category_slug, 'manual', 'approved', false,
                     :requested_at, 'kt_superadmin', :reviewed_at, 1, :now
                 )
                 """

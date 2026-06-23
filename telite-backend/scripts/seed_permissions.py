@@ -32,7 +32,9 @@ def seed_permissions():
                 "course.submit", "course.approve", "course.reject",
                 "course.publish", "course.archive",
                 "version.view", "version.create", "version.rollback",
-                "audit.view", "audit.export"
+                "audit.view", "audit.export",
+                "gradebook.view", "gradebook.release", "gradebook.lock",
+                "gradebook.override", "gradebook.audit.view"
             ],
             "org_admin": [
                 "block.create", "block.edit", "block.delete",
@@ -43,7 +45,9 @@ def seed_permissions():
                 "course.submit", "course.approve", "course.reject",
                 "course.publish", "course.archive",
                 "version.view", "version.create", "version.rollback",
-                "audit.view", "audit.export", "permission.manage"
+                "audit.view", "audit.export", "permission.manage",
+                "gradebook.view", "gradebook.release", "gradebook.lock",
+                "gradebook.override", "gradebook.audit.view"
             ]
         }
 

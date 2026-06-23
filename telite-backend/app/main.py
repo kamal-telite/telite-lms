@@ -29,6 +29,7 @@ from app.api.routes.publishing import publishing_router
 from app.api.routes.media import media_router
 from app.api.routes.permissions import permissions_router
 from app.api.routes.learning_paths import learning_paths_router
+from app.api.routes.announcements import announcements_router
 from app.api.routes.audit import audit_router
 from app.core.domain_context import resolve_domain_context
 from app.core.logging_config import configure_logging
@@ -150,12 +151,22 @@ def create_app() -> FastAPI:
     from app.api.routes.assignments import assignment_router
     from app.api.routes.player_api import player_router
     from app.api.routes.authoring import authoring_router
+    from app.api.routes.question_bank import question_bank_router
+    from app.api.routes.notifications import notifications_router
+    from app.api.routes.certificates import cert_router, public_cert_router
+    from app.api.routes.gradebook import gradebook_router
+    
     app.include_router(auth_router)
     app.include_router(assignment_router, prefix="/api/v1")
     app.include_router(learner_router, prefix="/api/v1")
     app.include_router(player_router, prefix="/api/v1")
     app.include_router(v1_enrol_router, prefix="/api/v1")
     app.include_router(authoring_router)
+    app.include_router(question_bank_router, prefix="/api/v1")
+    app.include_router(notifications_router, prefix="/api/v1")
+    app.include_router(cert_router, prefix="/api")
+    app.include_router(public_cert_router)
+    app.include_router(gradebook_router, prefix="/api/v1")
     app.include_router(dashboard_router)
     app.include_router(management_router)
     app.include_router(enrol_router)
@@ -173,6 +184,7 @@ def create_app() -> FastAPI:
     app.include_router(media_router)
     app.include_router(permissions_router)
     app.include_router(learning_paths_router)
+    app.include_router(announcements_router, prefix="/api/v1")
     app.include_router(audit_router)
 
     uploads_dir = Path(__file__).resolve().parents[1] / "uploads"

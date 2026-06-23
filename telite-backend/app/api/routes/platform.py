@@ -334,6 +334,27 @@ def api_list_admins(
         "total": total
     }
 
+@platform_router.get("/admins/invitations")
+def api_list_admin_invitations(
+    org_id: int | None = Query(default=None),
+    admin: TokenData = Depends(require_platform_admin),
+    db: Session = Depends(platform_db_session),
+):
+    invite_repo = InviteRepository(db)
+    org_repo = OrgRepository(db)
+    invitations = []
+    for invitation in invite_repo.list_pending(org_id=org_id):
+        item = invitation.to_dict()
+        org = org_repo.get_by_id(invitation.org_id)
+        item["org_name"] = org.name if org else None
+        item["org_type"] = org.type if org else None
+        invitations.append(item)
+
+    return {
+        "pending_invitations": invitations,
+        "total": len(invitations),
+    }
+
 @platform_router.post("/admins/invite", status_code=201)
 def api_invite_admin(
     payload: InviteAdminPayload,
@@ -376,10 +397,10 @@ def api_invite_admin(
     invite_repo.record_delivery(invitation_obj.id, delivered=delivered)
     db.flush()
 
-    AuditRepository(db).log_action(
+    AuditRepository(db).write(
         org_id=payload.org_id,
         action="admin.invite",
-        actor_id=admin.id,
+        actor_user_id=admin.id,
         actor_name=admin.full_name,
         target_type="user",
         target_id=payload.email,
@@ -414,16 +435,16 @@ def api_resend_admin_invitation(
         org_domain=org.domain if org else "telite.in",
         role=invitation.role,
         token=invitation.token,
-        expires_at=invitation.expires_at.isoformat(),
+        expires_at=str(invitation.expires_at),
     )
     
     invite_repo.record_delivery(invitation.id, delivered=delivered)
     db.flush()
 
-    AuditRepository(db).log_action(
+    AuditRepository(db).write(
         org_id=invitation.org_id,
         action="invite.resend",
-        actor_id=admin.id,
+        actor_user_id=admin.id,
         actor_name=admin.full_name,
         target_type="invitation",
         target_id=str(invitation_id),
@@ -446,13 +467,13 @@ def api_revoke_admin_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found.")
         
-    invite_repo.revoke(invitation.id, revoked_by=admin.id)
+    invite_repo.revoke_invitation(invitation.id, revoked_by=admin.id)
     db.flush()
 
-    AuditRepository(db).log_action(
+    AuditRepository(db).write(
         org_id=invitation.org_id,
         action="invite.revoke",
-        actor_id=admin.id,
+        actor_user_id=admin.id,
         actor_name=admin.full_name,
         target_type="invitation",
         target_id=str(invitation_id),

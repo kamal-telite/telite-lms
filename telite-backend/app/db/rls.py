@@ -25,6 +25,9 @@ logger = logging.getLogger("telite.db.rls")
 TENANT_SCOPED_TABLES = [
     "activity_log",
     "alert_rules",
+    "announcement_audiences",
+    "announcement_read_states",
+    "announcements",
     "audit_log",
     "auth_sessions",
     "branding_assets",
@@ -32,6 +35,7 @@ TENANT_SCOPED_TABLES = [
     "branding_versions",
     "builder_activity_log",
     "categories",
+    "certificates",
     "course_edit_locks",
     "course_modules",
     "course_progress",
@@ -39,7 +43,14 @@ TENANT_SCOPED_TABLES = [
     "course_sections",
     "course_versions",
     "courses",
+    "course_grades",
+    "completion_rules",
     "enrollment_requests",
+    "grade_categories",
+    "grade_change_audit",
+    "grade_items",
+    "grade_results",
+    "grading_schemes",
     "grading_events",
     "grading_rubrics",
     "interactive_tracking",
@@ -64,6 +75,10 @@ TENANT_SCOPED_TABLES = [
     "password_reset_tokens",
     "pending_verifications",
     "question_banks",
+    "question_categories",
+    "question_import_jobs",
+    "question_tag_map",
+    "question_tags",
     "question_versions",
     "questions",
     "quiz_answers",
@@ -116,6 +131,7 @@ def apply_rls_policies(session: Session) -> None:
         try:
             # Enable RLS on the table
             session.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
+            session.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
 
             # Drop existing policy if present (idempotent)
             session.execute(text(f"DROP POLICY IF EXISTS {policy_name} ON {table}"))

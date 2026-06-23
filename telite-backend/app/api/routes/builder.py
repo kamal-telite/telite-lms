@@ -273,6 +273,14 @@ def save_module_blocks(
     results = []
     
     for bp in request.blocks:
+        if bp.block_type == "quiz":
+            from fastapi import HTTPException
+            if not isinstance(bp.settings.get("questions"), list):
+                raise HTTPException(status_code=400, detail=f"Quiz block {bp.id or 'new'} must have a 'questions' list in settings")
+            for q in bp.settings["questions"]:
+                if "question_version_id" not in q:
+                    raise HTTPException(status_code=400, detail="Each question must have a question_version_id")
+        
         media_asset_id = bp.media_asset_id or bp.settings.get("asset_id")
         if bp.is_deleted and bp.id:
             block = builder_repo.get_block_by_id(bp.id, current_user.org_id)

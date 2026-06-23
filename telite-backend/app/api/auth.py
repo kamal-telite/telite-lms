@@ -367,6 +367,66 @@ def require_platform_admin(current_user: TokenData = Depends(get_current_user)) 
     return current_user
 
 
+
+
+def validate_csrf(
+    request: Request,
+    csrf_cookie: str | None = Cookie(default=None, alias="telite_csrf_token"),
+) -> None:
+    """
+    CSRF double-submit cookie validation.
+    Skipped for GET/HEAD/OPTIONS (safe methods).
+    Skipped for Bearer-only clients (no CSRF cookie present).
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+
+    # If no CSRF cookie, client is using Bearer auth — skip CSRF check
+    if not csrf_cookie:
+        return
+
+    header_token = request.headers.get("X-CSRF-Token", "")
+    if not header_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token missing. Include X-CSRF-Token header.",
+        )
+
+    if not validate_csrf_token(header_token, csrf_cookie):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token invalid.",
+        )
+
+
+
+# ── Role guards ───────────────────────────────────────────────────────────────
+
+def is_admin_role(role: str) -> bool:
+    return role in ("super_admin", "category_admin", "platform_admin")
+
+def is_tenant_super_admin_role(role: str) -> bool:
+    return role == "super_admin"
+
+
+def require_admin(current_user: TokenData = Depends(get_current_user)) -> TokenData:
+    if not current_user.is_platform_admin and not is_admin_role(current_user.role):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+def require_super_admin(current_user: TokenData = Depends(get_current_user)) -> TokenData:
+    if not current_user.is_platform_admin and not is_tenant_super_admin_role(current_user.role):
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    return current_user
+
+
+def require_platform_admin(current_user: TokenData = Depends(get_current_user)) -> TokenData:
+    if not current_user.is_platform_admin:
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    return current_user
+
+
 def resolve_org_scope(current_user: TokenData, requested_org_id: int | None = None) -> int | None:
     if current_user.is_platform_admin:
         return requested_org_id if requested_org_id is not None else current_user.org_id
@@ -387,13 +447,15 @@ def ensure_org_access(current_user: TokenData, target_org_id: int | None) -> int
 
 # ── Token helpers ─────────────────────────────────────────────────────────────
 
-def _build_token_response(user: dict[str, Any], refresh_token: str) -> TokenResponse:
+def _build_token_response(user: dict[str, Any], refresh_token: str, db: Session | None = None) -> TokenResponse:
     from app.core.permissions import resolve_permissions
-    access_token = create_access_token(create_access_payload(user))
+    access_token = create_access_token(create_access_payload(user, db))
     permissions = resolve_permissions(
-        user["role"],
-        bool(user.get("is_platform_admin")),
-        user.get("category_scope"),
+        role=user["role"],
+        is_platform_admin=bool(user.get("is_platform_admin")),
+        category_scope=user.get("category_scope"),
+        org_id=user.get("org_id"),
+        db=db,
     )
     return TokenResponse(
         access_token=access_token,
@@ -403,7 +465,7 @@ def _build_token_response(user: dict[str, Any], refresh_token: str) -> TokenResp
         role=user["role"],
         name=user["full_name"],
         email=user["email"],
-        category_scope=user["category_scope"],
+        category_scope=user.get("category_scope"),
         org_id=user.get("org_id"),
         is_platform_admin=bool(user.get("is_platform_admin")),
         permissions=permissions,
@@ -451,7 +513,7 @@ def issue_login_response(
     finally:
         db.execute(text("SELECT set_config('app.current_org_id', '', true)"))
 
-    token_response = _build_token_response(user_dict, refresh_token)
+    token_response = _build_token_response(user_dict, refresh_token, db=db)
     csrf_token = generate_csrf_token()
 
 
@@ -465,9 +527,6 @@ def issue_login_response(
     )
 
     return token_response
-
-
-# ── Router ────────────────────────────────────────────────────────────────────
 
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 

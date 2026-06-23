@@ -81,6 +81,22 @@ class InviteRepository(BaseRepository[OrgInvitation]):
         self.session.flush()
         return inv
 
+    def record_resend(self, invitation_id: int) -> OrgInvitation:
+        inv = self.get_by_id(invitation_id)
+        if not inv:
+            raise ValueError("Invitation not found.")
+        if inv.accepted_at:
+            raise ValueError("Invitation has already been accepted.")
+        if inv.revoked_at:
+            raise ValueError("Invitation has already been revoked.")
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        inv.resend_count = (inv.resend_count or 0) + 1
+        inv.last_resent_at = now
+        inv.last_sent_at = now
+        self.session.flush()
+        return inv
+
     def revoke_invitation(self, invitation_id: int, revoked_by: str | None = None, reason: str | None = None) -> OrgInvitation:
         inv = self.get_by_id(invitation_id)
         if not inv:

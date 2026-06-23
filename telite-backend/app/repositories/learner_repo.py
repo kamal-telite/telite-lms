@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.course import Course
 from app.models.course_module import CourseModule
 from app.models.learning_path import LearningPath
+from app.models.learning_path_progress import LearningPathProgress
 from app.models.user import User
 
 
@@ -39,9 +40,29 @@ class LearnerRepository:
         return self.session.scalar(stmt)
 
     def get_learning_paths(self, user_id: str, org_id: int) -> List[LearningPath]:
-        stmt = select(LearningPath)
+        stmt = (
+            select(LearningPath)
+            .join(LearningPathProgress, LearningPathProgress.path_id == LearningPath.id)
+            .where(
+                LearningPath.org_id == org_id,
+                LearningPath.deleted_at.is_(None),
+                LearningPathProgress.org_id == org_id,
+                LearningPathProgress.user_id == user_id,
+            )
+            .order_by(LearningPath.created_at.desc())
+        )
         return list(self.session.scalars(stmt))
 
     def get_learning_path(self, path_id: int, user_id: str, org_id: int) -> Optional[LearningPath]:
-        stmt = select(LearningPath).where(LearningPath.id == path_id)
+        stmt = (
+            select(LearningPath)
+            .join(LearningPathProgress, LearningPathProgress.path_id == LearningPath.id)
+            .where(
+                LearningPath.id == path_id,
+                LearningPath.org_id == org_id,
+                LearningPath.deleted_at.is_(None),
+                LearningPathProgress.org_id == org_id,
+                LearningPathProgress.user_id == user_id,
+            )
+        )
         return self.session.scalar(stmt)

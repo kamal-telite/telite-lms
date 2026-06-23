@@ -54,7 +54,7 @@ def get_learning_path(
     if not path:
         raise HTTPException(status_code=404, detail="Path not found")
         
-    courses = repo.get_path_courses(path_id)
+    courses = repo.get_path_courses(path_id, current_user.org_id)
     
     path_dict = path.to_dict()
     path_dict["settings"] = json.loads(path_dict["settings"])
@@ -116,7 +116,7 @@ def update_path_sequence(
     if not path:
         raise HTTPException(status_code=404, detail="Path not found")
         
-    repo.set_path_courses(path_id, request.course_ids)
+    repo.set_path_courses(path_id, request.course_ids, current_user.org_id)
     repo.log_activity(path.id, current_user.id, current_user.org_id, "PATH_SEQUENCE_UPDATED")
     db.commit()
     return {"success": True}

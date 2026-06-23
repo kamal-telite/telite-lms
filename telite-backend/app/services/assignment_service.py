@@ -9,10 +9,14 @@ from app.db.rls import set_platform_context, set_rls_context
 from app.models.assignment_submission import AssignmentSubmission
 from app.models.learner_event import LearnerEvent
 from app.models.lesson_block_progress import LessonBlockProgress
+from app.models.notification import NotificationType
+from app.core.notification_payloads import assignment_graded_metadata
 from app.repositories.assignment_repo import AssignmentRepository
 from app.repositories.enrollment_repo import EnrollmentRepository
+from app.repositories.notification_repo import NotificationRepository
 from app.repositories.progress_repo import ProgressRepository
 from app.services.assignment_storage import StorageProvider, get_storage_provider
+from app.services.gradebook_service import GradebookService
 from datetime import datetime, timezone
 
 
@@ -181,13 +185,65 @@ class AssignmentService:
 
     def grade(self, submission_id: int, user: TokenData, *, grade: float | None, feedback: str | None, returned: bool = False) -> dict:
         submission = self._require_submission_access(submission_id, user, admin=True)
-        self._require_admin_access(submission.block_id, user)
+        block, module, course = self._require_admin_access(submission.block_id, user)
         updated = self.repo.grade_submission(
             submission,
             grade=grade,
             feedback=feedback,
             graded_by=user.id,
             returned=returned,
+        )
+        if not returned and updated.grade is not None:
+            gradebook = GradebookService(self.db)
+            grade_item = gradebook.ensure_assignment_grade_item(
+                org_id=updated.org_id,
+                course=course,
+                block=block,
+                actor_user_id=user.id,
+            )
+            points_possible = float(grade_item.points_possible or 100)
+            points_awarded = float(updated.grade)
+            percentage = (points_awarded / points_possible * 100.0) if points_possible > 0 else None
+            gradebook.upsert_current_result(
+                org_id=updated.org_id,
+                course_id=course.id,
+                course_version_id=gradebook.course_version_token(
+                    user_id=updated.user_id,
+                    course_id=course.id,
+                    org_id=updated.org_id,
+                ),
+                grade_item=grade_item,
+                user_id=updated.user_id,
+                source_type="assignment_submission",
+                source_id=str(updated.id),
+                attempt_number=updated.attempt_number,
+                points_awarded=points_awarded,
+                points_possible=points_possible,
+                percentage=percentage,
+                status="graded",
+                graded_by=user.id,
+                graded_at=updated.graded_at,
+                feedback=updated.feedback,
+                metadata={
+                    "source_submission_id": updated.id,
+                    "attempt_number": updated.attempt_number,
+                    "attempt_strategy": (grade_item.grading_policy_json or {}).get("attempt_strategy", "latest"),
+                    "returned": returned,
+                },
+            )
+        NotificationRepository(self.db).create(
+            user_id=updated.user_id,
+            org_id=updated.org_id,
+            title="Assignment Graded",
+            body="Your assignment has been graded.",
+            notif_type=NotificationType.ASSIGNMENT_GRADED,
+            source_type="assignment",
+            source_id=str(updated.id),
+            metadata=assignment_graded_metadata(
+                course_id=course.id,
+                block_id=block.id,
+                submission_id=updated.id,
+            ),
         )
         self.db.commit()
         return {"message": "Submission graded", "submission": updated.to_dict()}

@@ -1,13 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Any
 
 from app.api.auth import get_current_user, TokenData
 from app.db.engine import db_session
 from app.models.course import Course
 from app.models.user import User
 from app.models.certificate import Certificate
+from app.models.notification import NotificationType
+from app.repositories.notification_repo import NotificationRepository
+from app.core.notification_payloads import (
+    certificate_awarded_idempotency_key,
+    certificate_awarded_metadata,
+)
 from app.services.certificate_service import CertificateService
+from app.services.completion_policy_service import CompletionPolicyService
 
 cert_router = APIRouter(prefix="/certificates", tags=["Certificates"])
 public_cert_router = APIRouter(prefix="/public/verify", tags=["Public Certificates"])
@@ -27,11 +33,37 @@ def issue_certificate(
     if not user or not course:
         raise HTTPException(status_code=404, detail="User or course not found")
         
-    # Check if they actually completed the course in module_progress/pal_scores
-    # For Phase E, we assume the frontend only calls this if they are 100% complete.
+    eligibility = CompletionPolicyService(db).is_certificate_eligible(
+        user_id=current_user.id,
+        course_id=course_id,
+        org_id=current_user.org_id,
+    )
+    if not eligibility.eligible:
+        raise HTTPException(status_code=403, detail="Course must be completed before issuing a certificate")
     
     cert_service = CertificateService(db)
-    cert = cert_service.generate_certificate(user, course, current_user.org_id)
+    cert, created = cert_service.generate_certificate(user, course, current_user.org_id)
+    if created:
+        metadata = certificate_awarded_metadata(
+            course_id=cert.course_id,
+            certificate_id=cert.id,
+            verification_token=cert.verification_token,
+        )
+        NotificationRepository(db).create_once(
+            user_id=cert.user_id,
+            org_id=cert.org_id,
+            title="Certificate Awarded",
+            body=f"Your certificate for {course.name} is ready.",
+            notif_type=NotificationType.CERTIFICATE_AWARDED,
+            source_type="certificate",
+            source_id=cert.id,
+            metadata=metadata,
+            idempotency_key=certificate_awarded_idempotency_key(
+                user_id=cert.user_id,
+                certificate_id=cert.id,
+            ),
+        )
+        db.commit()
     
     return {"success": True, "certificate": cert.to_dict()}
 

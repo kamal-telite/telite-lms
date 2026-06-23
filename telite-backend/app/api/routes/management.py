@@ -749,8 +749,12 @@ def remove_domain(
 ):
     return {"status": "success"}
 
-@management_router.get("/notifications")
+@management_router.get("/notifications", deprecated=True)
 def get_my_notifications(current_user: TokenData = Depends(get_current_user), db: Session = Depends(db_session)):
+    """
+    DEPRECATED: Use /api/v1/notifications instead.
+    Will be removed after runtime verification confirms no dependents.
+    """
     repo = NotificationRepository(db)
     notifs = repo.list_for_user(current_user.id, current_user.org_id)
     return {"notifications": [n.to_dict() for n in notifs]}

@@ -41,17 +41,23 @@ class LearningPathRepository(BaseRepository):
         path.deleted_by = user_id
         self.session.flush()
 
-    def get_path_courses(self, path_id: int) -> Sequence[LearningPathCourse]:
-        stmt = select(LearningPathCourse).where(LearningPathCourse.path_id == path_id).order_by(LearningPathCourse.sort_order)
+    def get_path_courses(self, path_id: int, org_id: int | None = None) -> Sequence[LearningPathCourse]:
+        stmt = select(LearningPathCourse).where(LearningPathCourse.path_id == path_id)
+        if org_id is not None:
+            stmt = stmt.where(LearningPathCourse.org_id == org_id)
+        stmt = stmt.order_by(LearningPathCourse.sort_order)
         return self.session.execute(stmt).scalars().all()
 
-    def set_path_courses(self, path_id: int, course_ids: list[str]) -> None:
+    def set_path_courses(self, path_id: int, course_ids: list[str], org_id: int) -> None:
         # Delete existing
-        self.session.query(LearningPathCourse).where(LearningPathCourse.path_id == path_id).delete()
+        self.session.query(LearningPathCourse).where(
+            LearningPathCourse.path_id == path_id,
+            LearningPathCourse.org_id == org_id,
+        ).delete()
         
         # Insert new
         for idx, cid in enumerate(course_ids):
-            pc = LearningPathCourse(path_id=path_id, course_id=cid, sort_order=idx)
+            pc = LearningPathCourse(path_id=path_id, course_id=cid, org_id=org_id, sort_order=idx)
             self.session.add(pc)
             
         self.session.flush()

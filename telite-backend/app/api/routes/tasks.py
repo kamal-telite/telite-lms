@@ -13,7 +13,9 @@ from app.repositories.task_repo import TaskRepository
 from app.repositories.user_repo import UserRepository
 from app.repositories.audit_repo import AuditRepository
 from app.repositories.notification_repo import NotificationRepository
+from app.core.notification_payloads import task_notification_metadata
 from app.core.rbac import ROLE_PERMISSIONS, Permission
+from app.models.notification import NotificationType
 
 
 task_router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -130,8 +132,10 @@ def post_task(
                 org_id=actor.org_id,
                 title="New task assigned",
                 body=f"New task assigned: {task.title}",
-                notif_type="task_assigned",
-                metadata={"task_id": task.id, "assignment_id": assignment.id},
+                notif_type=NotificationType.TASK_ASSIGNED,
+                source_type="task",
+                source_id=task.id,
+                metadata=task_notification_metadata(task.id, assignment.id),
             )
         response = task_repo.task_payload(task, assignment)
         db.commit()
@@ -360,7 +364,9 @@ def review_task(
             title=title,
             body=body_text,
             notif_type=f"task_{review_status}",
-            metadata={"task_id": task.id, "assignment_id": assignment.id},
+            source_type="task",
+            source_id=task.id,
+            metadata=task_notification_metadata(task.id, assignment.id),
         )
     response = task_repo.task_payload(task, assignment)
     db.commit()

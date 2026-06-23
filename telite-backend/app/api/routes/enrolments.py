@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 from pydantic import BaseModel, Field
 
 from app.api.auth import TokenData, require_admin, resolve_org_scope, ensure_org_access
@@ -18,6 +18,7 @@ from app.repositories.audit_repo import AuditRepository
 from app.core.password_utils import hash_password, get_default_learner_password
 from app.core.rbac import ROLE_PERMISSIONS, Permission
 from app.services.user_provisioning import UserProvisioningService
+from app.services.bulk_enrollment_service import BulkEnrollmentService
 from app.services.enrollment_service import (
     EnrollmentPermissionError,
     EnrollmentService,
@@ -151,6 +152,11 @@ class BatchApprovePayload(BaseModel):
     request_ids: list[str] = Field(default_factory=list)
 
 
+
+
+class BulkExecutePayload(BaseModel):
+    rows: list[dict]
+
 class ManualEnrollmentPayload(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     email: str = Field(min_length=3, max_length=255)
@@ -181,6 +187,38 @@ def manual_enrollment(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except EnrollmentServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@v1_enrol_router.post("/bulk/preview")
+async def bulk_enroll_preview(
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
+):
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8')
+        service = BulkEnrollmentService(db)
+        preview_rows = service.parse_and_validate_csv(content_str, current_user)
+        return {"preview": [r.to_dict() for r in preview_rows]}
+    except EnrollmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@v1_enrol_router.post("/bulk/execute")
+def bulk_enroll_execute(
+    body: BulkExecutePayload,
+    current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
+):
+    try:
+        service = BulkEnrollmentService(db)
+        result = service.execute_batch(body.rows, current_user)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 
 
 def _client_ip(request: Request) -> str:
