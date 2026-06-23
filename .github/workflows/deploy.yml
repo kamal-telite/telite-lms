@@ -1,0 +1,102 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      backend_image:
+        description: Backend image tag or digest to deploy
+        required: true
+        type: string
+      frontend_image:
+        description: Frontend image tag or digest to deploy
+        required: true
+        type: string
+      app_url:
+        description: Public application URL for smoke checks
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment inputs
+        run: |
+          case "${{ inputs.app_url }}" in
+            https://*) ;;
+            *) echo "app_url must be HTTPS"; exit 1 ;;
+          esac
+
+          if [ -z "${{ inputs.backend_image }}" ] || [ -z "${{ inputs.frontend_image }}" ]; then
+            echo "Image references are required"
+            exit 1
+          fi
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy immutable image references
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          BACKEND_IMAGE: ${{ inputs.backend_image }}
+          FRONTEND_IMAGE: ${{ inputs.frontend_image }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd '${DEPLOY_PATH}' && \
+             export TELITE_BACKEND_IMAGE='${BACKEND_IMAGE}' && \
+             export TELITE_FRONTEND_IMAGE='${FRONTEND_IMAGE}' && \
+             cat > docker-compose.release.yml <<EOF
+          services:
+            backend:
+              image: \${TELITE_BACKEND_IMAGE}
+            seed_permissions:
+              image: \${TELITE_BACKEND_IMAGE}
+            celery_worker:
+              image: \${TELITE_BACKEND_IMAGE}
+            celery_beat:
+              image: \${TELITE_BACKEND_IMAGE}
+            frontend:
+              image: \${TELITE_FRONTEND_IMAGE}
+          EOF
+             docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.release.yml pull backend frontend celery_worker celery_beat && \
+             docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.release.yml up -d backend frontend celery_worker celery_beat && \
+             docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.release.yml ps"
+
+      - name: Smoke check readiness
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "${{ inputs.app_url }}/health/readiness" >/tmp/readiness.json; then
+              cat /tmp/readiness.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Readiness smoke check failed"
+          exit 1

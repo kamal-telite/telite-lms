@@ -230,6 +230,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      disable: true
     deploy:
       resources:
         limits:
@@ -255,6 +257,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      disable: true
     deploy:
       resources:
         limits:

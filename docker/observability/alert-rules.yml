@@ -1,0 +1,30 @@
+groups:
+  - name: telite-api
+    rules:
+      - alert: TeliteBackendDown
+        expr: up{job="telite-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Telite backend metrics endpoint is down
+          description: Prometheus cannot scrape the Telite backend for more than 2 minutes.
+
+      - alert: TeliteHighErrorCount
+        expr: increase(telite_http_errors_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Telite backend is returning elevated 5xx errors
+          description: More than five 5xx responses were observed in the last five minutes.
+
+      - alert: TeliteNoTraffic
+        expr: increase(telite_http_requests_total[15m]) == 0
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: No Telite API traffic observed
+          description: No API requests have been observed for 15 minutes. Validate this is expected for the environment.
+

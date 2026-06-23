@@ -20,6 +20,7 @@ jobs:
   backend:
     name: Backend lint and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: telite-backend
@@ -70,11 +71,109 @@ jobs:
         run: alembic upgrade head
 
       - name: Pytest
-        run: pytest -q tests/test_health.py tests/test_course_creation.py tests/test_task_workflow.py
+        run: |
+          mkdir -p test-results
+          pytest -q \
+            --junitxml=test-results/backend-smoke.xml \
+            tests/test_health.py \
+            tests/test_course_creation.py \
+            tests/test_task_workflow.py
+
+      - name: Upload backend smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-smoke-test-results
+          path: telite-backend/test-results/*.xml
+          if-no-files-found: ignore
+
+  backend-critical-regression:
+    name: Backend critical regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: telite-backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: telite_backend_regression_ci
+          POSTGRES_USER: telite_ci
+          POSTGRES_PASSWORD: telite_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U telite_ci -d telite_backend_regression_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: development
+      PYTHONPATH: .
+      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_regression_ci
+      TELITE_TEST_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_regression_ci
+      TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
+      TELITE_PASSWORD_SALT: ci-test-password-salt
+      REDIS_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            telite-backend/requirements.txt
+            telite-backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run database migrations
+        run: alembic upgrade head
+
+      - name: Critical LMS regression suite
+        run: |
+          mkdir -p test-results
+          timeout 25m pytest -q \
+            --junitxml=test-results/backend-critical-regression.xml \
+            tests/test_health.py \
+            tests/test_login_rls.py \
+            tests/test_rls_isolation.py \
+            tests/test_rls_verification.py \
+            tests/test_manual_enrollment_service.py \
+            tests/test_platform_invitations.py \
+            tests/test_certificate_runtime.py \
+            tests/test_certificate_notifications.py \
+            tests/test_learning_path_runtime.py \
+            tests/test_learning_path_notifications.py \
+            tests/test_learning_path_assignment_notifications.py \
+            tests/test_learning_path_completion_notifications.py \
+            tests/test_completion_g04_policy.py \
+            tests/test_gradebook_g02_integration.py \
+            tests/test_gradebook_g03_aggregation.py \
+            tests/test_gradebook_g06_operations.py \
+            tests/test_announcement_runtime.py \
+            tests/test_h5p_service.py \
+            tests/test_h5p_e2e_publish_versioning.py
+
+      - name: Upload backend critical regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-critical-regression-results
+          path: telite-backend/test-results/*.xml
+          if-no-files-found: ignore
 
   frontend:
     name: Frontend lint and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: telite-frontend
@@ -95,6 +194,9 @@ jobs:
       - name: Lint
         run: npm run lint:ci
 
+      - name: Frontend unit tests
+        run: npm run test:frontend
+
       - name: Critical dependency audit
         run: npm audit --audit-level=critical
 
@@ -104,6 +206,7 @@ jobs:
   production-env-contract:
     name: Production env contract
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: telite-backend
@@ -137,6 +240,7 @@ jobs:
   postgres-migrations:
     name: PostgreSQL migration chain
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: telite-backend
@@ -189,8 +293,10 @@ jobs:
   docker:
     name: Docker compose build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs:
       - backend
+      - backend-critical-regression
       - frontend
       - production-env-contract
       - postgres-migrations

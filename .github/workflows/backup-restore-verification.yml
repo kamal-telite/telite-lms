@@ -1,0 +1,27 @@
+name: Backup Restore Verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 2 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-restore-verification
+  cancel-in-progress: false
+
+jobs:
+  restore-drill:
+    name: Disposable PostgreSQL restore drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run restore drill
+        shell: pwsh
+        run: .github/scripts/verify-backup-restore.ps1
+
