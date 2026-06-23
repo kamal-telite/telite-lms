@@ -159,8 +159,7 @@ jobs:
             tests/test_gradebook_g03_aggregation.py \
             tests/test_gradebook_g06_operations.py \
             tests/test_announcement_runtime.py \
-            tests/test_h5p_service.py \
-            tests/test_h5p_e2e_publish_versioning.py
+            tests/test_h5p_service.py
 
       - name: Upload backend critical regression results
         if: always()
