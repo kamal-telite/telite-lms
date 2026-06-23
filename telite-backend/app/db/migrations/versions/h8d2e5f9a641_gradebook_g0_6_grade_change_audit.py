@@ -1,7 +1,7 @@
 """gradebook g0.6 grade change audit
 
 Revision ID: h8d2e5f9a641
-Revises: g7c9d4e1f236
+Revises: c99c89b4b321
 Create Date: 2026-06-23
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "h8d2e5f9a641"
-down_revision = "g7c9d4e1f236"
+down_revision = "c99c89b4b321"
 branch_labels = None
 depends_on = None
 
