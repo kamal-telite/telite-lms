@@ -1,27 +1,42 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from typing import List, Optional
 
-from app.api.auth import get_current_user, require_admin, TokenData
-from app.db.engine import db_session
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.api.auth import TokenData, get_current_user, require_admin
+from app.db.engine import apply_tenant_context, db_session
 from app.models.course import Course
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
 from app.models.course_version import CourseVersion
+from app.models.learning_path import LearningPath, LearningPathCourse
 from app.models.lesson_block import LessonBlock
 from app.models.media_asset import MediaAsset
 from app.services.storage import storage_service
-from app.models.learning_path import LearningPath, LearningPathCourse
 
 logger = logging.getLogger("telite.authoring")
 
 authoring_router = APIRouter(prefix="/authoring", tags=["Authoring Gateway"])
+
+
+def _apply_authoring_tenant_context(db: Session, current_user: TokenData) -> None:
+    if current_user.org_id is None:
+        raise HTTPException(status_code=403, detail="Organization context is required")
+    apply_tenant_context(db, current_user.org_id)
+
+
+def _persist_and_refresh(db: Session, instance):
+    db.flush()
+    db.refresh(instance)
+    db.commit()
+    return instance
 
 # -----------------------------------------------------------------------------
 # 1. Course Versioning & Publishing
@@ -33,6 +48,7 @@ def branch_course_version(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     course = db.query(Course).filter(Course.id == course_id, Course.org_id == current_user.org_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -44,6 +60,7 @@ def branch_course_version(
     new_version_number = (latest_version.version_number + 1) if latest_version else 1
     
     new_version = CourseVersion(
+        id=uuid.uuid4().hex,
         course_id=course_id,
         org_id=current_user.org_id,
         version_number=new_version_number,
@@ -51,8 +68,7 @@ def branch_course_version(
         parent_version_id=latest_version.id if latest_version else None,
     )
     db.add(new_version)
-    db.commit()
-    db.refresh(new_version)
+    _persist_and_refresh(db, new_version)
     return {"success": True, "version": new_version.to_dict()}
 
 @authoring_router.post("/courses/{course_id}/publish", dependencies=[Depends(require_admin)])
@@ -61,6 +77,7 @@ def publish_course(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     draft = db.query(CourseVersion).filter(
         CourseVersion.course_id == course_id,
         CourseVersion.status == "Draft",
@@ -77,11 +94,14 @@ def publish_course(
     # In a real system, we would enqueue a Celery task here to sync the course structure to Moodle shell
     
     # [N4B] Dispatch Course Published Notification
-    from app.repositories.notification_repo import NotificationRepository
-    from app.models.notification import NotificationType
-    from app.models.course_review import CourseReview
+    from app.core.notification_payloads import (
+        course_authoring_metadata,
+        course_published_idempotency_key,
+    )
     from app.models.course import Course
-    from app.core.notification_payloads import course_authoring_metadata, course_published_idempotency_key
+    from app.models.course_review import CourseReview
+    from app.models.notification import NotificationType
+    from app.repositories.notification_repo import NotificationRepository
     
     course = db.query(Course).filter(Course.id == course_id).first()
     if course:
@@ -114,8 +134,7 @@ def publish_course(
             idempotency_key=idempotency_key,
         )
     
-    db.commit()
-    db.refresh(draft)
+    _persist_and_refresh(db, draft)
     return {"success": True, "version": draft.to_dict()}
 
 # -----------------------------------------------------------------------------
@@ -136,6 +155,7 @@ def create_section(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     course = db.query(Course).filter(Course.id == course_id, Course.org_id == current_user.org_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -147,8 +167,7 @@ def create_section(
         sort_order=request.sort_order
     )
     db.add(section)
-    db.commit()
-    db.refresh(section)
+    _persist_and_refresh(db, section)
     return section.to_dict()
 
 @authoring_router.patch("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
@@ -159,6 +178,7 @@ def update_section(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     section = db.query(CourseSection).filter(
         CourseSection.id == section_id,
         CourseSection.course_id == course_id,
@@ -173,8 +193,7 @@ def update_section(
         raise HTTPException(status_code=400, detail="Section title is required")
 
     section.title = title
-    db.commit()
-    db.refresh(section)
+    _persist_and_refresh(db, section)
     return section.to_dict()
 
 @authoring_router.delete("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
@@ -184,6 +203,7 @@ def delete_section(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     section = db.query(CourseSection).filter(
         CourseSection.id == section_id,
         CourseSection.course_id == course_id,
@@ -224,6 +244,7 @@ def update_course_structure(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     for sec_update in request.updates:
         section_id = None if sec_update.section_id == 0 else sec_update.section_id
         section = db.query(CourseSection).filter(
@@ -262,6 +283,7 @@ def create_lesson_block(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     module = db.query(CourseModule).filter(
         CourseModule.id == module_id, 
         CourseModule.org_id == current_user.org_id
@@ -279,8 +301,7 @@ def create_lesson_block(
         sort_order=request.sort_order
     )
     db.add(block)
-    db.commit()
-    db.refresh(block)
+    _persist_and_refresh(db, block)
     return block.to_dict()
 
 class BlockOrderUpdate(BaseModel):
@@ -294,6 +315,7 @@ def update_block_order(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     for update in updates:
         block = db.query(LessonBlock).filter(
             LessonBlock.id == update.block_id,
@@ -321,6 +343,7 @@ def generate_presigned_url(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     # Enforce basic limits (e.g. max 500MB)
     if request.size_bytes > 500 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large")
@@ -345,8 +368,7 @@ def generate_presigned_url(
         url=storage_service.get_public_url(storage_key)
     )
     db.add(asset)
-    db.commit()
-    db.refresh(asset)
+    _persist_and_refresh(db, asset)
     
     return {
         "upload_url": presigned_url,
@@ -359,6 +381,7 @@ def confirm_media_upload(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     asset = db.query(MediaAsset).filter(
         MediaAsset.id == asset_id,
         MediaAsset.org_id == current_user.org_id
@@ -384,6 +407,7 @@ def create_learning_path(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     path = LearningPath(
         id=f"path-{uuid.uuid4().hex[:8]}",
         org_id=current_user.org_id,
@@ -393,8 +417,7 @@ def create_learning_path(
         created_by=current_user.id
     )
     db.add(path)
-    db.commit()
-    db.refresh(path)
+    _persist_and_refresh(db, path)
     return path.to_dict()
 
 class LearningPathCourseUpdate(BaseModel):
@@ -408,6 +431,7 @@ def update_learning_path_courses(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     path = db.query(LearningPath).filter(
         LearningPath.id == path_id,
         LearningPath.org_id == current_user.org_id
@@ -454,6 +478,7 @@ def create_module(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     course = db.query(Course).filter(Course.id == request.course_id, Course.org_id == current_user.org_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -488,8 +513,7 @@ def create_module(
         status="published"
     )
     db.add(new_module)
-    db.commit()
-    db.refresh(new_module)
+    _persist_and_refresh(db, new_module)
     
     if request.module_type == "quiz":
         quiz_block = LessonBlock(
@@ -516,6 +540,7 @@ def update_module(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     module = db.query(CourseModule).filter(CourseModule.id == module_id, CourseModule.org_id == current_user.org_id).first()
     if not module:
         raise HTTPException(status_code=404, detail="Module not found")
@@ -526,8 +551,7 @@ def update_module(
     if request.content_url is not None:
         module.content_url = request.content_url
         
-    db.commit()
-    db.refresh(module)
+    _persist_and_refresh(db, module)
     
     return {"success": True, "module": module.to_dict()}
 
@@ -537,6 +561,7 @@ def delete_module(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     module = db.query(CourseModule).filter(
         CourseModule.id == module_id,
         CourseModule.org_id == current_user.org_id,
@@ -563,6 +588,7 @@ def add_quiz_question(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    _apply_authoring_tenant_context(db, current_user)
     module = db.query(CourseModule).filter(CourseModule.id == request.module_id, CourseModule.org_id == current_user.org_id).first()
     if not module or module.module_type != "quiz":
         raise HTTPException(status_code=404, detail="Quiz module not found")

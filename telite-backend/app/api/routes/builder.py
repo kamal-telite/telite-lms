@@ -1,15 +1,17 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 
-from app.api.auth import get_current_user, require_admin, TokenData
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.api.auth import TokenData, get_current_user, require_admin
 from app.db.engine import db_session
-from app.repositories.course_repo import CourseRepository
-from app.repositories.builder_repo import BuilderRepository
 from app.models.course_module import CourseModule
 from app.models.media_asset import MediaAsset
+from app.repositories.builder_repo import BuilderRepository
+from app.repositories.course_repo import CourseRepository
 from app.services.r2_client import generate_presigned_download_url
+from app.services.validation.engine import ValidationEngine
 
 builder_router = APIRouter(prefix="/authoring", tags=["Builder Gateway"])
 
@@ -104,6 +106,17 @@ def get_builder_structure(
         "sections": sections_list
     }
 
+
+@builder_router.get("/courses/{course_id}/validate", dependencies=[Depends(require_admin)])
+def validate_course_for_publishing(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    result = ValidationEngine(db).run(course_id, current_user.org_id)
+    return result.model_dump()
+
+
 # -----------------------------------------------------------------------------
 # 2. Builder Lock Service
 # -----------------------------------------------------------------------------
@@ -185,8 +198,10 @@ def release_builder_lock(
 # 3. Block Management & Autosave
 # -----------------------------------------------------------------------------
 
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+
 
 class ModuleStructureUpdate(BaseModel):
     module_id: int
@@ -267,8 +282,9 @@ def save_module_blocks(
     if not lock or lock.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="You do not hold the lock for this course.")
 
-    from app.models.lesson_block import LessonBlock
     import json
+
+    from app.models.lesson_block import LessonBlock
 
     results = []
     

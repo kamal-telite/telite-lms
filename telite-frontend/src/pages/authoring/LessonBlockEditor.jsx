@@ -78,6 +78,7 @@ function SortableBlock({
     ...(isDragging ? { zIndex: 1 } : {}),
   };
 
+  const settings = block.settings || {};
   const isLocked = Boolean(block.settings?.locked);
 
   // Stale questions check
@@ -755,9 +756,9 @@ export function LessonBlockEditor({
   const [mediaModalOpen, setMediaModalOpen] = useState(false);
   const [activeMediaBlockId, setActiveMediaBlockId] = useState(null);
   const [mediaFilterType, setMediaFilterType] = useState(null);
-  const [quizOptions, setQuizOptions] = useState([]);
-  const [quizLoading, setQuizLoading] = useState(false);
-  const [quizError, setQuizError] = useState(null);
+  const [quizOptions] = useState([]);
+  const [quizLoading] = useState(false);
+  const [quizError] = useState(null);
   const [conflictInfo, setConflictInfo] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -787,24 +788,6 @@ export function LessonBlockEditor({
     }
   }, [courseId, moduleId, showToast]);
 
-  const fetchQuizzes = useCallback(async () => {
-    if (!courseId) {
-      setQuizOptions([]);
-      return;
-    }
-
-    setQuizLoading(true);
-    try {
-      const { data } = await api.get(`/authoring/courses/${courseId}/quizzes`);
-      setQuizOptions(data.quizzes || []);
-      setQuizError(null);
-    } catch (err) {
-      setQuizError(getErrorMessage(err, "Failed to load quiz choices."));
-    } finally {
-      setQuizLoading(false);
-    }
-  }, [courseId]);
-
   useEffect(() => {
     fetchBlocks();
   }, [fetchBlocks]);
@@ -832,13 +815,11 @@ export function LessonBlockEditor({
   }, [highlightBlockId, loading, blocks, activeBlock, onActiveBlockChange, onHighlightClear]);
 
   useEffect(() => {
-    if (moduleId) {
-      fetchQuizzes();
-    } else {
+    if (!moduleId) {
       setBlocks([]);
     }
     onActiveBlockChange?.(null);
-  }, [moduleId, fetchQuizzes, onActiveBlockChange]);
+  }, [moduleId, onActiveBlockChange]);
 
   useEffect(() => {
     if (!onRegisterBlockSettingsUpdater) return undefined;
