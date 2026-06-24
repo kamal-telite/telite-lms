@@ -36,6 +36,7 @@ from app.core.logging_config import configure_logging
 from app.core.rate_limiter import close_redis_connection
 from app.core.request_context import reset_request_id, set_request_id
 from app.core.runtime import is_production_like
+from app.core.storage_paths import branding_upload_root, media_upload_root, upload_root
 from app.db.engine import dispose_engine, db_session
 from sqlalchemy.orm import Session
 from app.db.init_db import run_phase3_init
@@ -187,9 +188,9 @@ def create_app() -> FastAPI:
     app.include_router(announcements_router, prefix="/api/v1")
     app.include_router(audit_router)
 
-    uploads_dir = Path(__file__).resolve().parents[1] / "uploads"
-    media_dir = uploads_dir / "media"
-    branding_dir = uploads_dir / "branding"
+    uploads_dir = upload_root()
+    media_dir = media_upload_root()
+    branding_dir = branding_upload_root()
     media_dir.mkdir(parents=True, exist_ok=True)
     branding_dir.mkdir(parents=True, exist_ok=True)
 

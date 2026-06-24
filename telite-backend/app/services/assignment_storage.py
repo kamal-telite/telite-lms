@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
+from app.core.storage_paths import assignment_upload_root
 
 MAX_ASSIGNMENT_FILE_BYTES = int(os.getenv("TELITE_ASSIGNMENT_MAX_FILE_BYTES", str(25 * 1024 * 1024)))
 ALLOWED_EXTENSIONS = {
@@ -76,10 +77,7 @@ class StorageProvider:
 
 
 def _assignment_upload_root() -> Path:
-    configured = os.getenv("TELITE_ASSIGNMENT_UPLOAD_DIR", "").strip()
-    if configured:
-        return Path(configured).resolve()
-    return (Path(__file__).resolve().parents[2] / "uploads" / "organizations").resolve()
+    return assignment_upload_root()
 
 
 def _safe_filename(filename: str | None) -> str:

@@ -1,24 +1,23 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, TokenData
+from app.api.auth import TokenData, get_current_user
+from app.core.storage_paths import media_upload_root
 from app.db.engine import db_session
-from app.repositories.enrollment_repo import EnrollmentRepository
-from app.models.course_module import CourseModule
-from app.models.module_progress import ModuleProgress
-from app.models.interactive_tracking import InteractiveTracking
-from app.models.media_asset import MediaAsset
-from app.models.lesson_block import LessonBlock
 from app.models.course import Course
+from app.models.course_module import CourseModule
 from app.models.course_version import CourseVersion
+from app.models.interactive_tracking import InteractiveTracking
+from app.models.lesson_block import LessonBlock
+from app.models.media_asset import MediaAsset
+from app.models.module_progress import ModuleProgress
+from app.repositories.enrollment_repo import EnrollmentRepository
 from app.services.analytics_service import analytics_service
 from app.services.h5p_service import (
     assert_h5p_asset,
@@ -31,8 +30,8 @@ logger = logging.getLogger("telite.player")
 player_router = APIRouter(prefix="/player", tags=["Native Player"])
 
 
-def _uploads_root() -> Path:
-    return Path(__file__).resolve().parents[3] / "uploads" / "media"
+def _uploads_root():
+    return media_upload_root()
 
 
 def _published_snapshot_references_asset(snapshot: dict | None, asset_id: int, asset_version: int | None) -> bool:

@@ -26,6 +26,7 @@ x-backend-env: &backend-env
   R2_BUCKET: ${R2_BUCKET:-telite-media-bucket}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-text}
+  TELITE_UPLOAD_ROOT: ${TELITE_UPLOAD_ROOT:-/app/uploads}
   MOODLE_TOKEN: ${MOODLE_TOKEN:-}
   BACKEND_INTERNAL_PORT: ${BACKEND_INTERNAL_PORT:-8001}
 
@@ -142,7 +143,7 @@ services:
     ports:
       - "${BACKEND_PORT:-8001}:${BACKEND_INTERNAL_PORT:-8001}"
     volumes:
-      - telite-lms_uploads:/app/uploads
+      - ${TELITE_UPLOADS_VOLUME:-telite-lms_uploads}:/app/uploads
     healthcheck:
       test:
         [

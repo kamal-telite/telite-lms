@@ -1,23 +1,24 @@
 import json
-from uuid import uuid4
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Query
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import List
+from uuid import uuid4
 
-from app.api.auth import get_current_user, require_admin, TokenData
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.api.auth import TokenData, get_current_user, require_admin
+from app.core.permissions import require_capability
+from app.core.storage_paths import media_upload_root
 from app.db.engine import db_session
-from app.repositories.media_repo import MediaRepository
-from app.models.media_asset import MediaAsset
-from app.models.lesson_block import LessonBlock
+from app.models.course import Course
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
-from app.models.course import Course
-from app.services.r2_client import generate_presigned_upload_url, generate_presigned_download_url
+from app.models.lesson_block import LessonBlock
+from app.models.media_asset import MediaAsset
+from app.repositories.media_repo import MediaRepository
 from app.services.audit_service import AuditService
-from app.core.permissions import require_capability
 from app.services.h5p_service import (
     MAX_H5P_PACKAGE_BYTES,
     assert_h5p_asset,
@@ -27,6 +28,7 @@ from app.services.h5p_service import (
     safe_h5p_file_path,
     update_h5p_version_manifest,
 )
+from app.services.r2_client import generate_presigned_download_url, generate_presigned_upload_url
 
 media_router = APIRouter(prefix="/authoring/media", tags=["Media Library"])
 
@@ -49,7 +51,7 @@ class UpdateAssetMetadataRequest(BaseModel):
     tags: List[str] = []
 
 def _uploads_root() -> Path:
-    return Path(__file__).resolve().parents[3] / "uploads" / "media"
+    return media_upload_root()
 
 def _safe_filename(filename: str) -> str:
     safe = "".join(ch for ch in filename if ch.isalnum() or ch in ".-_ ")
@@ -344,6 +346,7 @@ def list_assets(
     usage_counts = {}
     if assets:
         from sqlalchemy import func
+
         from app.models.media_asset_usage import MediaAssetUsage
         counts_query = db.query(
             MediaAssetUsage.media_asset_id,

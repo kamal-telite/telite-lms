@@ -1,9 +1,12 @@
 import os
 import uuid
 from typing import Set
-from fastapi import UploadFile, HTTPException, status
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "uploads", "branding")
+from fastapi import HTTPException, UploadFile, status
+
+from app.core.storage_paths import branding_upload_root
+
+UPLOAD_DIR = str(branding_upload_root())
 ALLOWED_EXTENSIONS: Set[str] = {"png", "jpeg", "jpg", "svg", "ico", "pdf"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
