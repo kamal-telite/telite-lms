@@ -4,51 +4,51 @@ import sys
 # Add the project root to sys.path so we can import from app
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.core.rbac import ROLE_PERMISSIONS
 from app.db.engine import get_platform_session
-from app.models.role_permission import RolePermission
 from app.models.organization import Organization
+from app.models.role_permission import RolePermission
+
+AUTHOR_WORKFLOW_CAPABILITIES = {
+    "course.submit",
+    "version.view",
+    "version.create",
+}
+
+REVIEW_WORKFLOW_CAPABILITIES = {
+    "course.approve",
+    "course.reject",
+    "version.view",
+}
+
+ADMIN_WORKFLOW_CAPABILITIES = AUTHOR_WORKFLOW_CAPABILITIES | REVIEW_WORKFLOW_CAPABILITIES | {
+    "audit.view",
+    "audit.export",
+    "course.publish",
+    "course.archive",
+    "version.rollback",
+}
+
+
+def _role_capabilities(role: str, *extras: set[str]) -> list[str]:
+    capabilities = set(ROLE_PERMISSIONS[role])
+    for extra in extras:
+        capabilities.update(extra)
+    return sorted(capabilities)
+
 
 def seed_permissions():
     with get_platform_session() as db:
-        # Define role capabilities based on the matrix
+        # Keep seeded permissions based on the application RBAC matrix. The
+        # workflow capabilities below are still enforced by publishing routes
+        # through check_capability() until that legacy path is migrated.
         ROLE_CAPABILITIES = {
-            "author": [
-                "block.create", "block.edit", "block.delete",
-                "module.create", "module.edit", "module.delete",
-                "section.create", "section.edit", "section.delete",
-                "media.view", "media.upload", "media.replace", "media.delete",
-                "h5p.view", "h5p.upload", "h5p.edit", "h5p.delete",
-                "course.submit", "version.view", "version.create"
-            ],
-            "reviewer": [
-                "course.approve", "course.reject", "audit.view", "version.view"
-            ],
-            "category_admin": [
-                "block.create", "block.edit", "block.delete",
-                "module.create", "module.edit", "module.delete",
-                "section.create", "section.edit", "section.delete",
-                "media.view", "media.upload", "media.replace", "media.delete",
-                "h5p.view", "h5p.upload", "h5p.edit", "h5p.delete",
-                "course.submit", "course.approve", "course.reject",
-                "course.publish", "course.archive",
-                "version.view", "version.create", "version.rollback",
-                "audit.view", "audit.export",
-                "gradebook.view", "gradebook.release", "gradebook.lock",
-                "gradebook.override", "gradebook.audit.view"
-            ],
-            "org_admin": [
-                "block.create", "block.edit", "block.delete",
-                "module.create", "module.edit", "module.delete",
-                "section.create", "section.edit", "section.delete",
-                "media.view", "media.upload", "media.replace", "media.delete",
-                "h5p.view", "h5p.upload", "h5p.edit", "h5p.delete",
-                "course.submit", "course.approve", "course.reject",
-                "course.publish", "course.archive",
-                "version.view", "version.create", "version.rollback",
-                "audit.view", "audit.export", "permission.manage",
-                "gradebook.view", "gradebook.release", "gradebook.lock",
-                "gradebook.override", "gradebook.audit.view"
-            ]
+            "author": _role_capabilities("author", AUTHOR_WORKFLOW_CAPABILITIES),
+            "reviewer": _role_capabilities("reviewer", REVIEW_WORKFLOW_CAPABILITIES),
+            "category_admin": _role_capabilities("category_admin", ADMIN_WORKFLOW_CAPABILITIES),
+            "super_admin": _role_capabilities("super_admin", ADMIN_WORKFLOW_CAPABILITIES),
+            # Legacy org_admin rows are treated as the organization super-admin role.
+            "org_admin": _role_capabilities("super_admin", ADMIN_WORKFLOW_CAPABILITIES),
         }
 
         try:

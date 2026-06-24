@@ -12,18 +12,14 @@ PHASE 2 SECURITY HARDENING:
 from __future__ import annotations
 
 import logging
-from functools import wraps
-from typing import Any, Callable
+from typing import Callable
 
 from fastapi import Depends, HTTPException, status
 
 from app.api.auth import (
     TokenData,
-    get_current_user,
     ensure_org_access,
-    require_admin,
-    require_platform_admin,
-    require_super_admin,
+    get_current_user,
 )
 
 logger = logging.getLogger("telite.rbac")
@@ -62,12 +58,18 @@ class Permission:
     AUTHORING_MANAGE_BLOCKS = "authoring.manage_blocks"
     AUTHORING_MANAGE_SECTIONS = "authoring.manage_sections"
     AUTHORING_MANAGE_MODULES = "authoring.manage_modules"
+    # Deprecated compatibility capability; media routes use media.* below.
     AUTHORING_MANAGE_MEDIA = "authoring.manage_media"
     AUTHORING_SUBMIT_REVIEW = "authoring.submit_review"
     AUTHORING_APPROVE_REJECT = "authoring.approve_reject"
     AUTHORING_PUBLISH = "authoring.publish"
     AUTHORING_ROLLBACK = "authoring.rollback"
     AUTHORING_VIEW_AUDIT_LOG = "authoring.view_audit_log"
+
+    # Media-level
+    MEDIA_UPLOAD = "media.upload"
+    MEDIA_REPLACE = "media.replace"
+    MEDIA_DELETE = "media.delete"
 
     # H5P-level
     H5P_UPLOAD = "h5p.upload"
@@ -113,6 +115,9 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_MANAGE_SECTIONS,
         Permission.AUTHORING_MANAGE_MODULES,
         Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.MEDIA_UPLOAD,
+        Permission.MEDIA_REPLACE,
+        Permission.MEDIA_DELETE,
         Permission.AUTHORING_SUBMIT_REVIEW,
         Permission.AUTHORING_APPROVE_REJECT,
         Permission.AUTHORING_PUBLISH,
@@ -147,6 +152,9 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_MANAGE_SECTIONS,
         Permission.AUTHORING_MANAGE_MODULES,
         Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.MEDIA_UPLOAD,
+        Permission.MEDIA_REPLACE,
+        Permission.MEDIA_DELETE,
         Permission.AUTHORING_SUBMIT_REVIEW,
         Permission.AUTHORING_APPROVE_REJECT,
         Permission.AUTHORING_PUBLISH,
@@ -178,6 +186,9 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_MANAGE_SECTIONS,
         Permission.AUTHORING_MANAGE_MODULES,
         Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.MEDIA_UPLOAD,
+        Permission.MEDIA_REPLACE,
+        Permission.MEDIA_DELETE,
         Permission.AUTHORING_SUBMIT_REVIEW,
         Permission.AUTHORING_VIEW_AUDIT_LOG,
         Permission.H5P_UPLOAD,
@@ -198,6 +209,9 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_MANAGE_SECTIONS,
         Permission.AUTHORING_MANAGE_MODULES,
         Permission.AUTHORING_MANAGE_MEDIA,
+        Permission.MEDIA_UPLOAD,
+        Permission.MEDIA_REPLACE,
+        Permission.MEDIA_DELETE,
         Permission.AUTHORING_SUBMIT_REVIEW,
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
