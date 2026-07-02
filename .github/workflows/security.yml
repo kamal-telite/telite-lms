@@ -33,12 +33,32 @@ jobs:
           fetch-depth: 0
 
       - name: Gitleaks
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          GITHUB_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          elif [[ "$GITHUB_EVENT_BEFORE" != "0000000000000000000000000000000000000000" ]]; then
+            RANGE="${GITHUB_EVENT_BEFORE}..${GITHUB_SHA}"
+          else
+            RANGE="${GITHUB_SHA}"
+          fi
+
+          echo "Scanning commit range: $RANGE"
+
           docker run --rm \
             -v "$PWD:/repo" \
             -w /repo \
             "$GITLEAKS_IMAGE" detect \
             --source=/repo \
+            --log-opts="$RANGE" \
+            --gitleaks-ignore-path=/repo/.gitleaksignore \
             --redact \
             --verbose
 

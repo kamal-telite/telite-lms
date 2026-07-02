@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-0 \
     libgdk-pixbuf-2.0-dev \
     libffi-dev \
+    libpq-dev \
     shared-mime-info \
     fonts-dejavu-core \
     libharfbuzz0b \

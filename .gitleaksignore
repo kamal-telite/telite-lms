@@ -1,0 +1,4 @@
+# Ignore known historical findings that are already present in repository history.
+# These are not newly introduced secrets and should not fail new PRs or branch pushes.
+38881f0e47e7f24d0dc72818d82f10c0675e2108:moodle.sql:private-key:30291
+38881f0e47e7f24d0dc72818d82f10c0675e2108:moodle.sql:private-key:30333
