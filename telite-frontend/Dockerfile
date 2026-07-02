@@ -31,9 +31,6 @@ LABEL org.opencontainers.image.title="Telite LMS Frontend" \
 RUN apk update && apk upgrade && apk add --no-cache \
     dumb-init
 
-# Create non-root user for nginx security
-RUN addgroup -g 101 -S nginx-app && adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx-app -g nginx nginx
-
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
