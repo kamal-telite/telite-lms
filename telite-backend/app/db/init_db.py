@@ -1,4 +1,4 @@
-﻿"""
+"""
 Database initialisation for Phase 3.
 
 Runs on application startup:
@@ -100,8 +100,8 @@ def verify_connection() -> bool:
         with get_db_session() as session:
             session.execute(text("SELECT 1"))
         return True
-    except Exception as exc:
-        logger.error("Database connectivity check failed: %s", exc)
+    except Exception:
+        logger.exception("Database connectivity check failed")
         return False
 
 
@@ -174,7 +174,7 @@ def ensure_default_organization() -> None:
                 )
                 VALUES (
                     1, 'Telite Systems', 'company', 'telite.io', 'telite',
-                    'active', 'free', NOW()
+                    'active', 'free', CURRENT_TIMESTAMP
                 )
                 """
             )

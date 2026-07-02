@@ -65,3 +65,46 @@ def get_learner_dashboard(current_user: TokenData = Depends(get_current_user), d
         return analytics_repo.get_learner_summary(current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@dashboard_router.get("/super-admin/grading-analytics")
+def get_super_admin_grading_analytics(
+    org_id: int | None = Query(default=None, alias="orgId"),
+    current_user: TokenData = Depends(require_super_admin), 
+    db: Session = Depends(db_session),
+):
+    scoped_org_id = resolve_org_scope(current_user, org_id)
+    analytics_repo = AnalyticsRepository(db)
+    return analytics_repo.get_grading_analytics_super_admin(scoped_org_id)
+
+
+@dashboard_router.get("/categories/{category_slug}/grading-analytics")
+def get_category_admin_grading_analytics(
+    category_slug: str,
+    org_id: int | None = Query(default=None, alias="orgId"),
+    current_user: TokenData = Depends(require_admin), 
+    db: Session = Depends(db_session),
+):
+    if (current_user.role == "category_admin" or Permission.CAT_MANAGE_COURSES in ROLE_PERMISSIONS.get(current_user.role, set())) and current_user.category_scope != category_slug:
+        raise HTTPException(status_code=403, detail="You do not have access to this category.")
+    try:
+        scoped_org_id = resolve_org_scope(current_user, org_id)
+        ensure_org_access(current_user, scoped_org_id)
+        analytics_repo = AnalyticsRepository(db)
+        return analytics_repo.get_grading_analytics_category_admin(category_slug, scoped_org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@dashboard_router.get("/learner/grading-analytics")
+def get_learner_grading_analytics(
+    current_user: TokenData = Depends(get_current_user), 
+    db: Session = Depends(db_session),
+):
+    if not (current_user.role == "learner" or Permission.LEARNER_VIEW_COURSES in ROLE_PERMISSIONS.get(current_user.role, set())):
+        raise HTTPException(status_code=403, detail="Learner access required")
+    try:
+        analytics_repo = AnalyticsRepository(db)
+        return analytics_repo.get_grading_analytics_learner(current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

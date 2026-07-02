@@ -51,6 +51,27 @@ def _create_user(db: Session, email_prefix: str, org_id: int):
     db.flush()
     return user
 
+
+def _create_admin_user(db: Session, org_id: int = 1, role: str = "category_admin"):
+    _ensure_org(db, org_id)
+    email = f"admin_{uuid.uuid4().hex[:8]}@test.com"
+    user = User(
+        id=str(uuid.uuid4()),
+        email=email,
+        username=email,
+        full_name="Admin User",
+        role=role,
+        password_hash="hash",
+        org_id=org_id,
+        avatar_initials="AD",
+        gradient_start="#000",
+        gradient_end="#FFF",
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
 def _enroll_user(db: Session, user_id: str, course_id: str, org_id: int):
     db.flush()
     # Fetch user email
@@ -212,6 +233,73 @@ def test_tenant_isolation_attack(client: TestClient, db_session: Session):
     )
     # Should be 404 because block_b belongs to org 2
     assert response.status_code == 404
+
+
+def test_save_native_quiz_block_without_bank_reference_metadata(client: TestClient, db_session: Session):
+    admin_user = _create_admin_user(db_session, org_id=1)
+    course_id = f"course_native_quiz_{uuid.uuid4().hex[:8]}"
+    course = Course(
+        id=course_id,
+        name="Quiz Save Course",
+        org_id=1,
+        status="draft",
+        category_slug="uncategorized",
+        slug=f"quiz-save-{uuid.uuid4().hex[:8]}"
+    )
+    db_session.add(course)
+    db_session.flush()
+    module = CourseModule(
+        course_id=course_id,
+        title="Quiz Module",
+        org_id=1,
+        module_type="quiz"
+    )
+    db_session.add(module)
+    db_session.commit()
+
+    token = create_access_token(payload={"sub": admin_user.id, "org_id": admin_user.org_id})
+
+    lock_resp = client.post(
+        f"/authoring/courses/{course_id}/lock",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert lock_resp.status_code == 200, lock_resp.text
+
+    payload = {
+        "blocks": [
+            {
+                "module_id": module.id,
+                "block_type": "quiz",
+                "content": "",
+                "settings": {
+                    "passing_score": 80,
+                    "max_attempts": 3,
+                    "questions": [
+                        {
+                            "id": "q1",
+                            "text": "2+2?",
+                            "points": 10,
+                            "options": [
+                                {"id": "opt1", "text": "3"},
+                                {"id": "opt2", "text": "4"}
+                            ],
+                            "correct_option_id": "opt2"
+                        }
+                    ]
+                },
+                "sort_order": 0,
+                "is_deleted": false
+            }
+        ]
+    }
+
+    response = client.put(
+        f"/authoring/courses/{course_id}/blocks",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json().get("blocks")
 
 
 def test_version_freeze_pinning(client: TestClient, db_session: Session):

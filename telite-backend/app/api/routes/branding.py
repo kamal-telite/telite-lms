@@ -45,10 +45,19 @@ def get_tenant_branding(tenant_slug: str) -> dict[str, Any]:
     if branding is None:
         # Return safe defaults so the frontend never breaks
         logger.warning("Branding requested for unknown tenant: %s", tenant_slug)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation '{tenant_slug}' not found.",
-        )
+        return {
+            "organization": "Telite LMS",
+            "slug": tenant_slug,
+            "logo": None,
+            "favicon": None,
+            "primary_color": "#2563EB",
+            "secondary_color": "#111827",
+            "font": "Inter",
+            "theme": "light",
+            "banner": None,
+            "custom_domain": None,
+            "terminology": {},
+        }
 
     return branding
 

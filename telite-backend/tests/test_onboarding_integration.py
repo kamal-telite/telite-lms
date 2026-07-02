@@ -163,3 +163,32 @@ def test_accepted_invitation(db_session: Session, test_orgs):
     assert user.email == "accept@test.com"
     assert user.username == "accept_user"
     assert user.invited_via == "admin_invitation"
+
+def test_accept_invitation_for_existing_manual_learner(db_session: Session, test_orgs):
+    org1, org2, actor = test_orgs
+    svc = UserProvisioningService(db_session)
+
+    learner, created = svc.provision_manual_learner(
+        email="manual@test.com",
+        full_name="Manual Learner",
+        org_id=1,
+        actor=actor,
+        category_scope="backend",
+    )
+    assert created is True
+
+    invitation = svc.create_password_setup_invitation(
+        user=learner,
+        actor=actor,
+        org_id=1,
+        category_scope="backend",
+    )
+    db_session.commit()
+
+    user = svc.accept_invitation(invitation.token, "securepass123", "Manual Learner")
+    db_session.commit()
+
+    assert invitation.delivery_status == "accepted"
+    assert user.id == learner.id
+    assert user.email == "manual@test.com"
+    assert db_session.query(User).filter(User.email == "manual@test.com").count() == 1

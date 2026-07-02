@@ -52,6 +52,7 @@ from app.models.role_permission import RolePermission
 from app.models.assignment_submission import AssignmentSubmission
 from app.models.interactive_tracking import InteractiveTracking
 from app.models.certificate import Certificate
+from app.models.progression_rule import ProgressionRule
 
 __all__ = [
     "Base",
@@ -125,4 +126,5 @@ __all__ = [
     "AssignmentSubmission",
     "InteractiveTracking",
     "Certificate",
+    "ProgressionRule",
 ]

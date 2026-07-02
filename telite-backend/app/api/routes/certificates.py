@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, TokenData
@@ -87,6 +87,53 @@ def get_certificate(
         raise HTTPException(status_code=404, detail="Certificate not found or not earned yet")
         
     return {"certificate": cert.to_dict()}
+
+
+@cert_router.get("/{course_id}/download")
+def download_certificate(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Download the certificate PDF for a course.
+    Returns the PDF file directly.
+    """
+    cert = db.query(Certificate).filter(
+        Certificate.user_id == current_user.id,
+        Certificate.course_id == course_id,
+        Certificate.org_id == current_user.org_id
+    ).first()
+    
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found or not earned yet")
+    
+    # In production, this would fetch the PDF from S3
+    # For now, regenerate the PDF on-the-fly
+    from app.services.certificate_service import CertificateService
+    cert_service = CertificateService(db)
+    
+    user = db.query(User).filter(User.id == cert.user_id).first()
+    course = db.query(Course).filter(Course.id == cert.course_id).first()
+    
+    if not user or not course:
+        raise HTTPException(status_code=404, detail="User or course not found")
+    
+    from app.models.organization_branding import OrganizationBranding
+    branding = db.query(OrganizationBranding).filter(
+        OrganizationBranding.organization_id == cert.org_id
+    ).first()
+    
+    qr_url = cert.qr_code_url or f"https://telite.io/verify/{cert.verification_token}"
+    pdf_bytes = cert_service._generate_pdf(user, course, branding, qr_url, cert.certificate_hash)
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=certificate_{course_id}_{user.id}.pdf"
+        }
+    )
 
 
 @public_cert_router.get("/{token}")

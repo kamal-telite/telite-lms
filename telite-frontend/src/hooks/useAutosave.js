@@ -59,9 +59,14 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
       const blocksToSend = payload
         .filter((block) => !(block.is_deleted && !block.id))
         .map((block) => ({
-          ...block,
-          media_asset_id: block.media_asset_id || block.settings?.asset_id || null,
           id: block.id || null,
+          module_id: block.module_id,
+          block_type: block.block_type,
+          content: block.content || "",
+          media_asset_id: block.media_asset_id || block.settings?.asset_id || null,
+          settings: block.settings || {},
+          sort_order: Number.isFinite(block.sort_order) ? block.sort_order : 0,
+          is_deleted: Boolean(block.is_deleted),
         }));
 
       await saveDraftToCache(courseId, payload);
@@ -108,8 +113,20 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
         return;
       }
 
+      const detail = errorDetail(error);
+      if (error.response?.status === 400 || error.response?.status === 422) {
+        setSaveState("error");
+        showToast(detail || "Could not save quiz content. Check your questions and try again.", "error");
+        return;
+      }
+
       setSaveState("offline");
-      showToast("Autosave failed. Your changes are stored locally and will retry when possible.", "warning");
+      showToast(
+        detail
+          ? `Autosave failed: ${detail}`
+          : "Autosave failed. Your changes are stored locally and will retry when possible.",
+        "warning"
+      );
     }
   }, [courseId, onConflict, onBlocksSaved, showToast]);
 

@@ -530,37 +530,17 @@ export async function fetchVerificationStats() {
 export async function previewBulkEnrollments(file) {
   const formData = new FormData();
   formData.append('file', file);
-  
-  const token = localStorage.getItem('token');
-  const res = await fetch('/api/v1/enrol/bulk/preview', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    body: formData
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || 'Bulk preview failed');
-  }
-  return res.json();
+  return unwrap(
+    await api.post('/api/v1/enrol/bulk/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  );
 }
 
 export async function executeBulkEnrollments(rows) {
-  const token = localStorage.getItem('token');
-  const res = await fetch('/api/v1/enrol/bulk/execute', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({ rows })
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || 'Bulk execute failed');
-  }
-  return res.json();
+  return unwrap(
+    await api.post('/api/v1/enrol/bulk/execute', { rows })
+  );
 }
 
 // --- Question Banks ---

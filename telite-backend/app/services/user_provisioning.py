@@ -196,26 +196,37 @@ class UserProvisioningService:
             
         if inv.is_expired():
             raise ProvisioningError("Invitation has expired")
-            
-        if inv.delivery_status in ("accepted", "revoked"):
-            raise ProvisioningError(f"Invitation is already {inv.delivery_status}")
+
+        if inv.accepted_at or inv.delivery_status == "accepted":
+            raise ProvisioningError("Invitation is already accepted")
+
+        if inv.revoked_at:
+            raise ProvisioningError("Invitation has been revoked")
             
         inv.delivery_status = "accepted"
         inv.accepted_at = datetime.utcnow().isoformat()
-        
-        extra_kwargs = {}
 
-        user = self._provision_identity(
-            email=inv.email,
-            username=inv.username,
-            full_name=full_name or inv.email.split("@")[0],
-            role=inv.role,
-            org_id=inv.org_id,
-            password_hash=hash_password(password),
-            category_scope=inv.category_scope,
-            invited_via="admin_invitation",
-            **extra_kwargs
-        )
+        existing_user = self.user_repo.get_by_email(inv.email)
+        if existing_user:
+            if existing_user.org_id != inv.org_id:
+                raise ProvisioningError("Email belongs to another organization")
+            if existing_user.role != inv.role:
+                raise ProvisioningError("Existing account role does not match invitation")
+            existing_user.password_hash = hash_password(password)
+            if full_name:
+                existing_user.full_name = full_name.strip()
+            user = existing_user
+        else:
+            user = self._provision_identity(
+                email=inv.email,
+                username=inv.username,
+                full_name=full_name or inv.email.split("@")[0],
+                role=inv.role,
+                org_id=inv.org_id,
+                password_hash=hash_password(password),
+                category_scope=inv.category_scope,
+                invited_via="admin_invitation",
+            )
         
         if user.role == "super_admin":
             from app.repositories.org_repo import OrgRepository
@@ -237,6 +248,36 @@ class UserProvisioningService:
         self.db.commit()
         return user
 
+    def create_password_setup_invitation(
+        self,
+        *,
+        user: User,
+        actor: User,
+        org_id: int,
+        category_scope: str | None = None,
+        expires_in_days: int = 14,
+    ) -> OrgInvitation:
+        """Invite an already-provisioned learner to set their password."""
+        email = user.email.strip().lower()
+        expires_at = (datetime.utcnow() + timedelta(days=expires_in_days)).isoformat()
+        token = uuid.uuid4().hex
+
+        invitation = OrgInvitation(
+            org_id=org_id,
+            email=email,
+            username=user.username,
+            role="learner",
+            category_scope=category_scope or user.category_scope,
+            token=token,
+            invited_by=actor.id,
+            expires_at=expires_at,
+            delivery_status="pending",
+            metadata_json=json.dumps({"purpose": "password_setup", "user_id": user.id}),
+        )
+        self.db.add(invitation)
+        self.db.flush()
+        return invitation
+
     # ── Internal Core ────────────────────────────────────────────────────────────
 
     def provision_manual_learner(
@@ -248,7 +289,7 @@ class UserProvisioningService:
         actor: User,
         category_scope: str | None,
         enrollment_type: str = "manual",
-    ) -> User:
+    ) -> tuple[User, bool]:
         """Create or reuse a learner for admin-authorized manual enrollment."""
         email = email.strip().lower()
         full_name = full_name.strip()
@@ -266,7 +307,7 @@ class UserProvisioningService:
             if enrollment_type and not existing_user.enrollment_type:
                 existing_user.enrollment_type = enrollment_type
             self.db.flush()
-            return existing_user
+            return existing_user, False
 
         user = self._provision_identity(
             email=email,
@@ -289,7 +330,7 @@ class UserProvisioningService:
             target_id=user.id,
             message=f"Manually provisioned learner {email}",
         )
-        return user
+        return user, True
 
     def _provision_identity(
         self,

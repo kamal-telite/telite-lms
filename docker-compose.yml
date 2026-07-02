@@ -196,6 +196,33 @@ services:
       backend:
         condition: service_healthy
 
+  seed_kt_learn:
+    build:
+      context: ./telite-backend
+      dockerfile: Dockerfile
+    container_name: telite_seed_kt_learn
+    restart: "no"
+    command: python -m scripts.seed_kt_learn
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *backend-env
+      TELITE_DB_BACKEND: postgres
+      TELITE_POSTGRES_HOST: postgres
+      TELITE_POSTGRES_PORT: 5432
+      TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
+      TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
+      TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
+      TELITE_MIGRATION_DATABASE_URL: ${TELITE_MIGRATION_DATABASE_URL}
+      TELITE_DATABASE_URL: ""
+      TELITE_SQLITE_SOURCE_PATH: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
   celery_worker:
     build:
       context: ./telite-backend

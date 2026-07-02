@@ -19,6 +19,10 @@ def branding_upload_root() -> Path:
     return upload_root() / "branding"
 
 
+def certificate_upload_root() -> Path:
+    return upload_root() / "certificates"
+
+
 def assignment_upload_root() -> Path:
     configured = os.getenv("TELITE_ASSIGNMENT_UPLOAD_DIR", "").strip()
     if configured:

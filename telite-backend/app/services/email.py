@@ -4,6 +4,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
+from urllib.parse import urlencode
 
 load_dotenv()
 
@@ -13,6 +14,14 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 FROM_NAME = os.getenv("FROM_NAME", "Telite LMS")
 APP_URL = os.getenv("TELITE_APP_URL", "http://localhost:5173").rstrip("/")
+
+
+def _build_frontend_url(path: str, params: dict[str, str] | None = None) -> str:
+    path = path.lstrip("/")
+    url = f"{APP_URL}/{path}"
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    return url
 
 
 def send_welcome_email(
@@ -60,7 +69,7 @@ def send_welcome_email(
 
 
 def send_password_reset_email(to_email: str, name: str, token: str, expires_at: str) -> bool:
-    reset_url = f"{APP_URL}/reset-password?token={token}"
+    reset_url = _build_frontend_url("reset-password", {"token": token})
     if not SMTP_USER or not SMTP_PASSWORD:
         print(
             "\n".join(
@@ -159,14 +168,7 @@ def send_invitation_email(
     token: str,
     expires_at: str,
 ) -> bool:
-    protocol = "http" if "localhost" in org_domain else "https"
-    base_url = f"{protocol}://{org_domain}"
-    if "localhost" in org_domain and "localhost:" in APP_URL:
-        # append port for local dev
-        port = APP_URL.split("localhost:")[1].split("/")[0]
-        base_url = f"{protocol}://{org_domain}:{port}"
-        
-    invite_url = f"{base_url}/set-password?token={token}"
+    invite_url = _build_frontend_url("set-password", {"token": token})
     if not SMTP_USER or not SMTP_PASSWORD:
         print(
             "\n".join(

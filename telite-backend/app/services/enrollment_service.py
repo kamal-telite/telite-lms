@@ -21,8 +21,11 @@ from app.repositories.enrollment_repo import EnrollmentRepository
 from app.repositories.progress_repo import ProgressRepository
 from app.repositories.user_repo import UserRepository
 from app.repositories.notification_repo import NotificationRepository
+from app.repositories.invite_repo import InviteRepository
+from app.repositories.org_repo import OrgRepository
 from app.models.notification import NotificationType
 from app.core.notification_payloads import enrollment_notification_metadata
+from app.services.email import send_invitation_email
 from app.services.user_provisioning import ProvisioningError, UserProvisioningService
 
 
@@ -107,7 +110,7 @@ class EnrollmentService:
         category_slug = courses[0].category_slug
 
         try:
-            learner = self.provisioning.provision_manual_learner(
+            learner, created_new = self.provisioning.provision_manual_learner(
                 email=email,
                 full_name=full_name,
                 org_id=actor_token.org_id,
@@ -120,6 +123,14 @@ class EnrollmentService:
         except IntegrityError as exc:
             self.db.rollback()
             raise EnrollmentServiceError("Email is already assigned to another account") from exc
+
+        if created_new:
+            self._send_new_learner_setup_email(
+                learner=learner,
+                actor=actor,
+                org_id=actor_token.org_id,
+                category_slug=category_slug,
+            )
 
         enrollment_request = self._ensure_approved_request(
             learner=learner,
@@ -191,6 +202,36 @@ class EnrollmentService:
             skipped_course_ids=skipped_course_ids,
             category_slug=category_slug,
         )
+
+    def _send_new_learner_setup_email(
+        self,
+        *,
+        learner: User,
+        actor: User,
+        org_id: int,
+        category_slug: str,
+    ) -> None:
+        org = OrgRepository(self.db).get_by_id(org_id)
+        if not org:
+            return
+
+        invitation = self.provisioning.create_password_setup_invitation(
+            user=learner,
+            actor=actor,
+            org_id=org_id,
+            category_scope=category_slug,
+        )
+        self.db.flush()
+
+        delivered = send_invitation_email(
+            to_email=invitation.email,
+            org_name=org.name,
+            org_domain=org.domain,
+            role=invitation.role,
+            token=invitation.token,
+            expires_at=str(invitation.expires_at),
+        )
+        InviteRepository(self.db).record_delivery(invitation.id, delivered=delivered)
 
     def _load_and_validate_courses(
         self,

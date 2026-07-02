@@ -170,6 +170,9 @@ def apply_rls_policies(session: Session) -> None:
 
 def set_rls_context(session: Session, org_id: int) -> None:
     """Set the RLS context for the current transaction."""
+    from app.db.engine import is_postgres_dsn
+    if not is_postgres_dsn():
+        return
     session.execute(
         text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
@@ -179,11 +182,26 @@ def set_rls_context(session: Session, org_id: int) -> None:
 
 def set_platform_context(session: Session) -> None:
     """Bypass RLS for platform-level operations."""
+    from app.db.engine import is_postgres_dsn
+    if not is_postgres_dsn():
+        return
     session.execute(text("SELECT set_config('app.bypass_rls', 'on', true)"))
+
+
+def clear_rls_context(session: Session) -> None:
+    """Clear/reset the RLS context for the current transaction."""
+    from app.db.engine import is_postgres_dsn
+    if not is_postgres_dsn():
+        return
+    session.execute(text("SELECT set_config('app.current_org_id', '', true)"))
+    session.execute(text("SELECT set_config('app.bypass_rls', 'off', true)"))
 
 
 def verify_rls_active(session: Session, table: str) -> bool:
     """Check whether RLS is enabled on a table (for health checks)."""
+    from app.db.engine import is_postgres_dsn
+    if not is_postgres_dsn():
+        return False
     result = session.execute(
         text(
             """

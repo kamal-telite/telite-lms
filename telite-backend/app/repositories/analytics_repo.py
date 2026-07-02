@@ -584,6 +584,17 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         )
         total_time_seconds = self.session.execute(heartbeat_stmt).scalar() or 0
 
+        # Calculate PAL breakdown from user fields and progress
+        completed_courses_count = len([p for p in progress if p.status == 'completed'])
+        total_courses_count = len(courses) or 1
+        completion_pct = (completed_courses_count / total_courses_count * 100.0) if total_courses_count else 0.0
+        
+        # Get quiz average from PalQuizScore or user.pal_quiz_avg
+        quiz_avg = user.pal_quiz_avg if hasattr(user, 'pal_quiz_avg') else 0.0
+        
+        # Task completion from user field
+        task_completion = user.pal_task_completion_pct if hasattr(user, 'pal_task_completion_pct') else 0.0
+
         task_stmt = (
             select(Task, TaskAssignment, User)
             .join(TaskAssignment, TaskAssignment.task_id == Task.id)
@@ -615,6 +626,14 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
                 }
             )
 
+        # Get leaderboard and calculate user's rank
+        leaderboard_data = self.get_cohort_rankings(category_slug=user.category_scope, org_id=user.org_id, limit=50)
+        user_rank = None
+        for idx, row in enumerate(leaderboard_data):
+            if row.get("id") == user_id:
+                user_rank = idx + 1
+                break
+
         return {
             "profile": {"full_name": user.full_name, "category_scope": user.category_scope},
             "hero": {
@@ -624,11 +643,25 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
                 "time_spent_hours": round(total_time_seconds / 3600, 1),
                 "streak_days": user.streak_days,
                 "current_course": current_course,
+                "rank": user_rank,
             },
-            "stats": {"courses_completed": max(user.courses_completed, len([p for p in progress if p.status == 'completed'])), "quizzes_submitted": quizzes_submitted},
+            "stats": {
+                "courses_completed": max(user.courses_completed, len([p for p in progress if p.status == 'completed'])),
+                "quizzes_submitted": quizzes_submitted,
+                "cohort_rank": user.cohort_rank,
+                "avg_quiz_score": quiz_avg,
+            },
             "courses": course_rows,
             "tasks": task_rows,
-            "leaderboard": self.get_cohort_rankings(category_slug=user.category_scope, org_id=user.org_id, limit=5),
+            "pal_breakdown": {
+                "completion": completion_pct,
+                "pal_quiz_avg": quiz_avg,
+                "task_completion": task_completion,
+            },
+            "recommendation": {
+                "leaderboard": leaderboard_data[:5],
+            },
+            "leaderboard": leaderboard_data[:5],
         }
 
     def get_progress_distribution(self, category_slug: str | None = None, org_id: int | None = None) -> list[dict[str, Any]]:
@@ -659,16 +692,640 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
 
     def get_cohort_rankings(self, category_slug: str | None = None, org_id: int | None = None, limit: int | None = None) -> list[dict[str, Any]]:
         """Returns PAL leaderboard rankings based on aggregated quiz scores."""
-        stmt = select(User, func.avg(PalQuizScore.score).label('avg_score')).join(PalQuizScore, PalQuizScore.user_id == User.id)
+        # Use LEFT JOIN to include users without quiz scores
+        stmt = select(
+            User.id,
+            User.full_name,
+            func.coalesce(func.avg(PalQuizScore.score), 0.0).label('avg_score'),
+            User.streak_days,
+            User.pal_score
+        ).outerjoin(PalQuizScore, PalQuizScore.user_id == User.id)
+        
         if category_slug:
             stmt = stmt.where(User.category_scope == category_slug)
         if org_id:
-            stmt = stmt.where(PalQuizScore.org_id == org_id)
-        stmt = stmt.group_by(User.id).order_by(desc('avg_score'))
+            stmt = stmt.where(User.org_id == org_id)
+        
+        stmt = stmt.group_by(User.id, User.full_name, User.streak_days, User.pal_score).order_by(desc('avg_score'))
         if limit:
             stmt = stmt.limit(limit)
             
+        results = self.session.execute(stmt).all()
         return [
-            {"full_name": u.full_name, "pal_score": round(avg_score, 2)}
-            for u, avg_score in self.session.execute(stmt).all()
+            {
+                "id": row.id,
+                "full_name": row.full_name,
+                "pal_score": round(float(row.avg_score), 2),
+                "streak_days": row.streak_days or 0,
+                "rank": idx + 1,
+            }
+            for idx, row in enumerate(results)
         ]
+
+    def get_grading_analytics_super_admin(self, org_id: int | None = None) -> dict[str, Any]:
+        """Returns organization-wide grading analytics for Super Admin dashboard."""
+        from app.models.gradebook import CourseGrade, GradeResult, GradeItem, GradeCategory
+        
+        # Base queries with org filter
+        course_grade_stmt = select(CourseGrade)
+        grade_result_stmt = select(GradeResult)
+        grade_item_stmt = select(GradeItem)
+        
+        if org_id:
+            course_grade_stmt = course_grade_stmt.where(CourseGrade.org_id == org_id)
+            grade_result_stmt = grade_result_stmt.where(GradeResult.org_id == org_id)
+            grade_item_stmt = grade_item_stmt.where(GradeItem.org_id == org_id)
+        
+        # Calculate overall statistics
+        total_grades = self.session.execute(
+            select(func.count(CourseGrade.id)).where(
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+        ).scalar() or 0
+        
+        if org_id:
+            total_grades = self.session.execute(
+                select(func.count(CourseGrade.id)).where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar() or 0
+        
+        # Average grade
+        avg_grade_result = self.session.execute(
+            select(func.avg(CourseGrade.percentage)).where(
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+        ).scalar()
+        
+        if org_id:
+            avg_grade_result = self.session.execute(
+                select(func.avg(CourseGrade.percentage)).where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar()
+        
+        overall_average = self._round(avg_grade_result) if avg_grade_result else 0.0
+        
+        # Pass rate (grades >= 60%)
+        pass_count = self.session.execute(
+            select(func.count(CourseGrade.id)).where(
+                CourseGrade.percentage >= 60.0,
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+        ).scalar() or 0
+        
+        if org_id:
+            pass_count = self.session.execute(
+                select(func.count(CourseGrade.id)).where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.percentage >= 60.0,
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar() or 0
+        
+        pass_rate = self._round((pass_count / total_grades * 100.0) if total_grades > 0 else 0.0)
+        fail_rate = self._round(100.0 - pass_rate) if total_grades > 0 else 0.0
+        
+        # Total assessments (grade items)
+        total_assessments = self.session.execute(
+            select(func.count(GradeItem.id)).where(GradeItem.deleted_at.is_(None))
+        ).scalar() or 0
+        
+        if org_id:
+            total_assessments = self.session.execute(
+                select(func.count(GradeItem.id)).where(
+                    GradeItem.org_id == org_id,
+                    GradeItem.deleted_at.is_(None)
+                )
+            ).scalar() or 0
+        
+        # Total graded learners (unique users with course grades)
+        total_graded_learners = self.session.execute(
+            select(func.count(func.distinct(CourseGrade.user_id))).where(
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+        ).scalar() or 0
+        
+        if org_id:
+            total_graded_learners = self.session.execute(
+                select(func.count(func.distinct(CourseGrade.user_id))).where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar() or 0
+        
+        # Grade distribution
+        grade_distribution = [
+            {"range": "90-100%", "count": 0, "label": "A"},
+            {"range": "80-89%", "count": 0, "label": "B"},
+            {"range": "70-79%", "count": 0, "label": "C"},
+            {"range": "60-69%", "count": 0, "label": "D"},
+            {"range": "0-59%", "count": 0, "label": "F"},
+        ]
+        
+        for i, (min_pct, max_pct) in enumerate([(90, 100), (80, 89), (70, 79), (60, 69), (0, 59)]):
+            count_stmt = select(func.count(CourseGrade.id)).where(
+                CourseGrade.percentage >= min_pct,
+                CourseGrade.percentage <= (max_pct if max_pct < 100 else 100),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+            if org_id:
+                count_stmt = count_stmt.where(CourseGrade.org_id == org_id)
+            grade_distribution[i]["count"] = self.session.execute(count_stmt).scalar() or 0
+        
+        # Top performing categories (by average grade)
+        category_performance = self.session.execute(
+            select(
+                GradeCategory.name,
+                func.avg(CourseGrade.percentage).label('avg_grade')
+            )
+            .join(GradeItem, GradeItem.category_id == GradeCategory.id)
+            .join(GradeResult, GradeResult.grade_item_id == GradeItem.id)
+            .join(CourseGrade, CourseGrade.user_id == GradeResult.user_id)
+            .where(
+                GradeCategory.deleted_at.is_(None),
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+            .group_by(GradeCategory.id, GradeCategory.name)
+            .order_by(desc('avg_grade'))
+            .limit(5)
+        ).all()
+        
+        if org_id:
+            category_performance = self.session.execute(
+                select(
+                    GradeCategory.name,
+                    func.avg(CourseGrade.percentage).label('avg_grade')
+                )
+                .join(GradeItem, GradeItem.category_id == GradeCategory.id)
+                .join(GradeResult, GradeResult.grade_item_id == GradeItem.id)
+                .join(CourseGrade, CourseGrade.user_id == GradeResult.user_id)
+                .where(
+                    GradeCategory.org_id == org_id,
+                    GradeCategory.deleted_at.is_(None),
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+                .group_by(GradeCategory.id, GradeCategory.name)
+                .order_by(desc('avg_grade'))
+                .limit(5)
+            ).all()
+        
+        top_categories = [
+            {"name": name, "average": self._round(avg_grade)}
+            for name, avg_grade in category_performance
+        ]
+        
+        # Lowest performing categories
+        lowest_categories = list(reversed(top_categories[-3:])) if len(top_categories) > 3 else []
+        
+        # Organization grade trend (last 6 months)
+        from datetime import datetime, timedelta
+        six_months_ago = datetime.utcnow() - timedelta(days=180)
+        
+        trend_data = []
+        for i in range(6):
+            month_start = six_months_ago + timedelta(days=30 * i)
+            month_end = month_start + timedelta(days=30)
+            
+            month_avg = self.session.execute(
+                select(func.avg(CourseGrade.percentage)).where(
+                    CourseGrade.calculated_at >= month_start,
+                    CourseGrade.calculated_at < month_end,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar()
+            
+            if org_id:
+                month_avg = self.session.execute(
+                    select(func.avg(CourseGrade.percentage)).where(
+                        CourseGrade.org_id == org_id,
+                        CourseGrade.calculated_at >= month_start,
+                        CourseGrade.calculated_at < month_end,
+                        CourseGrade.percentage.isnot(None),
+                        CourseGrade.status.in_(["calculated", "released"])
+                    )
+                ).scalar()
+            
+            trend_data.append({
+                "month": month_start.strftime("%b"),
+                "average": self._round(month_avg) if month_avg else 0.0
+            })
+        
+        return {
+            "overall_average": overall_average,
+            "pass_rate": pass_rate,
+            "fail_rate": fail_rate,
+            "grade_distribution": grade_distribution,
+            "top_categories": top_categories,
+            "lowest_categories": lowest_categories,
+            "total_assessments": total_assessments,
+            "total_graded_learners": total_graded_learners,
+            "grade_trend": trend_data,
+        }
+
+    def get_grading_analytics_category_admin(self, category_slug: str, org_id: int | None = None) -> dict[str, Any]:
+        """Returns category-specific grading analytics for Category Admin dashboard."""
+        from app.models.gradebook import CourseGrade, GradeResult, GradeItem, GradeCategory
+        
+        # Get category courses
+        category_stmt = select(Category).where(Category.slug == category_slug)
+        if org_id:
+            category_stmt = category_stmt.where(Category.org_id == org_id)
+        category = self.session.execute(category_stmt).scalar_one_or_none()
+        
+        if not category:
+            return {}
+        
+        course_stmt = select(Course).where(
+            Course.category_slug == category_slug,
+            Course.status != "archived"
+        )
+        if org_id:
+            course_stmt = course_stmt.where(Course.org_id == org_id)
+        courses = self.session.execute(course_stmt).scalars().all()
+        course_ids = [c.id for c in courses]
+        
+        if not course_ids:
+            return {
+                "average_grade": 0.0,
+                "pass_rate": 0.0,
+                "fail_rate": 0.0,
+                "quiz_average": 0.0,
+                "assignment_average": 0.0,
+                "course_grade_distribution": [],
+                "learners_at_risk": [],
+                "top_performers": [],
+                "grade_trend": [],
+                "grade_summary": {"total_graded": 0, "total_assessments": 0}
+            }
+        
+        # Average grade for category
+        avg_grade_result = self.session.execute(
+            select(func.avg(CourseGrade.percentage)).where(
+                CourseGrade.course_id.in_(course_ids),
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+        ).scalar()
+        
+        if org_id:
+            avg_grade_result = self.session.execute(
+                select(func.avg(CourseGrade.percentage)).where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.course_id.in_(course_ids),
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar()
+        
+        average_grade = self._round(avg_grade_result) if avg_grade_result else 0.0
+        
+        # Pass/fail rates
+        total_grades = self.session.execute(
+            select(func.count(CourseGrade.id)).where(
+                CourseGrade.course_id.in_(course_ids),
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+        ).scalar() or 0
+        
+        if org_id:
+            total_grades = self.session.execute(
+                select(func.count(CourseGrade.id)).where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.course_id.in_(course_ids),
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar() or 0
+        
+        pass_count = self.session.execute(
+            select(func.count(CourseGrade.id)).where(
+                CourseGrade.course_id.in_(course_ids),
+                CourseGrade.percentage >= 60.0,
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+        ).scalar() or 0
+        
+        if org_id:
+            pass_count = self.session.execute(
+                select(func.count(CourseGrade.id)).where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.course_id.in_(course_ids),
+                    CourseGrade.percentage >= 60.0,
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar() or 0
+        
+        pass_rate = self._round((pass_count / total_grades * 100.0) if total_grades > 0 else 0.0)
+        fail_rate = self._round(100.0 - pass_rate) if total_grades > 0 else 0.0
+        
+        # Quiz average (from grade results with source_type = quiz_block)
+        quiz_avg_result = self.session.execute(
+            select(func.avg(GradeResult.percentage)).where(
+                GradeResult.course_id.in_(course_ids),
+                GradeResult.source_type == "quiz_block",
+                GradeResult.percentage.isnot(None),
+                GradeResult.status == "graded"
+            )
+        ).scalar()
+        
+        if org_id:
+            quiz_avg_result = self.session.execute(
+                select(func.avg(GradeResult.percentage)).where(
+                    GradeResult.org_id == org_id,
+                    GradeResult.course_id.in_(course_ids),
+                    GradeResult.source_type == "quiz_block",
+                    GradeResult.percentage.isnot(None),
+                    GradeResult.status == "graded"
+                )
+            ).scalar()
+        
+        quiz_average = self._round(quiz_avg_result) if quiz_avg_result else 0.0
+        
+        # Assignment average (from grade results with source_type = assignment_block)
+        assignment_avg_result = self.session.execute(
+            select(func.avg(GradeResult.percentage)).where(
+                GradeResult.course_id.in_(course_ids),
+                GradeResult.source_type == "assignment_block",
+                GradeResult.percentage.isnot(None),
+                GradeResult.status == "graded"
+            )
+        ).scalar()
+        
+        if org_id:
+            assignment_avg_result = self.session.execute(
+                select(func.avg(GradeResult.percentage)).where(
+                    GradeResult.org_id == org_id,
+                    GradeResult.course_id.in_(course_ids),
+                    GradeResult.source_type == "assignment_block",
+                    GradeResult.percentage.isnot(None),
+                    GradeResult.status == "graded"
+                )
+            ).scalar()
+        
+        assignment_average = self._round(assignment_avg_result) if assignment_avg_result else 0.0
+        
+        # Course grade distribution
+        course_distribution = []
+        for course in courses:
+            course_avg = self.session.execute(
+                select(func.avg(CourseGrade.percentage)).where(
+                    CourseGrade.course_id == course.id,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar()
+            
+            if org_id:
+                course_avg = self.session.execute(
+                    select(func.avg(CourseGrade.percentage)).where(
+                        CourseGrade.org_id == org_id,
+                        CourseGrade.course_id == course.id,
+                        CourseGrade.percentage.isnot(None),
+                        CourseGrade.status.in_(["calculated", "released"])
+                    )
+                ).scalar()
+            
+            if course_avg:
+                course_distribution.append({
+                    "course_name": course.name,
+                    "average": self._round(course_avg)
+                })
+        
+        # Learners at risk (grade < 60%)
+        at_risk = self.session.execute(
+            select(User, CourseGrade.percentage)
+            .join(CourseGrade, CourseGrade.user_id == User.id)
+            .where(
+                CourseGrade.course_id.in_(course_ids),
+                CourseGrade.percentage < 60.0,
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+            .limit(10)
+        ).all()
+        
+        if org_id:
+            at_risk = self.session.execute(
+                select(User, CourseGrade.percentage)
+                .join(CourseGrade, CourseGrade.user_id == User.id)
+                .where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.course_id.in_(course_ids),
+                    CourseGrade.percentage < 60.0,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+                .limit(10)
+            ).all()
+        
+        learners_at_risk = [
+            {"full_name": user.full_name, "grade": self._round(percentage)}
+            for user, percentage in at_risk
+        ]
+        
+        # Top performers (grade >= 90%)
+        top_performers = self.session.execute(
+            select(User, CourseGrade.percentage)
+            .join(CourseGrade, CourseGrade.user_id == User.id)
+            .where(
+                CourseGrade.course_id.in_(course_ids),
+                CourseGrade.percentage >= 90.0,
+                CourseGrade.percentage.isnot(None),
+                CourseGrade.status.in_(["calculated", "released"])
+            )
+            .order_by(desc(CourseGrade.percentage))
+            .limit(5)
+        ).all()
+        
+        if org_id:
+            top_performers = self.session.execute(
+                select(User, CourseGrade.percentage)
+                .join(CourseGrade, CourseGrade.user_id == User.id)
+                .where(
+                    CourseGrade.org_id == org_id,
+                    CourseGrade.course_id.in_(course_ids),
+                    CourseGrade.percentage >= 90.0,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+                .order_by(desc(CourseGrade.percentage))
+                .limit(5)
+            ).all()
+        
+        top_performers_list = [
+            {"full_name": user.full_name, "grade": self._round(percentage)}
+            for user, percentage in top_performers
+        ]
+        
+        # Grade trend (last 6 months)
+        from datetime import datetime, timedelta
+        six_months_ago = datetime.utcnow() - timedelta(days=180)
+        
+        trend_data = []
+        for i in range(6):
+            month_start = six_months_ago + timedelta(days=30 * i)
+            month_end = month_start + timedelta(days=30)
+            
+            month_avg = self.session.execute(
+                select(func.avg(CourseGrade.percentage)).where(
+                    CourseGrade.course_id.in_(course_ids),
+                    CourseGrade.calculated_at >= month_start,
+                    CourseGrade.calculated_at < month_end,
+                    CourseGrade.percentage.isnot(None),
+                    CourseGrade.status.in_(["calculated", "released"])
+                )
+            ).scalar()
+            
+            if org_id:
+                month_avg = self.session.execute(
+                    select(func.avg(CourseGrade.percentage)).where(
+                        CourseGrade.org_id == org_id,
+                        CourseGrade.course_id.in_(course_ids),
+                        CourseGrade.calculated_at >= month_start,
+                        CourseGrade.calculated_at < month_end,
+                        CourseGrade.percentage.isnot(None),
+                        CourseGrade.status.in_(["calculated", "released"])
+                    )
+                ).scalar()
+            
+            trend_data.append({
+                "month": month_start.strftime("%b"),
+                "average": self._round(month_avg) if month_avg else 0.0
+            })
+        
+        # Total assessments
+        total_assessments = self.session.execute(
+            select(func.count(GradeItem.id)).where(
+                GradeItem.course_id.in_(course_ids),
+                GradeItem.deleted_at.is_(None)
+            )
+        ).scalar() or 0
+        
+        if org_id:
+            total_assessments = self.session.execute(
+                select(func.count(GradeItem.id)).where(
+                    GradeItem.org_id == org_id,
+                    GradeItem.course_id.in_(course_ids),
+                    GradeItem.deleted_at.is_(None)
+                )
+            ).scalar() or 0
+        
+        return {
+            "average_grade": average_grade,
+            "pass_rate": pass_rate,
+            "fail_rate": fail_rate,
+            "quiz_average": quiz_average,
+            "assignment_average": assignment_average,
+            "course_grade_distribution": course_distribution,
+            "learners_at_risk": learners_at_risk,
+            "top_performers": top_performers_list,
+            "grade_trend": trend_data,
+            "grade_summary": {
+                "total_graded": total_grades,
+                "total_assessments": total_assessments
+            }
+        }
+
+    def get_grading_analytics_learner(self, user_id: str) -> dict[str, Any]:
+        """Returns learner-specific grading analytics for Learner dashboard."""
+        from app.models.gradebook import CourseGrade, GradeResult, GradeItem, GradeCategory
+        
+        # Get learner's course grades
+        course_grades = self.session.execute(
+            select(CourseGrade).where(
+                CourseGrade.user_id == user_id,
+                CourseGrade.percentage.isnot(None)
+            )
+        ).scalars().all()
+        
+        if not course_grades:
+            return {
+                "has_grades": False,
+                "message": "Grade will be available after evaluation."
+            }
+        
+        # Calculate overall statistics
+        grades_list = [g.percentage for g in course_grades if g.percentage is not None]
+        overall_average = self._round(sum(grades_list) / len(grades_list)) if grades_list else 0.0
+        
+        # Pass/fail status based on most recent or highest grade
+        passed_grades = [g for g in course_grades if g.passed is True]
+        overall_passed = bool(passed_grades)
+        
+        # Quiz average
+        quiz_results = self.session.execute(
+            select(GradeResult).where(
+                GradeResult.user_id == user_id,
+                GradeResult.source_type == "quiz_block",
+                GradeResult.percentage.isnot(None),
+                GradeResult.status == "graded"
+            )
+        ).scalars().all()
+        
+        quiz_scores = [r.percentage for r in quiz_results if r.percentage is not None]
+        quiz_average = self._round(sum(quiz_scores) / len(quiz_scores)) if quiz_scores else 0.0
+        
+        # Assignment average
+        assignment_results = self.session.execute(
+            select(GradeResult).where(
+                GradeResult.user_id == user_id,
+                GradeResult.source_type == "assignment_block",
+                GradeResult.percentage.isnot(None),
+                GradeResult.status == "graded"
+            )
+        ).scalars().all()
+        
+        assignment_scores = [r.percentage for r in assignment_results if r.percentage is not None]
+        assignment_average = self._round(sum(assignment_scores) / len(assignment_scores)) if assignment_scores else 0.0
+        
+        # Current percentage (most recent course grade)
+        current_percentage = self._round(course_grades[0].percentage) if course_grades else 0.0
+        
+        # Grade summary by course
+        grade_summary = []
+        for grade in course_grades:
+            course = self.session.execute(
+                select(Course).where(Course.id == grade.course_id)
+            ).scalar_one_or_none()
+            
+            grade_summary.append({
+                "course_name": course.name if course else "Unknown Course",
+                "percentage": self._round(grade.percentage),
+                "display_grade": grade.display_grade,
+                "passed": grade.passed,
+                "status": grade.status
+            })
+        
+        # Grade progress (trend over time)
+        grade_progress = [
+            {
+                "course_name": gs["course_name"],
+                "percentage": gs["percentage"]
+            }
+            for gs in grade_summary
+        ]
+        
+        return {
+            "has_grades": True,
+            "final_grade": overall_average,
+            "current_percentage": current_percentage,
+            "quiz_average": quiz_average,
+            "assignment_average": assignment_average,
+            "pass_fail_status": "Pass" if overall_passed else "Fail",
+            "grade_summary": grade_summary,
+            "grade_progress": grade_progress,
+            "total_courses_graded": len(course_grades)
+        }

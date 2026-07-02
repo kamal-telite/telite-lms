@@ -59,8 +59,11 @@ class UserRepository(BaseRepository[User]):
         """Find user by email or username, bypassing RLS for authentication bootstrap."""
         ident = identifier.strip().lower()
 
+        from app.db.engine import is_postgres_dsn
+        is_pg = is_postgres_dsn()
         try:
-            self.session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+            if is_pg:
+                self.session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
 
             stmt = select(User).where(
                 or_(User.email == ident, User.username == ident)
@@ -68,7 +71,8 @@ class UserRepository(BaseRepository[User]):
 
             return self.session.execute(stmt).scalar_one_or_none()
         finally:
-            self.session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+            if is_pg:
+                self.session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
 
     def get_platform_admin(self) -> User | None:
         stmt = select(User).where(User.is_platform_admin.is_(True)).limit(1)

@@ -113,6 +113,18 @@ export default function LearnerPage({ session, onLogout }) {
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: "", email: "", organization_id: "1" });
+  const [gradingAnalytics, setGradingAnalytics] = useState(null);
+  const [gradingLoading, setGradingLoading] = useState(false);
+
+  // Calculate activeNav from current path
+  const currentPath = location.pathname.replace(/\/$/, "");
+  const pathParts = currentPath.split("/");
+  const currentTab = pathParts[pathParts.length - 1];
+
+  let activeNav = "section-dashboard";
+  if (currentTab !== "learner") {
+    activeNav = `section-${currentTab}`;
+  }
 
   useEffect(() => {
     if (data?.profile) {
@@ -127,6 +139,23 @@ export default function LearnerPage({ session, onLogout }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    async function fetchGradingAnalytics() {
+      if (activeNav === "section-grading") {
+        setGradingLoading(true);
+        try {
+          const { data } = await api.get("/dashboard/learner/grading-analytics");
+          setGradingAnalytics(data);
+        } catch (err) {
+          console.error("Failed to fetch grading analytics:", err);
+        } finally {
+          setGradingLoading(false);
+        }
+      }
+    }
+    fetchGradingAnalytics();
+  }, [activeNav]);
 
   useEffect(() => {
     let ignore = false;
@@ -161,15 +190,6 @@ export default function LearnerPage({ session, onLogout }) {
     }
     return undefined;
   }, [loading, data]);
-
-  const currentPath = location.pathname.replace(/\/$/, "");
-  const pathParts = currentPath.split("/");
-  const currentTab = pathParts[pathParts.length - 1];
-
-  let activeNav = "section-dashboard";
-  if (currentTab !== "learner") {
-    activeNav = `section-${currentTab}`;
-  }
 
   function changeSection(item) {
     if (item.id === "launch-current") {
@@ -225,9 +245,10 @@ export default function LearnerPage({ session, onLogout }) {
 
   async function handleCertificate(courseId) {
     if (!courseId) return;
-    setCertifyingCourseId(courseId);
+    const courseIdStr = String(courseId);
+    setCertifyingCourseId(courseIdStr);
     try {
-      const response = await api.post(`/api/certificates/${courseId}/issue`);
+      const response = await api.post(`/api/certificates/${courseIdStr}/issue`);
       const cert = response.data?.certificate;
       showToast("Certificate ready.", "success");
       if (cert?.verification_token) {
@@ -281,6 +302,7 @@ export default function LearnerPage({ session, onLogout }) {
         { id: "section-dashboard", label: "Dashboard", icon: "dashboard" },
         { id: "section-courses", label: "My Courses", icon: "course" },
         { id: "section-pal", label: "PAL Progress", icon: "leaderboard" },
+        { id: "section-grading", label: "Grades", icon: "analytics" },
         { id: "section-tasks", label: "Tasks", icon: "task", badge: String(tasks.filter(t => t.status === "pending" || t.status === "overdue").length || 0), badgeTone: "warn" },
         { id: "section-announcements", label: "Announcements", icon: "bell", badge: String(announcementState.items.filter((item) => !item.is_read).length || 0), badgeTone: "brand" },
       ],
@@ -400,35 +422,38 @@ export default function LearnerPage({ session, onLogout }) {
 
             <Panel title="Recent Courses" subtitle="Resume where you left off" action={<button className="panel-link" onClick={() => changeSection({ id: 'section-courses' })}>View all →</button>}>
               <div className="grid-3">
-                {courses.slice(0,3).map((course) => (
-                  <article className={`course-card ${hero.current_course?.id === course.id ? "is-active" : ""}`} key={course.id}>
-                    <div className="course-card__header">
-                      <div className="course-card__title">{course.name}</div>
-                      <Badge tone={course.status === "completed" ? "success" : "neutral"}>
-                        {titleize(course.status)}
-                      </Badge>
-                    </div>
-                    <div className="bar-score" style={{ marginTop: 12 }}>
-                      <div className="progress-track">
-                        <div
-                          className="progress-fill"
-                          style={{
-                            width: animateProgress ? `${course.completion_pct}%` : "0%",
-                            background: getCompletionColor(course.completion_pct),
-                          }}
-                        />
+                {courses.slice(0,3).map((course) => {
+                  const courseId = String(course.id || course.course_id);
+                  return (
+                    <article className={`course-card ${hero.current_course?.id === courseId ? "is-active" : ""}`} key={courseId}>
+                      <div className="course-card__header">
+                        <div className="course-card__title">{course.name}</div>
+                        <Badge tone={course.status === "completed" ? "success" : "neutral"}>
+                          {titleize(course.status)}
+                        </Badge>
                       </div>
-                    </div>
-                    <div className="course-card__footer">
-                      <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                        {formatPercent(course.completion_pct)} done
+                      <div className="bar-score" style={{ marginTop: 12 }}>
+                        <div className="progress-track">
+                          <div
+                            className="progress-fill"
+                            style={{
+                              width: animateProgress ? `${course.completion_pct}%` : "0%",
+                              background: getCompletionColor(course.completion_pct),
+                            }}
+                          />
+                        </div>
                       </div>
-                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingCourseId === course.id}>
-                        {launchingCourseId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
-                      </Button>
-                    </div>
-                  </article>
-                ))}
+                      <div className="course-card__footer">
+                        <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                          {formatPercent(course.completion_pct)} done
+                        </div>
+                        <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(courseId)} disabled={launchingCourseId === courseId}>
+                          {launchingCourseId === courseId ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                        </Button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </Panel>
           </section>
@@ -446,35 +471,38 @@ export default function LearnerPage({ session, onLogout }) {
                 ))}
               </div>
               <div className="grid-3">
-                {courses.filter(c => courseFilter === "all" ? true : c.status === courseFilter).map((course) => (
-                  <article className="course-card" key={course.id}>
-                    <div className="course-card__header">
-                      <div className="course-card__title">{course.name}</div>
-                      <Badge tone={course.status === "completed" ? "success" : "neutral"}>
-                        {titleize(course.status)}
-                      </Badge>
-                    </div>
-                    <div className="bar-score" style={{ marginTop: 12 }}>
-                      <div className="progress-track">
-                        <div
-                          className="progress-fill"
-                          style={{
-                            width: animateProgress ? `${course.completion_pct}%` : "0%",
-                            background: getCompletionColor(course.completion_pct),
-                          }}
-                        />
+                {courses.filter(c => courseFilter === "all" ? true : c.status === courseFilter).map((course) => {
+                  const courseId = String(course.id || course.course_id);
+                  return (
+                    <article className="course-card" key={courseId}>
+                      <div className="course-card__header">
+                        <div className="course-card__title">{course.name}</div>
+                        <Badge tone={course.status === "completed" ? "success" : "neutral"}>
+                          {titleize(course.status)}
+                        </Badge>
                       </div>
-                    </div>
-                    <div className="course-card__footer">
-                      <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                        {formatPercent(course.completion_pct)} done
+                      <div className="bar-score" style={{ marginTop: 12 }}>
+                        <div className="progress-track">
+                          <div
+                            className="progress-fill"
+                            style={{
+                              width: animateProgress ? `${course.completion_pct}%` : "0%",
+                              background: getCompletionColor(course.completion_pct),
+                            }}
+                          />
+                        </div>
                       </div>
-                      <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(course.id)} disabled={launchingCourseId === course.id}>
-                        {launchingCourseId === course.id ? "..." : course.status === "completed" ? "Review" : "Resume"}
-                      </Button>
-                    </div>
-                  </article>
-                ))}
+                      <div className="course-card__footer">
+                        <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                          {formatPercent(course.completion_pct)} done
+                        </div>
+                        <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(courseId)} disabled={launchingCourseId === courseId}>
+                          {launchingCourseId === courseId ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                        </Button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </Panel>
           </section>
@@ -495,9 +523,9 @@ export default function LearnerPage({ session, onLogout }) {
             <Panel title="PAL Dimensions" subtitle="How your score is calculated">
                <div className="pal-list">
                  {[
-                   { label: "Course Completion", value: data.pal_breakdown.completion || 0, weight: 0.3 },
-                   { label: "Quiz Average", value: data.pal_breakdown.pal_quiz_avg || 0, weight: 0.3 },
-                   { label: "Task Completion", value: data.pal_breakdown.task_completion || 0, weight: 0.2 },
+                   { label: "Course Completion", value: data.pal_breakdown?.completion || 0, weight: 0.3 },
+                   { label: "Quiz Average", value: data.pal_breakdown?.pal_quiz_avg || 0, weight: 0.3 },
+                   { label: "Task Completion", value: data.pal_breakdown?.task_completion || 0, weight: 0.2 },
                  ].map((dim) => (
                    <div className="pal-item" key={dim.label}>
                      <div className="pal-item__info">
@@ -514,6 +542,100 @@ export default function LearnerPage({ session, onLogout }) {
                  ))}
                </div>
             </Panel>
+          </section>
+        )}
+
+        {/* GRADING PAGE */}
+        {activeNav === "section-grading" && (
+          <section id="section-grading">
+            {gradingLoading ? (
+              <LoadingState title="Loading your grades..." body="Fetching your grade data from the system." />
+            ) : gradingAnalytics ? (
+              gradingAnalytics.has_grades ? (
+                <>
+                  <div className="grid-4">
+                    <StatCard accent="#7C3AED" label="Final Grade" value={`${gradingAnalytics.final_grade}%`} meta="Overall average" />
+                    <StatCard accent="#2563EB" label="Current Percentage" value={`${gradingAnalytics.current_percentage}%`} meta="Most recent course" />
+                    <StatCard accent="#059669" label="Quiz Average" value={`${gradingAnalytics.quiz_average}%`} meta="Assessment performance" />
+                    <StatCard accent="#F59E0B" label="Assignment Average" value={`${gradingAnalytics.assignment_average}%`} meta="Task performance" />
+                  </div>
+
+                  <Panel title="Pass/Fail Status" subtitle="Your overall standing" style={{ marginTop: 18 }}>
+                    <div className="soft-card" style={{ textAlign: "center", padding: 32 }}>
+                      <div className="row-title" style={{ fontSize: "16px", marginBottom: 8 }}>Overall Status</div>
+                      <Badge tone={gradingAnalytics.pass_fail_status === "Pass" ? "success" : "danger"} style={{ fontSize: "24px", padding: "12px 32px" }}>
+                        {gradingAnalytics.pass_fail_status}
+                      </Badge>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Grade Summary" subtitle="Breakdown by course" style={{ marginTop: 18 }}>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Course</th>
+                            <th style={{ textAlign: "right" }}>Grade</th>
+                            <th style={{ textAlign: "right" }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gradingAnalytics.grade_summary.map((grade, idx) => (
+                            <tr key={idx}>
+                              <td>{grade.course_name}</td>
+                              <td className="mono" style={{ textAlign: "right", color: getScoreColor(grade.percentage), fontWeight: 700 }}>
+                                {grade.percentage}%
+                              </td>
+                              <td style={{ textAlign: "right" }}>
+                                <Badge tone={grade.passed ? "success" : "danger"}>
+                                  {grade.passed ? "Pass" : "Fail"}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Grade Progress" subtitle="Your performance across courses" style={{ marginTop: 18 }}>
+                    <ChartCanvas
+                      type="bar"
+                      height={200}
+                      labels={gradingAnalytics.grade_progress.map(g => g.course_name)}
+                      datasets={[
+                        {
+                          label: "Grade",
+                          data: gradingAnalytics.grade_progress.map(g => g.percentage),
+                          backgroundColor: gradingAnalytics.grade_progress.map(g => getScoreColor(g.percentage)),
+                          borderRadius: 8,
+                        },
+                      ]}
+                      options={{
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, max: 100 } },
+                      }}
+                    />
+                  </Panel>
+
+                  <Panel title="Course Grade" subtitle="Your most recent course performance" style={{ marginTop: 18 }}>
+                    <div className="soft-card">
+                      <div className="row-title">Current Course Grade</div>
+                      <div className="row-subtitle mono" style={{ fontSize: "48px", fontWeight: 700, color: getScoreColor(gradingAnalytics.current_percentage) }}>
+                        {gradingAnalytics.current_percentage}%
+                      </div>
+                      <div className="row-subtitle" style={{ marginTop: 8 }}>
+                        {gradingAnalytics.pass_fail_status === "Pass" ? "You are passing!" : "Keep working to improve your grade."}
+                      </div>
+                    </div>
+                  </Panel>
+                </>
+              ) : (
+                <EmptyState title={gradingAnalytics.message || "No grades available"} body="Your grades will appear here once your assessments have been evaluated." />
+              )
+            ) : (
+              <EmptyState title="No grading data available" body="Grading analytics will appear once courses have been graded." />
+            )}
           </section>
         )}
 
@@ -602,25 +724,28 @@ export default function LearnerPage({ session, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {leaderboard.map((row, idx) => (
-                      <tr key={row.id || idx} className={row.id === data.profile.id ? "is-highlighted" : ""}>
-                        <td style={{ textAlign: "center", fontWeight: 700, color: getRankColor(row.rank) }}>
-                          #{row.rank}
-                        </td>
-                        <td>
-                          <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
-                            <Avatar initials={getInitials(row.full_name)} size={24} />
-                            <span>{row.full_name}</span>
-                          </div>
-                        </td>
-                        <td className="mono" style={{ textAlign: "right", color: getScoreColor(row.pal_score), fontWeight: 700 }}>
-                          {formatPercent(row.pal_score)}
-                        </td>
-                        <td className="mono" style={{ textAlign: "right", color: "var(--text-secondary)" }}>
-                          {row.streak_days}d
-                        </td>
-                      </tr>
-                    ))}
+                    {leaderboard.map((row, idx) => {
+                      const rowId = String(row.id || idx);
+                      return (
+                        <tr key={rowId} className={rowId === String(data.profile.id) ? "is-highlighted" : ""}>
+                          <td style={{ textAlign: "center", fontWeight: 700, color: getRankColor(row.rank) }}>
+                            #{row.rank}
+                          </td>
+                          <td>
+                            <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+                              <Avatar initials={getInitials(row.full_name)} size={24} />
+                              <span>{row.full_name}</span>
+                            </div>
+                          </td>
+                          <td className="mono" style={{ textAlign: "right", color: getScoreColor(row.pal_score), fontWeight: 700 }}>
+                            {formatPercent(row.pal_score)}
+                          </td>
+                          <td className="mono" style={{ textAlign: "right", color: "var(--text-secondary)" }}>
+                            {row.streak_days}d
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -633,20 +758,23 @@ export default function LearnerPage({ session, onLogout }) {
           <section id="section-certificates">
             <Panel title="Certificates" subtitle="Earned credentials">
               <div className="grid-3">
-                {courses.filter(c => c.status === "completed").map(course => (
-                  <div className="soft-card" key={course.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div style={{ background: "var(--brand-gradient, linear-gradient(135deg, #0ea5e9, #6366f1))", height: 100, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold" }}>
-                      Certificate
+                {courses.filter(c => c.status === "completed").map(course => {
+                  const courseId = String(course.id || course.course_id);
+                  return (
+                    <div className="soft-card" key={courseId} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div style={{ background: "var(--brand-gradient, linear-gradient(135deg, #0ea5e9, #6366f1))", height: 100, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold" }}>
+                        Certificate
+                      </div>
+                      <div>
+                        <div className="row-title">{course.name}</div>
+                        <div className="row-subtitle">Completed {formatPercent(course.completion_pct)}</div>
+                      </div>
+                      <Button tone="primary" onClick={() => handleCertificate(courseId)} disabled={certifyingCourseId === courseId}>
+                        {certifyingCourseId === courseId ? "Preparing..." : "View Certificate"}
+                      </Button>
                     </div>
-                    <div>
-                      <div className="row-title">{course.name}</div>
-                      <div className="row-subtitle">Completed {formatPercent(course.completion_pct)}</div>
-                    </div>
-                    <Button tone="primary" onClick={() => handleCertificate(course.id)} disabled={certifyingCourseId === course.id}>
-                      {certifyingCourseId === course.id ? "Preparing..." : "View Certificate"}
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
                 {courses.filter(c => c.status === "completed").length === 0 && (
                   <EmptyState title="No certificates yet" body="Complete your first course to earn a certificate." style={{ gridColumn: "1 / -1" }} />
                 )}

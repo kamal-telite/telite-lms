@@ -1,5 +1,6 @@
 import pytest
 from sqlalchemy import func, select
+from unittest.mock import patch
 
 from app.api.auth import TokenData
 from app.db.rls import set_rls_context
@@ -7,6 +8,7 @@ from app.models.audit import AuditLog
 from app.models.course import Course
 from app.models.course_progress import CourseProgress
 from app.models.enrollment import EnrollmentRequest
+from app.models.invitation import OrgInvitation
 from app.models.organization import Organization
 from app.models.user import User
 from app.services.enrollment_service import (
@@ -127,8 +129,9 @@ def manual_enroll(db, actor, *, email="learner@example.com", course_ids=None):
 def test_manual_enrollment_success_creates_user_request_progress_and_audit(db_session):
     context = seed_org(db_session, org_id=1)
 
-    result = manual_enroll(db_session, context["category_admin"])
-    db_session.commit()
+    with patch("app.services.enrollment_service.send_invitation_email", return_value=True) as send_email:
+        result = manual_enroll(db_session, context["category_admin"])
+        db_session.commit()
 
     assert result.enrolled_course_ids == [context["course"].id]
     assert result.skipped_course_ids == []
@@ -137,6 +140,20 @@ def test_manual_enrollment_success_creates_user_request_progress_and_audit(db_se
     assert count_rows(db_session, CourseProgress, user_id=result.user.id, course_id=context["course"].id) == 1
     assert count_rows(db_session, AuditLog, action="learner.manual_provisioned") == 1
     assert count_rows(db_session, AuditLog, action="enrollment.manual") == 1
+    assert count_rows(db_session, OrgInvitation, email="learner@example.com") == 1
+    send_email.assert_called_once()
+
+
+def test_manual_enrollment_does_not_email_existing_learner(db_session):
+    context = seed_org(db_session, org_id=1)
+    learner = seed_learner(db_session, org_id=1, email="existing@example.com")
+
+    with patch("app.services.enrollment_service.send_invitation_email", return_value=True) as send_email:
+        manual_enroll(db_session, context["super_admin"], email=learner.email)
+        db_session.commit()
+
+    send_email.assert_not_called()
+    assert count_rows(db_session, OrgInvitation, email=learner.email) == 0
 
 
 def test_manual_enrollment_reuses_existing_learner(db_session):

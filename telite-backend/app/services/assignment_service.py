@@ -29,8 +29,11 @@ def set_assignment_actor_context(db: Session, user: TokenData) -> None:
         set_platform_context(db)
     elif user.org_id is not None:
         set_rls_context(db, user.org_id)
-    db.execute(text("SELECT set_config('app.current_user_id', :user_id, true)"), {"user_id": user.id})
-    db.execute(text("SELECT set_config('app.current_user_role', :role, true)"), {"role": "platform_admin" if user.is_platform_admin else user.role})
+    
+    from app.db.engine import is_postgres_dsn
+    if is_postgres_dsn():
+        db.execute(text("SELECT set_config('app.current_user_id', :user_id, true)"), {"user_id": user.id})
+        db.execute(text("SELECT set_config('app.current_user_role', :role, true)"), {"role": "platform_admin" if user.is_platform_admin else user.role})
 
 
 class AssignmentService:

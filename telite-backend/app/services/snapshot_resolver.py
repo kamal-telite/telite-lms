@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.course_progress import CourseProgress
 from app.models.course_version import CourseVersion
 from app.models.lesson_block import LessonBlock
+from app.models.media_asset import MediaAsset
 
 
 class SnapshotResolver:
@@ -39,7 +40,25 @@ class SnapshotResolver:
             return None
         return version.snapshot_json
 
-    def get_block(self, user_id: str, course_id: str, block_id: int) -> Dict[str, Any]:
+    def _resolve_asset_url(self, media_asset_id: int, org_id: int) -> str | None:
+        """Resolve the actual URL for a media asset."""
+        if not media_asset_id:
+            return None
+        asset = self.db.execute(
+            select(MediaAsset).where(
+                MediaAsset.id == media_asset_id,
+                MediaAsset.org_id == org_id,
+                MediaAsset.deleted_at.is_(None)
+            )
+        ).scalar_one_or_none()
+        if not asset:
+            return None
+        # Return the storage_key if it's a local upload, otherwise return the URL
+        if asset.storage_key.startswith("/uploads/"):
+            return asset.storage_key
+        return asset.url
+
+    def get_block(self, user_id: str, course_id: str, block_id: int, org_id: int) -> Dict[str, Any]:
         """
         Retrieves the version-frozen block for the learner based on their enrolled version.
         Falls back to live Draft if the user is an author previewing without an enrollment.
@@ -54,14 +73,20 @@ class SnapshotResolver:
             ).scalars().first()
             if not block:
                 raise ValueError("Block not found in Draft")
+            settings = block.metadata_json or {}
+            # Resolve asset URL for media blocks
+            if block.media_asset_id:
+                asset_url = self._resolve_asset_url(block.media_asset_id, org_id)
+                if asset_url:
+                    settings["url"] = asset_url
             return {
                 "id": block.id,
                 "module_id": block.module_id,
                 "block_type": block.block_type,
                 "content": block.content,
                 "media_asset_id": block.media_asset_id,
-                "metadata_json": block.metadata_json or {},
-                "settings": block.metadata_json or {},
+                "metadata_json": settings,
+                "settings": settings,
                 "sort_order": block.sort_order,
             }
 
@@ -76,8 +101,14 @@ class SnapshotResolver:
                 for b in module.get("blocks", []):
                     if b.get("id") == block_id:
                         # Normalize settings
-                        b["settings"] = b.get("metadata_json") or b.get("settings") or {}
-                        b["metadata_json"] = b.get("settings", {})
+                        settings = b.get("metadata_json") or b.get("settings") or {}
+                        # Resolve asset URL for media blocks
+                        if b.get("media_asset_id"):
+                            asset_url = self._resolve_asset_url(b.get("media_asset_id"), org_id)
+                            if asset_url:
+                                settings["url"] = asset_url
+                        b["settings"] = settings
+                        b["metadata_json"] = settings
                         return b
 
         raise ValueError(f"Block {block_id} not found in Snapshot V{enrolled_version}")

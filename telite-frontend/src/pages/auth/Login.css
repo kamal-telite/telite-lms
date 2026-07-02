@@ -448,3 +448,233 @@ body.login-active {
   display: inline;
 }
 .auth-inline-link:hover { color: #fff; }
+
+
+/* =========================================================
+   RESPONSIVE PATCH
+========================================================= */
+
+/* Better sizing */
+*,
+*::before,
+*::after{
+  box-sizing:border-box;
+}
+
+/* Prevent horizontal scroll */
+html,
+body{
+  overflow-x:hidden;
+}
+
+/* Better viewport on mobile */
+body.login-active{
+  min-height:100dvh;
+  overflow-x:hidden;
+  overflow-y:auto;
+}
+
+/* Wrapper */
+.auth-page-wrap{
+  width:100%;
+  min-height:100dvh;
+  padding:24px;
+}
+
+/* Modal container */
+.auth-modal-wrap{
+  width:100%;
+  max-width:580px;
+}
+
+/* Glass card */
+.auth-glass-modal{
+  width:100%;
+}
+
+/* Inputs */
+.auth-field-input{
+  width:100%;
+}
+
+/* Button */
+.auth-btn-open{
+  width:100%;
+}
+
+/* -----------------------------
+   Tablet
+--------------------------------*/
+@media (max-width:1024px){
+
+.auth-page-wrap{
+    padding:32px;
+}
+
+.auth-modal-wrap{
+    max-width:520px;
+}
+
+.auth-glass-modal{
+    padding:34px;
+}
+
+}
+
+/* -----------------------------
+   Mobile
+--------------------------------*/
+@media (max-width:768px){
+
+body.login-active{
+    cursor:auto;
+}
+
+.custom-cursor,
+.custom-cursor-dot{
+    display:none;
+}
+
+.auth-page-wrap{
+    padding:20px;
+    align-items:center;
+    justify-content:center;
+}
+
+.auth-modal-wrap{
+    max-width:100%;
+}
+
+.auth-glass-modal{
+
+    padding:28px 22px;
+    border-radius:22px;
+
+}
+
+.auth-modal-title{
+    font-size:24px;
+}
+
+.auth-modal-sub{
+    font-size:13px;
+}
+
+.auth-btn-open{
+
+    height:52px;
+
+}
+
+}
+
+/* -----------------------------
+   Small Mobile
+--------------------------------*/
+@media (max-width:480px){
+
+.auth-page-wrap{
+    padding:16px;
+}
+
+.auth-glass-modal{
+
+    padding:22px 16px;
+
+}
+
+.auth-modal-title{
+
+    font-size:22px;
+
+}
+
+.auth-modal-sub{
+
+    font-size:12px;
+    margin-bottom:22px;
+
+}
+
+.auth-field-label{
+
+    font-size:11px;
+
+}
+
+.auth-field-input{
+
+    font-size:14px;
+    padding:12px;
+
+}
+
+.auth-btn-open{
+
+    font-size:14px;
+    padding:14px;
+
+}
+
+.auth-back-btn{
+
+    font-size:11px;
+
+}
+
+}
+
+/* -----------------------------
+   Very Small Devices
+--------------------------------*/
+@media (max-width:360px){
+
+.auth-page-wrap{
+
+    padding:12px;
+
+}
+
+.auth-glass-modal{
+
+    padding:18px 14px;
+
+}
+
+.auth-modal-title{
+
+    font-size:20px;
+
+}
+
+.auth-modal-sub{
+
+    font-size:11px;
+
+}
+
+.auth-btn-open{
+
+    height:48px;
+
+}
+
+}
+
+/* Landscape phones */
+
+@media (max-height:600px){
+
+body.login-active{
+
+    overflow-y:auto;
+
+}
+
+.auth-page-wrap{
+
+    padding:20px;
+
+}
+
+}

@@ -15,10 +15,13 @@ from app.repositories.progress_repo import ProgressRepository
 from app.services.completion_policy_service import CompletionPolicyService
 from app.services.gradebook_service import GradebookService
 from app.services.learning_path_unlock_service import LearningPathUnlockService
+from app.services.progression_rule_engine import ProgressionRuleEngine
 from app.models.learner_event import LearnerEvent
 from app.models.course_progress import CourseProgress
 from app.models.module_progress import ModuleProgress
+from app.models.section_progress import SectionProgress
 from app.models.course_module import CourseModule
+from app.models.course_section import CourseSection
 from app.models.lesson_block import LessonBlock
 from app.models.media_asset import MediaAsset
 
@@ -87,6 +90,10 @@ class HeartbeatRequest(BaseModel):
     block_id: Optional[int] = None
     time_spent_seconds: int
 
+class AccessValidationRequest(BaseModel):
+    target_type: str
+    target_id: int
+
 @learner_router.get("/courses", response_model=List[CourseListResponse])
 def get_learner_courses(
     db: Session = Depends(db_session),
@@ -146,7 +153,8 @@ def get_learner_course(
     current_user: TokenData = Depends(get_current_user)
 ):
     """Retrieve details for a specific course, gated by enrollment access.
-    Serves snapshot-frozen content when learner has an enrolled_version."""
+    Serves snapshot-frozen content when learner has an enrolled_version.
+    Returns sections ordered by sort_order ASC, modules ordered by sort_order ASC within sections."""
     enrollment_repo = EnrollmentRepository(db)
     if not enrollment_repo.has_access(current_user.id, id, current_user.org_id):
         raise HTTPException(status_code=403, detail="Not enrolled or access denied")
@@ -170,13 +178,18 @@ def get_learner_course(
         ).first()
         if version and version.snapshot_json:
             snapshot = version.snapshot_json
-            snapshot_modules = []
-            for section in snapshot.get("sections", []):
-                for mod in section.get("modules", []):
+            snapshot_sections = []
+            # Sort sections by sort_order
+            sorted_sections = sorted(snapshot.get("sections", []), key=lambda s: s.get("sort_order", 0))
+            for section in sorted_sections:
+                section_modules = []
+                # Sort modules within section by sort_order
+                sorted_modules = sorted(section.get("modules", []), key=lambda m: m.get("sort_order", 0))
+                for mod in sorted_modules:
                     blocks = mod.get("blocks", [])
                     for idx, b in enumerate(blocks):
                         blocks[idx] = _sanitize_block_for_learner(b)
-                    snapshot_modules.append({
+                    section_modules.append({
                         "id": mod["id"],
                         "title": mod.get("title", ""),
                         "module_type": mod.get("module_type", "page"),
@@ -186,20 +199,36 @@ def get_learner_course(
                         "content_url": mod.get("content_url"),
                         "content": blocks,
                     })
+                snapshot_sections.append({
+                    "id": section.get("id"),
+                    "course_id": section.get("course_id"),
+                    "org_id": section.get("org_id"),
+                    "title": section.get("title", ""),
+                    "sort_order": section.get("sort_order", 0),
+                    "deleted_at": section.get("deleted_at"),
+                    "deleted_by": section.get("deleted_by"),
+                    "modules": section_modules,
+                })
             return {
                 "id": course.id,
                 "name": snapshot.get("course", {}).get("name", course.name),
                 "description": course.description,
-                "modules_json": snapshot_modules,
+                "sections": snapshot_sections,
                 "version": enrolled_version,
             }
 
     # Fallback: serve live draft content
+    sections = db.query(CourseSection).filter(
+        CourseSection.course_id == course.id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).order_by(CourseSection.sort_order.asc()).all()
+    
     modules = db.query(CourseModule).filter(
         CourseModule.course_id == course.id,
         CourseModule.org_id == current_user.org_id,
         CourseModule.deleted_at.is_(None),
-    ).order_by(CourseModule.sort_order).all()
+    ).order_by(CourseModule.sort_order.asc()).all()
 
     blocks_by_module = {}
     if modules:
@@ -208,24 +237,62 @@ def get_learner_course(
             LessonBlock.module_id.in_(module_ids),
             LessonBlock.org_id == current_user.org_id,
             LessonBlock.deleted_at.is_(None),
-        ).order_by(LessonBlock.sort_order).all()
+        ).order_by(LessonBlock.sort_order.asc()).all()
         for block in blocks:
             block_dict = block.to_dict()
             block_dict["settings"] = block_dict.pop("metadata_json", {})
             block_dict = _sanitize_block_for_learner(block_dict)
             blocks_by_module.setdefault(block.module_id, []).append(block_dict)
 
-    native_modules = []
-    for module in modules:
-        module_dict = module.to_dict()
-        module_dict["content"] = blocks_by_module.get(module.id, [])
-        native_modules.append(module_dict)
+    # Group modules by sections
+    sections_list = []
+    for section in sections:
+        sec_dict = section.to_dict()
+        sec_dict["modules"] = []
+        # Get modules for this section, ordered by sort_order
+        section_modules = [m for m in modules if m.section_id == section.id]
+        section_modules.sort(key=lambda m: m.sort_order)
         
+        for module in section_modules:
+            module_dict = module.to_dict()
+            module_dict["content"] = blocks_by_module.get(module.id, [])
+            sec_dict["modules"].append(module_dict)
+        sections_list.append(sec_dict)
+    
+    # Handle unassigned modules (modules without sections)
+    assigned_module_ids = {
+        module.get("id")
+        for section in sections_list
+        for module in section.get("modules", [])
+    }
+    unassigned_modules = [m for m in modules if m.id not in assigned_module_ids]
+    unassigned_modules.sort(key=lambda m: m.sort_order)
+    
+    if unassigned_modules:
+        sections_list.append({
+            "id": 0,
+            "course_id": course.id,
+            "org_id": current_user.org_id,
+            "title": "Course modules",
+            "sort_order": -1,
+            "deleted_at": None,
+            "deleted_by": None,
+            "modules": [m.to_dict() for m in unassigned_modules],
+        })
+    
+    # Flatten modules for easier frontend consumption
+    modules_json = []
+    for section in sections_list:
+        for module in section.get("modules", []):
+            modules_json.append(module)
+    
     return {
         "id": course.id,
         "name": course.name,
         "description": course.description,
-        "modules_json": native_modules or course.modules_json,
+        "sections": sections_list,
+        "modules_json": modules_json,
+        "progress": cp.to_dict() if cp else None,
     }
 
 @learner_router.get("/modules/{id}")
@@ -245,6 +312,17 @@ def get_learner_module(
     enrollment_repo = EnrollmentRepository(db)
     if not enrollment_repo.has_access(current_user.id, module.course_id, current_user.org_id):
         raise HTTPException(status_code=403, detail="Not enrolled or access denied")
+    
+    # Check progression rules
+    engine = ProgressionRuleEngine(db)
+    access_result = engine.validate_access(
+        user_id=current_user.id,
+        target_type="module",
+        target_id=id,
+        org_id=current_user.org_id
+    )
+    if not access_result.allowed:
+        raise HTTPException(status_code=403, detail=access_result.reason or "Access denied by progression rules")
         
     return {
         "id": module.id,
@@ -260,7 +338,8 @@ def update_progress(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Update learner progress for course and modules."""
+    """Update learner progress for course, sections, and modules.
+    Updates section progress based on module completion within each section."""
     enrollment_repo = EnrollmentRepository(db)
     if not enrollment_repo.has_access(current_user.id, req.course_id, current_user.org_id):
         raise HTTPException(status_code=403, detail="Not enrolled or access denied")
@@ -315,6 +394,68 @@ def update_progress(
             
         progress_repo.upsert_module_progress(mp)
 
+    # Update section progress based on module completion
+    # Get all sections for this course
+    sections = db.query(CourseSection).filter(
+        CourseSection.course_id == req.course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).order_by(CourseSection.sort_order.asc()).all()
+    
+    for section in sections:
+        # Get all modules in this section
+        section_modules = db.query(CourseModule).filter(
+            CourseModule.section_id == section.id,
+            CourseModule.org_id == current_user.org_id,
+            CourseModule.deleted_at.is_(None),
+        ).all()
+        
+        if not section_modules:
+            continue
+        
+        # Count completed modules in this section
+        completed_in_section = 0
+        for module in section_modules:
+            mp = progress_repo.get_module_progress(current_user.id, module.id, current_user.org_id)
+            if mp and mp.status == "completed":
+                completed_in_section += 1
+        
+        # Update section progress
+        sp = progress_repo.get_section_progress(current_user.id, section.id, current_user.org_id)
+        section_completion_pct = (completed_in_section / len(section_modules) * 100.0) if section_modules else 0.0
+        
+        if not sp:
+            sp = SectionProgress(
+                user_id=current_user.id,
+                section_id=section.id,
+                org_id=current_user.org_id,
+                status="in_progress" if completed_in_section > 0 else "not_started",
+                completion_percentage=section_completion_pct,
+                started_at=datetime.utcnow() if completed_in_section > 0 else None
+            )
+        else:
+            sp.completion_percentage = section_completion_pct
+            if completed_in_section > 0 and sp.status == "not_started":
+                sp.status = "in_progress"
+                sp.started_at = sp.started_at or datetime.utcnow()
+        
+        # Mark section as completed if all modules are completed
+        if completed_in_section == len(section_modules) and sp.status != "completed":
+            sp.status = "completed"
+            sp.completed_at = datetime.utcnow()
+            # Emit SECTION_COMPLETED event
+            db.add(LearnerEvent(
+                user_id=current_user.id,
+                course_id=req.course_id,
+                event_type="SECTION_COMPLETED",
+                schema_version="1.0",
+                payload_json={"section_id": section.id, "section_title": section.title},
+                created_at=datetime.utcnow(),
+                org_id=current_user.org_id
+            ))
+        
+        progress_repo.upsert_section_progress(sp)
+
     course_module_ids = [
         module_id for (module_id,) in db.query(CourseModule.id).filter(
             CourseModule.course_id == req.course_id,
@@ -335,9 +476,13 @@ def update_progress(
     completion_percentage = (completed_count / total_modules * 100.0) if total_modules else 0.0
     course_progress.completion_percentage = completion_percentage
 
-    if not total_modules or completed_count != total_modules:
-        course_progress.status = "in_progress"
-        course_progress.completed_at = None
+    # Only auto-complete if NOT using explicit submission workflow
+    # Check if course has been explicitly submitted
+    if course_progress.status != "submitted":
+        if not total_modules or completed_count != total_modules:
+            course_progress.status = "in_progress"
+            course_progress.completed_at = None
+        # Note: We don't auto-set to "completed" anymore - that requires explicit submission
 
     evaluation = CompletionPolicyService(db).evaluate_course_completion(
         user_id=current_user.id,
@@ -480,13 +625,171 @@ def record_events(
         db.commit()
     return {"status": "success", "recorded": len(events)}
 
+@learner_router.post("/validate-access")
+def validate_access(
+    req: AccessValidationRequest,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Validate whether a learner can access a module or section based on progression rules."""
+    engine = ProgressionRuleEngine(db)
+    result = engine.validate_access(
+        user_id=current_user.id,
+        target_type=req.target_type,
+        target_id=req.target_id,
+        org_id=current_user.org_id
+    )
+    
+    return {
+        "allowed": result.allowed,
+        "reason": result.reason
+    }
+
+@learner_router.get("/courses/{course_id}/module-progress")
+def get_module_progress(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Get all module progress for a course.
+    Returns a mapping of module_id -> status for all modules in the course."""
+    enrollment_repo = EnrollmentRepository(db)
+    if not enrollment_repo.has_access(current_user.id, course_id, current_user.org_id):
+        raise HTTPException(status_code=403, detail="Not enrolled or access denied")
+
+    # Get all modules for this course
+    course_module_ids = [
+        module_id for (module_id,) in db.query(CourseModule.id).filter(
+            CourseModule.course_id == course_id,
+            CourseModule.org_id == current_user.org_id,
+            CourseModule.deleted_at.is_(None),
+        ).all()
+    ]
+
+    if not course_module_ids:
+        return {}
+
+    # Get progress for all these modules
+    module_progress = {}
+    for module_id in course_module_ids:
+        mp = db.query(ModuleProgress).filter(
+            ModuleProgress.user_id == current_user.id,
+            ModuleProgress.module_id == module_id,
+            ModuleProgress.org_id == current_user.org_id
+        ).first()
+        if mp:
+            module_progress[str(module_id)] = mp.status
+        else:
+            module_progress[str(module_id)] = "not_started"
+
+    return module_progress
+
 @learner_router.get("/resume/{course_id}")
 def resume_course(
     course_id: str,
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Get the last known position for a learner in a course."""
+    """Get the first incomplete module for a learner in a course.
+    Returns modules in sequential order (sections by sort_order, modules by sort_order within sections).
+    If course is completed, returns the last module."""
+    enrollment_repo = EnrollmentRepository(db)
+    if not enrollment_repo.has_access(current_user.id, course_id, current_user.org_id):
+        raise HTTPException(status_code=403, detail="Not enrolled or access denied")
+
+    progress_repo = ProgressRepository(db)
+    cp = progress_repo.get_course_progress(current_user.id, course_id, current_user.org_id)
+
+    if not cp:
+        # No progress - return first module
+        first_section = db.query(CourseSection).filter(
+            CourseSection.course_id == course_id,
+            CourseSection.org_id == current_user.org_id,
+            CourseSection.deleted_at.is_(None),
+        ).order_by(CourseSection.sort_order.asc()).first()
+
+        if first_section:
+            first_module = db.query(CourseModule).filter(
+                CourseModule.section_id == first_section.id,
+                CourseModule.org_id == current_user.org_id,
+                CourseModule.deleted_at.is_(None),
+            ).order_by(CourseModule.sort_order.asc()).first()
+            if first_module:
+                return {"status": "not_started", "last_module_id": first_module.id, "last_block_id": None}
+
+        return {"status": "not_started"}
+
+    # If course is submitted/completed, return last module
+    if cp.status in ("completed", "submitted"):
+        last_section = db.query(CourseSection).filter(
+            CourseSection.course_id == course_id,
+            CourseSection.org_id == current_user.org_id,
+            CourseSection.deleted_at.is_(None),
+        ).order_by(CourseSection.sort_order.desc()).first()
+
+        if last_section:
+            last_module = db.query(CourseModule).filter(
+                CourseModule.section_id == last_section.id,
+                CourseModule.org_id == current_user.org_id,
+                CourseModule.deleted_at.is_(None),
+            ).order_by(CourseModule.sort_order.desc()).first()
+            if last_module:
+                return {"status": cp.status, "last_module_id": last_module.id, "last_block_id": None}
+
+        return {"status": cp.status}
+
+    # Find first incomplete module sequentially
+    sections = db.query(CourseSection).filter(
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).order_by(CourseSection.sort_order.asc()).all()
+
+    for section in sections:
+        # Check if section is unlocked (previous section completed)
+        if section.sort_order > 0:
+            previous_section = db.query(CourseSection).filter(
+                CourseSection.course_id == course_id,
+                CourseSection.org_id == current_user.org_id,
+                CourseSection.deleted_at.is_(None),
+                CourseSection.sort_order < section.sort_order,
+            ).order_by(CourseSection.sort_order.desc()).first()
+
+            if previous_section:
+                prev_sp = progress_repo.get_section_progress(current_user.id, previous_section.id, current_user.org_id)
+                if not prev_sp or prev_sp.status != "completed":
+                    # Previous section not completed, skip this section
+                    continue
+
+        # Get modules in this section, ordered by sort_order
+        modules = db.query(CourseModule).filter(
+            CourseModule.section_id == section.id,
+            CourseModule.org_id == current_user.org_id,
+            CourseModule.deleted_at.is_(None),
+        ).order_by(CourseModule.sort_order.asc()).all()
+
+        for module in modules:
+            mp = progress_repo.get_module_progress(current_user.id, module.id, current_user.org_id)
+            if not mp or mp.status != "completed":
+                # Found first incomplete module
+                return {
+                    "status": cp.status,
+                    "last_module_id": module.id,
+                    "last_block_id": mp.last_block_id if mp else None
+                }
+
+    # All modules completed but course not submitted
+    return {"status": "ready_to_submit", "last_module_id": None, "last_block_id": None}
+
+@learner_router.post("/courses/{course_id}/submit")
+def submit_course(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Explicitly submit a course for completion.
+    Validates that all modules are completed, marks course as submitted,
+    and triggers certificate generation."""
     enrollment_repo = EnrollmentRepository(db)
     if not enrollment_repo.has_access(current_user.id, course_id, current_user.org_id):
         raise HTTPException(status_code=403, detail="Not enrolled or access denied")
@@ -495,22 +798,114 @@ def resume_course(
     cp = progress_repo.get_course_progress(current_user.id, course_id, current_user.org_id)
     
     if not cp:
-        return {"status": "not_started"}
-        
-    # In a full impl, we'd query module_progress ordering by last_viewed_at DESC
-    from sqlalchemy import desc
-    stmt = db.query(ModuleProgress).join(CourseModule, ModuleProgress.module_id == CourseModule.id)\
-        .filter(ModuleProgress.user_id == current_user.id, CourseModule.course_id == course_id)\
-        .order_by(desc(ModuleProgress.last_viewed_at)).first()
-        
-    if stmt:
+        raise HTTPException(status_code=400, detail="No progress found for this course")
+    
+    # Check if certificate already exists - return it instead of error
+    from app.models.certificate import Certificate
+    existing_cert = db.query(Certificate).filter(
+        Certificate.user_id == current_user.id,
+        Certificate.course_id == course_id,
+        Certificate.org_id == current_user.org_id
+    ).first()
+    
+    if existing_cert:
+        # Course already submitted and certificate exists - return the existing certificate
         return {
-            "status": cp.status,
-            "last_module_id": stmt.module_id,
-            "last_block_id": stmt.last_block_id
+            "status": "success",
+            "course_status": cp.status,
+            "completed_at": cp.completed_at.isoformat() if cp.completed_at else None,
+            "certificate": existing_cert.to_dict(),
+            "already_submitted": True
         }
+    
+    # Verify all modules are completed
+    course_module_ids = [
+        module_id for (module_id,) in db.query(CourseModule.id).filter(
+            CourseModule.course_id == course_id,
+            CourseModule.org_id == current_user.org_id,
+            CourseModule.deleted_at.is_(None),
+        ).all()
+    ]
+    
+    completed_module_ids = {
+        module_id for (module_id,) in db.query(ModuleProgress.module_id).filter(
+            ModuleProgress.user_id == current_user.id,
+            ModuleProgress.org_id == current_user.org_id,
+            ModuleProgress.module_id.in_(course_module_ids),
+            ModuleProgress.status == "completed",
+        ).all()
+    }
+    
+    if len(completed_module_ids) != len(course_module_ids):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Complete all modules before submitting. Completed: {len(completed_module_ids)}/{len(course_module_ids)}"
+        )
+    
+    # Mark course as submitted
+    cp.status = "submitted"
+    cp.completion_percentage = 100.0
+    cp.completed_at = cp.completed_at or datetime.utcnow()
+    
+    # Emit COURSE_SUBMITTED event
+    db.add(LearnerEvent(
+        user_id=current_user.id,
+        course_id=course_id,
+        event_type="COURSE_SUBMITTED",
+        schema_version="1.0",
+        payload_json={
+            "completed_modules": len(completed_module_ids),
+            "total_modules": len(course_module_ids)
+        },
+        created_at=datetime.utcnow(),
+        org_id=current_user.org_id
+    ))
+    
+    progress_repo.upsert_course_progress(cp)
+    db.commit()
+    
+    # Auto-generate certificate
+    cert = None
+    try:
+        from app.models.user import User
+        from app.models.course import Course
+        from app.services.certificate_service import CertificateService
         
-    return {"status": cp.status}
+        user = db.query(User).filter(User.id == current_user.id).first()
+        course = db.query(Course).filter(Course.id == course_id, Course.org_id == current_user.org_id).first()
+        
+        if user and course:
+            cert_service = CertificateService(db)
+            cert, created = cert_service.generate_certificate(user, course, current_user.org_id)
+            
+            if created:
+                # Emit CERTIFICATE_GENERATED event
+                db.add(LearnerEvent(
+                    user_id=current_user.id,
+                    course_id=course_id,
+                    event_type="CERTIFICATE_GENERATED",
+                    schema_version="1.0",
+                    payload_json={"certificate_id": cert.id},
+                    created_at=datetime.utcnow(),
+                    org_id=current_user.org_id
+                ))
+                db.commit()
+    except Exception as e:
+        # Log error but don't fail submission if certificate generation fails
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to generate certificate for course {course_id}: {e}")
+    
+    response_data = {
+        "status": "success",
+        "course_status": cp.status,
+        "completed_at": cp.completed_at.isoformat() if cp.completed_at else None
+    }
+    
+    if cert:
+        response_data["certificate"] = cert.to_dict()
+    
+    return response_data
 
 from app.models.lesson_block_progress import LessonBlockProgress
 
@@ -528,7 +923,7 @@ def _resolve_block_for_learner(block_id: int, db: Session, user_id: str, org_id:
         raise HTTPException(status_code=403, detail="Not enrolled or access denied")
     resolver = SnapshotResolver(db)
     try:
-        return resolver.get_block(user_id, course_id, block_id), course_id
+        return resolver.get_block(user_id, course_id, block_id, org_id), course_id
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

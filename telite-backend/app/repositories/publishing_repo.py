@@ -94,7 +94,7 @@ class PublishingRepository(BaseRepository):
                 hydrated_questions = []
                 for q in settings["questions"]:
                     if q.get("type") == "bank_reference":
-                        version_id = q.get("version_id")
+                        version_id = q.get("question_version_id") or q.get("version_id")
                         if version_id:
                             q_version = self.session.execute(
                                 select(QuestionVersion).where(

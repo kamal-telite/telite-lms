@@ -32,10 +32,17 @@ def _apply_authoring_tenant_context(db: Session, current_user: TokenData) -> Non
     apply_tenant_context(db, current_user.org_id)
 
 
-def _persist_and_refresh(db: Session, instance):
+def _persist_and_refresh(db: Session, instance, org_id: int | None = None):
+    if org_id is not None:
+        apply_tenant_context(db, org_id)
+
     db.flush()
-    db.refresh(instance)
     db.commit()
+
+    if org_id is not None:
+        apply_tenant_context(db, org_id)
+
+    db.refresh(instance)
     return instance
 
 # -----------------------------------------------------------------------------
@@ -68,7 +75,7 @@ def branch_course_version(
         parent_version_id=latest_version.id if latest_version else None,
     )
     db.add(new_version)
-    _persist_and_refresh(db, new_version)
+    _persist_and_refresh(db, new_version, org_id=current_user.org_id)
     return {"success": True, "version": new_version.to_dict()}
 
 @authoring_router.post("/courses/{course_id}/publish", dependencies=[Depends(require_admin)])
@@ -134,7 +141,7 @@ def publish_course(
             idempotency_key=idempotency_key,
         )
     
-    _persist_and_refresh(db, draft)
+    _persist_and_refresh(db, draft, org_id=current_user.org_id)
     return {"success": True, "version": draft.to_dict()}
 
 # -----------------------------------------------------------------------------
@@ -143,7 +150,7 @@ def publish_course(
 
 class CreateSectionRequest(BaseModel):
     title: str
-    sort_order: int
+    sort_order: Optional[int] = None
 
 class UpdateSectionRequest(BaseModel):
     title: str
@@ -159,15 +166,23 @@ def create_section(
     course = db.query(Course).filter(Course.id == course_id, Course.org_id == current_user.org_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-        
+    
+    # Get the next sort_order for sections in this course
+    max_order_query = db.query(func.max(CourseSection.sort_order)).filter(
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None)
+    )
+    max_order = max_order_query.scalar() or 0
+    
     section = CourseSection(
         course_id=course_id,
         org_id=current_user.org_id,
         title=request.title,
-        sort_order=request.sort_order
+        sort_order=max_order + 1
     )
     db.add(section)
-    _persist_and_refresh(db, section)
+    _persist_and_refresh(db, section, org_id=current_user.org_id)
     return section.to_dict()
 
 @authoring_router.patch("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
@@ -193,7 +208,7 @@ def update_section(
         raise HTTPException(status_code=400, detail="Section title is required")
 
     section.title = title
-    _persist_and_refresh(db, section)
+    _persist_and_refresh(db, section, org_id=current_user.org_id)
     return section.to_dict()
 
 @authoring_router.delete("/courses/{course_id}/sections/{section_id}", dependencies=[Depends(require_admin)])
@@ -225,6 +240,97 @@ def delete_section(
     section.deleted_by = current_user.id
     db.commit()
     return {"success": True}
+
+@authoring_router.post("/courses/{course_id}/sections/{section_id}/duplicate", dependencies=[Depends(require_admin)])
+def duplicate_section(
+    course_id: str,
+    section_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    _apply_authoring_tenant_context(db, current_user)
+    section = db.query(CourseSection).filter(
+        CourseSection.id == section_id,
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).first()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+    
+    # Get the next sort_order for sections in this course
+    max_order_query = db.query(func.max(CourseSection.sort_order)).filter(
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None)
+    )
+    max_order = max_order_query.scalar() or 0
+    
+    # Create new section
+    new_section = CourseSection(
+        course_id=course_id,
+        org_id=current_user.org_id,
+        title=f"{section.title} (copy)",
+        sort_order=max_order + 1
+    )
+    db.add(new_section)
+    _persist_and_refresh(db, new_section, org_id=current_user.org_id)
+    
+    # Duplicate all modules in the section
+    existing_modules = db.query(CourseModule).filter(
+        CourseModule.section_id == section_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
+    ).order_by(CourseModule.sort_order).all()
+    
+    duplicated_modules = []
+    for module in existing_modules:
+        # Get the next sort_order for modules in the new section
+        max_module_order_query = db.query(func.max(CourseModule.sort_order)).filter(
+            CourseModule.course_id == course_id,
+            CourseModule.org_id == current_user.org_id,
+            CourseModule.section_id == new_section.id
+        )
+        max_module_order = max_module_order_query.scalar() or 0
+        
+        new_module = CourseModule(
+            course_id=course_id,
+            section_id=new_section.id,
+            section=new_section.sort_order,
+            title=f"{module.title} (copy)",
+            module_type=module.module_type,
+            sort_order=max_module_order + 1,
+            content_url=module.content_url,
+            org_id=current_user.org_id,
+            status="published"
+        )
+        db.add(new_module)
+        _persist_and_refresh(db, new_module, org_id=current_user.org_id)
+        
+        # Duplicate all blocks in the module
+        existing_blocks = db.query(LessonBlock).filter(
+            LessonBlock.module_id == module.id,
+            LessonBlock.org_id == current_user.org_id,
+            LessonBlock.deleted_at.is_(None),
+        ).order_by(LessonBlock.sort_order).all()
+        
+        for block in existing_blocks:
+            new_block = LessonBlock(
+                module_id=new_module.id,
+                org_id=current_user.org_id,
+                block_type=block.block_type,
+                content=block.content,
+                media_asset_id=block.media_asset_id,
+                metadata_json=block.metadata_json,
+                sort_order=block.sort_order
+            )
+            db.add(new_block)
+        
+        duplicated_modules.append(new_module.to_dict())
+    
+    db.commit()
+    
+    return {"success": True, "section": {**new_section.to_dict(), "modules": duplicated_modules}}
 
 class ModuleStructureUpdate(BaseModel):
     module_id: int
@@ -301,7 +407,7 @@ def create_lesson_block(
         sort_order=request.sort_order
     )
     db.add(block)
-    _persist_and_refresh(db, block)
+    _persist_and_refresh(db, block, org_id=current_user.org_id)
     return block.to_dict()
 
 class BlockOrderUpdate(BaseModel):
@@ -368,7 +474,7 @@ def generate_presigned_url(
         url=storage_service.get_public_url(storage_key)
     )
     db.add(asset)
-    _persist_and_refresh(db, asset)
+    _persist_and_refresh(db, asset, org_id=current_user.org_id)
     
     return {
         "upload_url": presigned_url,
@@ -417,7 +523,7 @@ def create_learning_path(
         created_by=current_user.id
     )
     db.add(path)
-    _persist_and_refresh(db, path)
+    _persist_and_refresh(db, path, org_id=current_user.org_id)
     return path.to_dict()
 
 class LearningPathCourseUpdate(BaseModel):
@@ -467,6 +573,7 @@ class CreateModuleRequest(BaseModel):
     title: str
     module_type: str
     content_url: str | None = None
+    auto_create_block: Optional[bool] = False
     
 class UpdateModuleRequest(BaseModel):
     title: str
@@ -495,11 +602,13 @@ def create_module(
         if not section:
             raise HTTPException(status_code=404, detail="Section not found")
 
-    max_order = db.query(CourseModule).filter(
-        CourseModule.course_id == request.course_id, 
+    # Get the next sort_order for modules in the same section
+    max_order_query = db.query(func.max(CourseModule.sort_order)).filter(
+        CourseModule.course_id == request.course_id,
         CourseModule.org_id == current_user.org_id,
         CourseModule.section_id == request.section_id if request.section_id else CourseModule.section == request.section
-    ).count()
+    )
+    max_order = max_order_query.scalar() or 0
 
     new_module = CourseModule(
         course_id=course.id,
@@ -507,15 +616,19 @@ def create_module(
         section_id=section.id if section else None,
         title=request.title,
         module_type=request.module_type,
-        sort_order=max_order,
+        sort_order=max_order + 1,
         content_url=request.content_url,
         org_id=current_user.org_id,
         status="published"
     )
     db.add(new_module)
-    _persist_and_refresh(db, new_module)
+    _persist_and_refresh(db, new_module, org_id=current_user.org_id)
     
     if request.module_type == "quiz":
+        suffix = uuid.uuid4().hex[:8]
+        question_id = f"q_{suffix}"
+        option_a = f"opt_{suffix}_1"
+        option_b = f"opt_{suffix}_2"
         quiz_block = LessonBlock(
             module_id=new_module.id,
             org_id=current_user.org_id,
@@ -525,11 +638,22 @@ def create_module(
             metadata_json={
                 "passing_score": 80,
                 "max_attempts": 3,
-                "questions": [],
+                "questions": [
+                    {
+                        "id": question_id,
+                        "text": "",
+                        "points": 10,
+                        "options": [
+                            {"id": option_a, "text": ""},
+                            {"id": option_b, "text": ""},
+                        ],
+                        "correct_option_id": option_a,
+                    }
+                ],
             },
         )
         db.add(quiz_block)
-        db.commit()
+        _persist_and_refresh(db, quiz_block, org_id=current_user.org_id)
 
     return {"success": True, "module": new_module.to_dict()}
 
@@ -551,7 +675,7 @@ def update_module(
     if request.content_url is not None:
         module.content_url = request.content_url
         
-    _persist_and_refresh(db, module)
+    _persist_and_refresh(db, module, org_id=current_user.org_id)
     
     return {"success": True, "module": module.to_dict()}
 
@@ -574,6 +698,67 @@ def delete_module(
     module.deleted_by = current_user.id
     db.commit()
     return {"success": True}
+
+@authoring_router.post("/modules/{module_id}/duplicate", dependencies=[Depends(require_admin)])
+def duplicate_module(
+    module_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    _apply_authoring_tenant_context(db, current_user)
+    module = db.query(CourseModule).filter(
+        CourseModule.id == module_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.deleted_at.is_(None),
+    ).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
+    
+    # Get the next sort_order for modules in the same section
+    max_order_query = db.query(func.max(CourseModule.sort_order)).filter(
+        CourseModule.course_id == module.course_id,
+        CourseModule.org_id == current_user.org_id,
+        CourseModule.section_id == module.section_id if module.section_id else CourseModule.section == module.section
+    )
+    max_order = max_order_query.scalar() or 0
+    
+    # Create new module
+    new_module = CourseModule(
+        course_id=module.course_id,
+        section=module.section,
+        section_id=module.section_id,
+        title=f"{module.title} (copy)",
+        module_type=module.module_type,
+        sort_order=max_order + 1,
+        content_url=module.content_url,
+        org_id=current_user.org_id,
+        status="published"
+    )
+    db.add(new_module)
+    _persist_and_refresh(db, new_module, org_id=current_user.org_id)
+    
+    # Duplicate all blocks in the module
+    existing_blocks = db.query(LessonBlock).filter(
+        LessonBlock.module_id == module.id,
+        LessonBlock.org_id == current_user.org_id,
+        LessonBlock.deleted_at.is_(None),
+    ).order_by(LessonBlock.sort_order).all()
+    
+    for block in existing_blocks:
+        new_block = LessonBlock(
+            module_id=new_module.id,
+            org_id=current_user.org_id,
+            block_type=block.block_type,
+            content=block.content,
+            media_asset_id=block.media_asset_id,
+            metadata_json=block.metadata_json,
+            sort_order=block.sort_order
+        )
+        db.add(new_block)
+    
+    db.commit()
+    
+    return {"success": True, "module": new_module.to_dict()}
 
 class QuizQuestionRequest(BaseModel):
     module_id: int

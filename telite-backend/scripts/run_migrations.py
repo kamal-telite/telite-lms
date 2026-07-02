@@ -52,7 +52,16 @@ def _repair_orphan_references() -> None:
 
 def main() -> int:
     _use_migration_database_url()
+    
+    # Debug: print database connection info
+    import os
+    print(f"TELITE_DATABASE_URL: {os.getenv('TELITE_DATABASE_URL', 'NOT SET')[:50] if os.getenv('TELITE_DATABASE_URL') else 'NOT SET'}...")
+    print(f"TELITE_POSTGRES_HOST: {os.getenv('TELITE_POSTGRES_HOST', 'NOT SET')}")
+    print(f"TELITE_POSTGRES_PORT: {os.getenv('TELITE_POSTGRES_PORT', 'NOT SET')}")
+    
     engine = get_engine()
+    print(f"Engine URL: {engine.url}")
+    
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
 

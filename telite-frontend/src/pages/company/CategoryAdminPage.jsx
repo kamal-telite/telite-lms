@@ -58,7 +58,7 @@ const COURSE_INITIAL = {
   module_count: 4,
   lessons_count: 8,
   hours: 12,
-  modules: "",
+  modules: [],
 };
 
 const LEARNER_INITIAL = {
@@ -84,6 +84,7 @@ const tabs = [
   { id: "enrollment", label: "Enrollment" },
 
   { id: "pal", label: "PAL tracker" },
+  { id: "grading", label: "Grading Analytics" },
   { id: "tasks", label: "Tasks" },
   { id: "reports", label: "Reports" },
 ];
@@ -123,6 +124,8 @@ function CategoryAdminPageContent({ session, onLogout }) {
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkResult, setBulkResult] = useState(null);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [gradingAnalytics, setGradingAnalytics] = useState(null);
+  const [gradingLoading, setGradingLoading] = useState(false);
 
   const deferredLearnerSearch = useDeferredValue(learnerSearch);
   const kpiPulse = useKpiPulse(dashboard?.kpis || {});
@@ -164,6 +167,26 @@ function CategoryAdminPageContent({ session, onLogout }) {
   const derivedActiveTab = searchParams.get("tab") || "overview";
   const derivedSegment = location.pathname.replace(/\/$/, "").split("/").pop();
   const resolvedTab = derivedSegment === "activity" ? "activity" : derivedSegment === "settings" ? "settings" : derivedSegment === "profile" ? "profile" : derivedActiveTab;
+
+  useEffect(() => {
+    async function fetchGradingAnalytics() {
+      if (resolvedTab === "grading") {
+        setGradingLoading(true);
+        try {
+          const response = await fetch(`/api/dashboard/categories/${slug}/grading-analytics`);
+          if (response.ok) {
+            const data = await response.json();
+            setGradingAnalytics(data);
+          }
+        } catch (err) {
+          console.error("Failed to fetch grading analytics:", err);
+        } finally {
+          setGradingLoading(false);
+        }
+      }
+    }
+    fetchGradingAnalytics();
+  }, [resolvedTab, slug]);
 
   const loadVerifications = useCallback(async () => {
     await fetchVerificationsData(slug);
@@ -1027,6 +1050,171 @@ function CategoryAdminPageContent({ session, onLogout }) {
             <PalTrackerTab dashboard={dashboard} labels={labels} palExpanded={palExpanded} setPalExpanded={setPalExpanded} />
           ) : null}
 
+          {activeTab === "grading" ? (
+            gradingLoading ? (
+              <LoadingState title="Loading grading analytics..." body="Fetching grade data for your category." />
+            ) : gradingAnalytics ? (
+              <>
+                <div className="grid-4">
+                  <StatCard accent="#2563EB" label="Average Grade" value={`${gradingAnalytics.average_grade}%`} meta="Category average" />
+                  <StatCard accent="#059669" label="Pass Rate" value={`${gradingAnalytics.pass_rate}%`} meta="Grades ≥ 60%" />
+                  <StatCard accent="#DC2626" label="Fail Rate" value={`${gradingAnalytics.fail_rate}%`} meta="Grades < 60%" />
+                  <StatCard accent="#7C3AED" label="Quiz Average" value={`${gradingAnalytics.quiz_average}%`} meta="Assessment performance" />
+                </div>
+
+                <div className="grid-2-wide" style={{ marginTop: 18 }}>
+                  <Panel title="Course Grade Distribution" subtitle="Average grades by course">
+                    <ChartCanvas
+                      type="bar"
+                      height={200}
+                      labels={gradingAnalytics.course_grade_distribution.map(c => c.course_name)}
+                      datasets={[
+                        {
+                          label: "Average Grade",
+                          data: gradingAnalytics.course_grade_distribution.map(c => c.average),
+                          backgroundColor: "#2563EB",
+                          borderRadius: 8,
+                        },
+                      ]}
+                      options={{
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, max: 100 } },
+                      }}
+                    />
+                  </Panel>
+
+                  <Panel title="Assessment Breakdown" subtitle="Quiz vs Assignment performance">
+                    <div className="grid-2">
+                      <div className="soft-card">
+                        <div className="row-title">Quiz Average</div>
+                        <div className="row-subtitle mono" style={{ fontSize: "32px", fontWeight: 700, color: "#7C3AED" }}>
+                          {gradingAnalytics.quiz_average}%
+                        </div>
+                      </div>
+                      <div className="soft-card">
+                        <div className="row-title">Assignment Average</div>
+                        <div className="row-subtitle mono" style={{ fontSize: "32px", fontWeight: 700, color: "#059669" }}>
+                          {gradingAnalytics.assignment_average}%
+                        </div>
+                      </div>
+                    </div>
+                  </Panel>
+                </div>
+
+                <div className="grid-2-wide" style={{ marginTop: 18 }}>
+                  <Panel title="Learners At Risk" subtitle="Grades below 60%">
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Learner</th>
+                            <th style={{ textAlign: "right" }}>Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gradingAnalytics.learners_at_risk.length > 0 ? (
+                            gradingAnalytics.learners_at_risk.map((learner, idx) => (
+                              <tr key={idx}>
+                                <td>{learner.full_name}</td>
+                                <td className="mono" style={{ textAlign: "right", color: "#DC2626", fontWeight: 700 }}>
+                                  {learner.grade}%
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="2">
+                                <EmptyState title="No at-risk learners" body="All learners are performing above threshold." />
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Top Performers" subtitle="Grades 90% and above">
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Learner</th>
+                            <th style={{ textAlign: "right" }}>Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gradingAnalytics.top_performers.length > 0 ? (
+                            gradingAnalytics.top_performers.map((learner, idx) => (
+                              <tr key={idx}>
+                                <td>{learner.full_name}</td>
+                                <td className="mono" style={{ textAlign: "right", color: "#059669", fontWeight: 700 }}>
+                                  {learner.grade}%
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="2">
+                                <EmptyState title="No top performers yet" body="Learners with 90%+ grades will appear here." />
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Panel>
+                </div>
+
+                <Panel title="Grade Trend" subtitle="Last 6 months" style={{ marginTop: 18 }}>
+                  <ChartCanvas
+                    type="line"
+                    height={200}
+                    labels={gradingAnalytics.grade_trend.map(t => t.month)}
+                    datasets={[
+                      {
+                        label: "Average Grade",
+                        data: gradingAnalytics.grade_trend.map(t => t.average),
+                        borderColor: "#2563EB",
+                        backgroundColor: "rgba(37, 99, 235, 0.1)",
+                        fill: true,
+                        tension: 0.4,
+                      },
+                    ]}
+                    options={{
+                      plugins: { legend: { display: false } },
+                      scales: { y: { beginAtZero: true, max: 100 } },
+                    }}
+                  />
+                </Panel>
+
+                <Panel title="Grade Summary" subtitle="Key metrics" style={{ marginTop: 18 }}>
+                  <div className="grid-3">
+                    <div className="soft-card">
+                      <div className="row-title">Total Graded</div>
+                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#2563EB" }}>
+                        {gradingAnalytics.grade_summary.total_graded}
+                      </div>
+                    </div>
+                    <div className="soft-card">
+                      <div className="row-title">Total Assessments</div>
+                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#7C3AED" }}>
+                        {gradingAnalytics.grade_summary.total_assessments}
+                      </div>
+                    </div>
+                    <div className="soft-card">
+                      <div className="row-title">Assignment Average</div>
+                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#059669" }}>
+                        {gradingAnalytics.assignment_average}%
+                      </div>
+                    </div>
+                  </div>
+                </Panel>
+              </>
+            ) : (
+              <EmptyState title="No grading data available" body="Grading analytics will appear once courses have been graded." />
+            )
+          ) : null}
+
           {activeTab === "tasks" ? (
             <TasksTab pendingTasks={pendingTasks} completedTasks={completedTasks} toggleTask={toggleTask} setTaskModal={setTaskModal} onReviewTask={handleReviewTask} />
           ) : null}
@@ -1276,6 +1464,10 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
         description: form.description,
         tier: form.tier,
         status: form.status,
+        module_count: form.module_count,
+        lessons_count: form.lessons_count,
+        hours: form.hours,
+        modules: form.modules,
       },
       isEdit
     );

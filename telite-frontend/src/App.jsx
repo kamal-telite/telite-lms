@@ -29,6 +29,7 @@ const Login = lazy(() => import("./pages/auth/Login"));
 const LandingPage = lazy(() => import("./pages/landing/LandingPage"));
 const AcceptInvitePage = lazy(() => import("./pages/auth/AcceptInvitePage"));
 const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
+const CertificateVerifyPage = lazy(() => import("./pages/public/CertificateVerifyPage"));
 const AUTH_EXPIRED_EVENT = "telite:auth-expired";
 const ROUTER_NAVIGATE_EVENT = "telite:router-navigate";
 const CHUNK_RELOAD_KEY = "telite_chunk_reload_at";
@@ -134,6 +135,12 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
         <Route
           path="/reset-password"
           element={<ResetPasswordPage />}
+        />
+        
+        {/* Public Certificate Verification */}
+        <Route
+          path="/public/verify/:token"
+          element={<CertificateVerifyPage />}
         />
         
         {/* Modular Routers */}

@@ -33,14 +33,31 @@ def configure_logging() -> None:
     root.handlers.clear()
     root.setLevel(level)
 
-    handler = logging.StreamHandler()
+    # Stream Handler
+    stream_handler = logging.StreamHandler()
     if log_format == "json":
-        handler.setFormatter(JsonLogFormatter())
+        stream_handler.setFormatter(JsonLogFormatter())
     else:
-        handler.setFormatter(
+        stream_handler.setFormatter(
             logging.Formatter(
                 "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
         )
-    root.addHandler(handler)
+    root.addHandler(stream_handler)
+
+    # File Handler for debugging
+    try:
+        log_dir = os.path.dirname(os.path.abspath(__file__))
+        debug_log_path = os.path.join(os.path.dirname(os.path.dirname(log_dir)), "debug_server.log")
+        file_handler = logging.FileHandler(debug_log_path, mode="a", encoding="utf-8")
+        file_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
+        root.addHandler(file_handler)
+    except Exception:
+        pass
+

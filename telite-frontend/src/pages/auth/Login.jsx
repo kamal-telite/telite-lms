@@ -14,8 +14,8 @@ export default function Login({ onAuthenticated }) {
   const navigate = useNavigate();
 
   // ── Login state ──────────────────────────────────────────────────────────────
-  const [username, setUsername] = useState("superadmin");
-  const [password, setPassword] = useState("Super@1234");
+  const [username, setUsername] = useState("username");
+  const [password, setPassword] = useState("Password");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 

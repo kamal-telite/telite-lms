@@ -167,7 +167,6 @@ export function CourseBuilderLayout({
     try {
       const { data } = await api.post(`/authoring/courses/${course.id}/sections`, {
         title: sectionTitle.trim(),
-        sort_order: sections.length,
       });
       setSections([...(sections || []), { ...data, modules: [] }]);
       setSectionModalOpen(false);

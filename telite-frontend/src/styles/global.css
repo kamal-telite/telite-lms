@@ -281,7 +281,7 @@ a {
   top: 0;
   z-index: 10;
   height: 56px;
-  background: rgba(255, 255, 255, 0.94);
+  background: color-mix(in srgb, var(--surface-raised) 0.94, transparent);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -782,6 +782,23 @@ a {
 
 .table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  table {
+    min-width: 600px;
+  }
+
+  th,
+  td {
+    padding: 12px 16px;
+  }
 }
 
 .question-bank-manager {
@@ -1464,20 +1481,22 @@ code {
 .login-brand__title {
   font-size: 14px;
   font-weight: 600;
+  color: #1e293b;
 }
 
 .login-brand__subtitle {
-  color: var(--text-muted);
+  color: #475569;
   font-size: 12px;
 }
 
 .eyebrow {
   margin: 34px 0 10px;
-  color: var(--violet);
+  color: #6366f1;
   font-family: "Geist Mono", monospace;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .login-copy h1 {
@@ -1486,12 +1505,13 @@ code {
   font-size: clamp(38px, 6vw, 62px);
   line-height: 0.98;
   letter-spacing: -0.04em;
+  color: #1e293b;
 }
 
 .login-copy__body {
   margin: 18px 0 0;
   max-width: 540px;
-  color: var(--text-secondary);
+  color: #475569;
   font-size: 15px;
 }
 
@@ -1906,7 +1926,7 @@ code {
 
 .course-card.is-active {
   border-color: var(--theme-accent-mid);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-accent) 6%, white), white);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-accent) 6%, var(--surface-raised)), var(--surface-raised));
 }
 
 .pal-ring {
@@ -1991,6 +2011,7 @@ code {
   box-shadow: var(--shadow-md);
   border-radius: 10px;
   overflow: hidden;
+  max-height: calc(100vh - 100px);
   z-index: 20;
 }
 
@@ -2096,6 +2117,12 @@ code {
   }
 }
 
+@media (max-width: 1400px) {
+  .grid-4 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1180px) {
   .grid-4,
   .grid-3,
@@ -2110,6 +2137,93 @@ code {
 
   .login-hero {
     padding-right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .grid-4,
+  .grid-3,
+  .grid-3-equal,
+  .grid-2,
+  .grid-2-wide {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sidebar {
+    position: fixed;
+    left: -100%;
+    top: 0;
+    height: 100vh;
+    z-index: 100;
+    transition: left 0.3s ease;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  }
+
+  .dashboard-sidebar.mobile-open {
+    left: 0;
+  }
+
+  .sidebar-nav {
+    flex-direction: column;
+    overflow-x: visible;
+    padding: 12px 10px;
+  }
+
+  .sidebar-nav__group {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-top: var(--space-24);
+  }
+
+  .sidebar-nav__items {
+    flex-direction: column;
+  }
+
+  .nav-item {
+    white-space: normal;
+  }
+
+  /* Learner Dashboard Mobile Styles */
+  .hero-banner {
+    padding: 24px 16px !important;
+  }
+
+  .hero-banner__metrics {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .hero-metric {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 120px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .hero-actions .btn {
+    width: 100%;
+  }
+
+  .pal-ring {
+    width: 100px !important;
+    height: 100px !important;
+  }
+
+  .course-card {
+    min-height: auto;
+  }
+
+  .split-actions {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+
+  .split-actions > * {
+    width: 100%;
   }
 }
 
@@ -2170,6 +2284,25 @@ code {
   .grid-3-equal,
   .field-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Override mobile sidebar for tablets */
+  .dashboard-sidebar {
+    position: static;
+    left: auto;
+    box-shadow: none;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+  }
+
+  .sidebar-nav__group {
+    flex-direction: row;
+  }
+
+  .sidebar-nav__items {
+    flex-direction: row;
   }
 
   .question-bank-filters {

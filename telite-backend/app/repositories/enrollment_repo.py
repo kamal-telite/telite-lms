@@ -182,7 +182,7 @@ class EnrollmentRepository(BaseRepository[EnrollmentRequest]):
         if not user:
             return False
 
-        if user.role in ("super_admin", "category_admin"):
+        if user.role in ("super_admin", "category_admin", "instructor"):
             return True
 
         if course.status not in ("active", "published"):
@@ -201,4 +201,12 @@ class EnrollmentRepository(BaseRepository[EnrollmentRequest]):
             EnrollmentRequest.org_id == org_id,
             EnrollmentRequest.status == "approved"
         )
-        return self.session.execute(stmt).scalar_one_or_none() is not None
+        if self.session.execute(stmt).scalar_one_or_none():
+            return True
+
+        # If learner is in the same org and course is active, allow access
+        # This ensures learners can see content created by category admins
+        if user.role == "learner" and user.org_id == org_id:
+            return True
+
+        return False

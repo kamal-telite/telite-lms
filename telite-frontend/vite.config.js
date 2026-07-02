@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
         clientPort: frontendPort,
       },
       proxy: {
-        "^/(api|auth|authoring|categories|users|dashboard|enrol|tasks|pal|notifications|settings|admin|signup|courses|health|moodle)": {
+        "^/(api|auth|authoring|categories|users|dashboard|enrol|tasks|pal|notifications|settings|admin|signup|courses|health|moodle|public)": {
           target: backendUrl,
           changeOrigin: true,
           bypass: (req) => {

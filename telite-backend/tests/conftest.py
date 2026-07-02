@@ -12,7 +12,7 @@ from app.models.base import Base
 
 TEST_DATABASE_URL = os.getenv(
     "TELITE_TEST_DATABASE_URL",
-    "postgresql+psycopg://postgres:postgres123@localhost:55432/test_telite_backend",
+    "postgresql+psycopg://postgres:postgres123@127.0.0.1:55432/test_telite_backend",
 ).replace("postgresql+psycopg2://", "postgresql+psycopg://", 1).replace("postgresql://", "postgresql+psycopg://", 1).replace("postgres://", "postgresql+psycopg://", 1)
 
 

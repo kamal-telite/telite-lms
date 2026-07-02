@@ -296,6 +296,7 @@ def upgrade() -> None:
         sa.Column("revoked_at", sa.String(), nullable=True),
         sa.Column("revoked_by", sa.String(), nullable=True),
         sa.Column("revoke_reason", sa.String(), nullable=True),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
         sa.Column("resend_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("last_sent_at", sa.String(), nullable=True),
         sa.Column("last_resent_at", sa.String(), nullable=True),

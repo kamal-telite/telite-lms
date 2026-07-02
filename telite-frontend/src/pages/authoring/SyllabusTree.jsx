@@ -178,7 +178,9 @@ function SyllabusSection({
           strategy={verticalListSortingStrategy}
         >
           <div style={{ minHeight: "10px" }}>
-            {modules.map((module) => (
+            {modules
+              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+              .map((module) => (
               <SortableModule
                 key={module.id}
                 module={module}
@@ -405,7 +407,9 @@ export function SyllabusTree({
         items={sections.map(s => `sec-${s.id}`)}
         strategy={verticalListSortingStrategy}
       >
-        {sections.map((section) => (
+        {sections
+          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+          .map((section) => (
           <SyllabusSection 
             key={section.id} 
             section={section} 

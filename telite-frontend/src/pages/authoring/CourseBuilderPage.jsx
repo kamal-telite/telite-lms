@@ -20,6 +20,7 @@ export default function CourseBuilderPage({ session, onLogout }) {
   const [lockExpiresAt, setLockExpiresAt] = useState(null);
   const [lockState, setLockState] = useState("connecting");
   const heartbeatIntervalRef = useRef(null);
+  const initializingRef = useRef(false);
 
   // 1. Fetch Structure
   const fetchStructure = useCallback(async () => {
@@ -72,6 +73,11 @@ export default function CourseBuilderPage({ session, onLogout }) {
     let active = true;
 
     async function init() {
+      if (initializingRef.current) {
+        return;
+      }
+      initializingRef.current = true;
+      
       setLoading(true);
       const locked = await acquireLock();
       if (locked && active) {
@@ -92,6 +98,7 @@ export default function CourseBuilderPage({ session, onLogout }) {
         clearInterval(heartbeatIntervalRef.current);
       }
       releaseLock();
+      initializingRef.current = false;
     };
   }, [acquireLock, fetchStructure, heartbeat, releaseLock]);
 
