@@ -250,6 +250,36 @@ export default function Login({ onAuthenticated }) {
         <div className="auth-modal-wrap">
           <div className="auth-glass-modal auth-hidden" id="glassModal" ref={modalRef}>
 
+            {/* ── HOME BUTTON ──────────────────────────────────────────────────── */}
+            <button
+              type="button"
+              className="auth-home-btn"
+              onClick={() => navigate("/")}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              aria-label="Go to home page"
+              title="Back to home"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M8 2L2 7V13C2 13.5304 2.21071 14.0391 2.58579 14.4142C2.96086 14.7893 3.46957 15 4 15H12C12.5304 15 13.0391 14.7893 13.4142 14.4142C13.7893 14.0391 14 13.5304 14 13V7L8 2Z"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+                <path
+                  d="M6 15V10H10V15"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Home
+            </button>
+
             {/* ── LOGIN VIEW ──────────────────────────────────────────────────── */}
             {view === VIEW_LOGIN && (
               <>

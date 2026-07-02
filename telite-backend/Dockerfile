@@ -1,4 +1,4 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim
 
 LABEL org.opencontainers.image.title="Telite LMS Backend" \
       org.opencontainers.image.description="FastAPI backend for Telite LMS" \
@@ -10,7 +10,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Stage 1: Build dependencies
+# Update and upgrade all system packages, then install build dependencies
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     build-essential \
     gosu \
     libcairo2 \
@@ -25,13 +27,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     libharfbuzz0b \
     libharfbuzz-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system telite \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip to latest security version
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Create application user before copying files for better layer caching
+RUN groupadd --system telite \
     && useradd --system --gid telite --home-dir /app telite
 
+# Copy and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy application code
 COPY app ./app
 COPY scripts ./scripts
 COPY main.py telite_store.py ./
@@ -39,12 +49,15 @@ COPY students.csv faculty.csv ./
 COPY alembic.ini ./
 COPY app/db/migrations ./app/db/migrations
 
+# Set up application directory permissions
 RUN sed -i 's/\r$//' /app/scripts/docker-entrypoint.sh \
     && chmod +x /app/scripts/docker-entrypoint.sh \
     && mkdir -p /app/uploads \
     && chown -R telite:telite /app
 
 EXPOSE ${BACKEND_INTERNAL_PORT}
+
+USER telite
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD python -c "import os, urllib.request; port=os.getenv('BACKEND_INTERNAL_PORT','8001'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health/liveness', timeout=5)" || exit 1
