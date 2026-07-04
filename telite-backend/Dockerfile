@@ -13,6 +13,7 @@ WORKDIR /app
 # Stage 1: Build dependencies
 # Update and upgrade all system packages, then install build dependencies
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    bash \
     build-essential \
     gosu \
     libcairo2 \

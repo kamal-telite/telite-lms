@@ -5,9 +5,10 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const frontendPort = Number(env.VITE_FRONTEND_DEV_PORT || env.FRONTEND_PORT || 3000);
-  const backendHost = env.VITE_BACKEND_HOST || "127.0.0.1";
-  const backendPort = env.VITE_BACKEND_PORT || env.BACKEND_PORT || 8001;
-  const backendUrl = env.VITE_BACKEND_URL || `http://${backendHost}:${backendPort}`;
+  const backendHost = env.VITE_BACKEND_HOST || process.env.VITE_BACKEND_HOST || "127.0.0.1";
+  const backendPort = env.VITE_BACKEND_PORT || process.env.VITE_BACKEND_PORT || env.BACKEND_PORT || process.env.BACKEND_PORT || 8001;
+  const backendUrl =
+    env.VITE_BACKEND_URL || process.env.VITE_BACKEND_URL || `http://${backendHost}:${backendPort}`;
 
   return {
     plugins: [react()],

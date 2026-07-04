@@ -35,13 +35,15 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 ENV BACKEND_SERVICE_HOST=backend \
-    BACKEND_INTERNAL_PORT=8001
+    BACKEND_INTERNAL_PORT=8001 \
+    NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates \
+    NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d
 
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 
-# Use dumb-init as PID 1 for proper signal handling
-ENTRYPOINT ["dumb-init", "--"]
+# Use dumb-init as PID 1 for proper signal handling and preserve nginx base entrypoint behavior
+ENTRYPOINT ["dumb-init", "--", "/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

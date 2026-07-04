@@ -31,19 +31,31 @@ export function getTenantSlugFromUrl(sessionUser) {
   }
 
   // 3. Subdomain Hostname resolution
-  const hostname = window.location.hostname;
+  const hostname = window.location.hostname.toLowerCase().trim();
   const parts = hostname.split(".");
-  
-  const isPlatformHost =
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "telite.com" ||
-    hostname.startsWith("platform.") ||
-    (hostname.endsWith("telite.com") && parts.length === 2);
 
-  if (!isPlatformHost && parts.length >= 2) {
-    // If e.g. ktlearn.telite.com or ktlearn.localhost, 'ktlearn' is the subdomain
-    return parts[0].toLowerCase().trim();
+  const isIpAddress = (value) => {
+    return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(value) || /^\[[0-9a-f:.]+\]$/.test(value);
+  };
+
+  const platformHosts = new Set(
+    (import.meta.env.VITE_PLATFORM_DOMAINS || "localhost,127.0.0.1,telite.com,platform.telite.com")
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  if (isIpAddress(hostname) || platformHosts.has(hostname)) {
+    return null;
+  }
+
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const tenantSlug = parts[0].toLowerCase().trim();
+  if (tenantSlug) {
+    return tenantSlug;
   }
 
   // 4. Logged-in Session Profile scope
