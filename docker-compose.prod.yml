@@ -5,10 +5,10 @@
 
 services:
   postgres:
-    ports: !reset []
+    ports:  []
 
   redis:
-    ports: !reset []
+    ports:  []
 
   backend:
     environment:
