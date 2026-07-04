@@ -117,7 +117,8 @@ services:
     container_name: telite_backend
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       <<: *backend-env
       TELITE_DB_BACKEND: postgres
@@ -176,7 +177,8 @@ services:
     restart: "no"
     command: python -m scripts.seed_permissions
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       <<: *backend-env
       TELITE_DB_BACKEND: postgres
@@ -202,7 +204,8 @@ services:
     restart: "no"
     command: python -m scripts.seed_kt_learn
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       <<: *backend-env
       TELITE_DB_BACKEND: postgres
@@ -228,7 +231,8 @@ services:
     restart: unless-stopped
     command: celery -A app.workers.celery_app worker --loglevel=info --queues=default,reconcile,notifications,reminders --concurrency=2
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       <<: *backend-env
       TELITE_DB_BACKEND: postgres
