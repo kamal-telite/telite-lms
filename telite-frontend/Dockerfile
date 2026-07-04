@@ -29,7 +29,8 @@ LABEL org.opencontainers.image.title="Telite LMS Frontend" \
 
 # Update Alpine packages for security patches
 RUN apk update && apk upgrade && apk add --no-cache \
-    dumb-init
+    dumb-init \
+    gettext
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
@@ -44,6 +45,8 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 
-# Use dumb-init as PID 1 for proper signal handling and preserve nginx base entrypoint behavior
-ENTRYPOINT ["dumb-init", "--", "/docker-entrypoint.sh"]
-CMD ["nginx", "-g", "daemon off;"]
+RUN mkdir -p /etc/nginx/conf.d && \
+    printf '#!/bin/sh\nset -eu\nif [ -f /etc/nginx/templates/default.conf.template ]; then\n  envsubst "${BACKEND_SERVICE_HOST} ${BACKEND_INTERNAL_PORT}" < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf\nfi\nexec dumb-init -- nginx -g "daemon off;"\n' > /usr/local/bin/start-nginx.sh && \
+    chmod +x /usr/local/bin/start-nginx.sh
+
+ENTRYPOINT ["/usr/local/bin/start-nginx.sh"]
