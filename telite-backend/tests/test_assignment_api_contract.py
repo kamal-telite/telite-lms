@@ -33,6 +33,13 @@ class FakeAssignmentService:
         self.calls.append(("list_submissions", block_id, user.id))
         return {"assignment": {"block_id": block_id}, "submissions": []}
 
+    def list_verification_queue(self, category_slug, user, *, status_filter=None, course_id=None, learner_id=None, search=None):
+        self.calls.append(("list_verification_queue", category_slug, user.id, status_filter, course_id, learner_id, search))
+        return {
+            "stats": {"pending": 1, "approved": 0, "rejected": 0, "total": 1},
+            "submissions": [{"id": 99, "status": "pending_verification"}],
+        }
+
     def get_admin_submission(self, submission_id, user):
         self.calls.append(("get_admin_submission", submission_id, user.id))
         return {"submission": {"id": submission_id}}
@@ -40,6 +47,10 @@ class FakeAssignmentService:
     def grade(self, submission_id, user, *, grade, feedback, returned=False):
         self.calls.append(("grade", submission_id, user.id, grade, feedback, returned))
         return {"submission": {"id": submission_id, "grade": grade, "feedback": feedback, "status": "returned" if returned else "graded"}}
+
+    def review(self, submission_id, user, *, approved, feedback=None):
+        self.calls.append(("review", submission_id, user.id, approved, feedback))
+        return {"submission": {"id": submission_id, "feedback": feedback, "status": "approved" if approved else "rejected"}}
 
 
 class FakeDb:
@@ -102,3 +113,34 @@ def test_admin_assignment_api_contract_lists_and_grades(monkeypatch):
     assert graded.status_code == 200
     assert graded.json()["submission"]["status"] == "graded"
     assert ("grade", 99, "admin-1", 88.0, "Good", False) in FakeAssignmentService.calls
+
+
+def test_admin_assignment_verification_contract_lists_approves_and_rejects(monkeypatch):
+    user = TokenData(id="admin-1", email="admin@example.com", full_name="Admin", role="category_admin", org_id=1)
+    client = make_client(monkeypatch, user)
+
+    queue = client.get(
+        "/api/v1/admin/categories/ats/assignment-verifications",
+        params={"status": "pending_verification", "course_id": "course-1", "search": "learner"},
+    )
+    assert queue.status_code == 200
+    assert queue.json()["stats"]["pending"] == 1
+    assert (
+        "list_verification_queue",
+        "ats",
+        "admin-1",
+        "pending_verification",
+        "course-1",
+        None,
+        "learner",
+    ) in FakeAssignmentService.calls
+
+    approved = client.post("/api/v1/admin/submissions/99/approve", json={"feedback": "Looks good"})
+    assert approved.status_code == 200
+    assert approved.json()["submission"]["status"] == "approved"
+
+    rejected = client.post("/api/v1/admin/submissions/100/reject", json={"feedback": "Please revise"})
+    assert rejected.status_code == 200
+    assert rejected.json()["submission"]["status"] == "rejected"
+    assert ("review", 99, "admin-1", True, "Looks good") in FakeAssignmentService.calls
+    assert ("review", 100, "admin-1", False, "Please revise") in FakeAssignmentService.calls

@@ -4,15 +4,21 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
   approveEnrollmentRequest,
+  approveAssignmentSubmission,
   approveVerification,
   bulkUploadVerifications,
   createCourse,
   createTask,
   deleteCourse,
   deleteUser,
+  downloadAssignmentSubmissionFile,
   getErrorMessage,
+  fetchAssignmentVerifications,
+  fetchCategoryGradingAnalytics,
+  fetchCategoryQuizStatistics,
   manualEnroll,
   rejectEnrollmentRequest,
+  rejectAssignmentSubmission,
   rejectVerification,
   reviewTask,
   updateCourse,
@@ -32,8 +38,10 @@ import {
   StatCard,
   useToast,
 } from "../../components/common/ui";
+import { ChartCanvas } from "../../components/common/charts";
 import {
   formatMonthDate,
+  formatDateTime,
   formatPercent,
   formatShortDate,
   getCompletionColor,
@@ -54,7 +62,7 @@ const COURSE_INITIAL = {
   slug: "",
   description: "",
   tier: "Basic",
-  status: "active",
+  status: "draft",
   module_count: 4,
   lessons_count: 8,
   hours: 12,
@@ -77,11 +85,21 @@ const TASK_INITIAL = {
   notes: "",
 };
 
+function formatDuration(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 const tabs = [
   { id: "overview", label: "Overview" },
   { id: "courses", label: "Course management" },
   { id: "learners", label: "Learners" },
   { id: "enrollment", label: "Enrollment" },
+  { id: "assignment_verification", label: "Assignment Verification" },
+  { id: "quiz_attempts", label: "Quiz Attempts" },
 
   { id: "pal", label: "PAL tracker" },
   { id: "grading", label: "Grading Analytics" },
@@ -126,6 +144,13 @@ function CategoryAdminPageContent({ session, onLogout }) {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [gradingAnalytics, setGradingAnalytics] = useState(null);
   const [gradingLoading, setGradingLoading] = useState(false);
+  const [gradingFilters, setGradingFilters] = useState({ course: "", learner: "", type: "", status: "", grade: "", from: "", to: "", search: "" });
+  const [assignmentQueue, setAssignmentQueue] = useState({ stats: {}, submissions: [] });
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentFilters, setAssignmentFilters] = useState({ status: "", course_id: "", search: "" });
+  const [reviewDrafts, setReviewDrafts] = useState({});
+  const [quizStatistics, setQuizStatistics] = useState({ rows: [] });
+  const [quizStatsLoading, setQuizStatsLoading] = useState(false);
 
   const deferredLearnerSearch = useDeferredValue(learnerSearch);
   const kpiPulse = useKpiPulse(dashboard?.kpis || {});
@@ -160,6 +185,37 @@ function CategoryAdminPageContent({ session, onLogout }) {
     setLearnerPage(1);
   }, [deferredLearnerSearch, learnerFilter]);
 
+  const filteredGradingLearners = useMemo(() => {
+    const rows = gradingAnalytics?.learner_grades || [];
+    const search = gradingFilters.search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (gradingFilters.course && row.course_id !== gradingFilters.course) return false;
+      if (gradingFilters.learner && row.learner_id !== gradingFilters.learner) return false;
+      if (gradingFilters.grade && row.overall_grade !== gradingFilters.grade) return false;
+      if (search && !`${row.learner_name} ${row.course}`.toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [gradingAnalytics, gradingFilters]);
+
+  const filteredAssessmentDetails = useMemo(() => {
+    const rows = gradingAnalytics?.assessment_details || [];
+    const search = gradingFilters.search.trim().toLowerCase();
+    const from = gradingFilters.from ? new Date(gradingFilters.from) : null;
+    const to = gradingFilters.to ? new Date(`${gradingFilters.to}T23:59:59`) : null;
+    return rows.filter((row) => {
+      if (gradingFilters.course && row.course_id && row.course_id !== gradingFilters.course) return false;
+      if (gradingFilters.learner && row.learner_id !== gradingFilters.learner) return false;
+      if (gradingFilters.type && row.assessment_type !== gradingFilters.type) return false;
+      if (gradingFilters.status && row.status !== gradingFilters.status) return false;
+      if (gradingFilters.grade && row.grade !== gradingFilters.grade) return false;
+      if (search && !`${row.learner_name} ${row.course}`.toLowerCase().includes(search)) return false;
+      const stamp = row.submission_date ? new Date(row.submission_date) : null;
+      if (from && stamp && stamp < from) return false;
+      if (to && stamp && stamp > to) return false;
+      return true;
+    });
+  }, [gradingAnalytics, gradingFilters]);
+
   useEffect(() => {
     fetchDashboardData(slug);
   }, [slug, fetchDashboardData]);
@@ -173,20 +229,106 @@ function CategoryAdminPageContent({ session, onLogout }) {
       if (resolvedTab === "grading") {
         setGradingLoading(true);
         try {
-          const response = await fetch(`/api/dashboard/categories/${slug}/grading-analytics`);
-          if (response.ok) {
-            const data = await response.json();
-            setGradingAnalytics(data);
-          }
+          setGradingAnalytics(await fetchCategoryGradingAnalytics(slug));
         } catch (err) {
           console.error("Failed to fetch grading analytics:", err);
+          showToast(getErrorMessage(err, "Unable to load grading analytics."), "error");
         } finally {
           setGradingLoading(false);
         }
       }
     }
     fetchGradingAnalytics();
+  }, [resolvedTab, showToast, slug]);
+
+  useEffect(() => {
+    if (resolvedTab !== "grading") return undefined;
+    const timer = window.setInterval(async () => {
+      try {
+        setGradingAnalytics(await fetchCategoryGradingAnalytics(slug));
+      } catch (err) {
+        console.error("Failed to refresh grading analytics:", err);
+      }
+    }, 30000);
+    return () => window.clearInterval(timer);
   }, [resolvedTab, slug]);
+
+  const loadAssignmentQueue = useCallback(async () => {
+    setAssignmentLoading(true);
+    try {
+      const data = await fetchAssignmentVerifications(slug, {
+        status: assignmentFilters.status || undefined,
+        course_id: assignmentFilters.course_id || undefined,
+        search: assignmentFilters.search || undefined,
+      });
+      setAssignmentQueue(data);
+    } catch (err) {
+      showToast(getErrorMessage(err, "Unable to load assignment verifications."), "error");
+    } finally {
+      setAssignmentLoading(false);
+    }
+  }, [assignmentFilters.course_id, assignmentFilters.search, assignmentFilters.status, showToast, slug]);
+
+  useEffect(() => {
+    if (resolvedTab === "assignment_verification") {
+      loadAssignmentQueue();
+    }
+  }, [resolvedTab, loadAssignmentQueue]);
+
+  const loadQuizStatistics = useCallback(async () => {
+    setQuizStatsLoading(true);
+    try {
+      setQuizStatistics(await fetchCategoryQuizStatistics(slug));
+    } catch (err) {
+      showToast(getErrorMessage(err, "Unable to load quiz attempt statistics."), "error");
+    } finally {
+      setQuizStatsLoading(false);
+    }
+  }, [showToast, slug]);
+
+  useEffect(() => {
+    if (resolvedTab === "quiz_attempts") {
+      loadQuizStatistics();
+    }
+  }, [resolvedTab, loadQuizStatistics]);
+
+  async function handleAssignmentReview(submissionId, action) {
+    const feedback = reviewDrafts[submissionId] || "";
+    try {
+      if (action === "approve") {
+        await approveAssignmentSubmission(submissionId, feedback);
+        showToast("Assignment approved.", "success");
+      } else {
+        await rejectAssignmentSubmission(submissionId, feedback);
+        showToast("Assignment rejected.", "warning");
+      }
+      await loadAssignmentQueue();
+      if (resolvedTab === "grading") {
+        setGradingAnalytics(await fetchCategoryGradingAnalytics(slug));
+      }
+    } catch (err) {
+      showToast(getErrorMessage(err, `Unable to ${action} assignment.`), "error");
+    }
+  }
+
+  async function handleAssignmentDownload(event, submission, file) {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      const assetId = file?.asset_id || file?.file_path || null;
+      const { blob, filename } = await downloadAssignmentSubmissionFile(submission.id, assetId);
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      showToast(getErrorMessage(err, "Unable to download assignment file."), "error");
+    }
+  }
 
   const loadVerifications = useCallback(async () => {
     await fetchVerificationsData(slug);
@@ -375,6 +517,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
         { id: "learners", label: "Learners", icon: "users", badge: String(dashboard.kpis.active_learners), badgeTone: "brand" },
         { id: "enrollment", label: "Enrollment", icon: "enrollments", badge: String(dashboard.kpis.pending_enrollment), badgeTone: "warn" },
         { id: "verifications", label: "Verifications", icon: "shield", badge: String(dashboard.kpis.pending_verifications || 0), badgeTone: "warn" },
+        { id: "assignment_verification", label: "Assignment verification", icon: "task", badge: String(assignmentQueue?.stats?.pending || 0), badgeTone: "warn" },
         { id: "tasks", label: "Tasks", icon: "task", badge: String(dashboard.tasks.length), badgeTone: "neutral" },
       ],
     },
@@ -428,6 +571,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
       tasks: "tasks",
       reports: "reports",
       verifications: "verifications",
+      assignment_verification: "assignment_verification",
     };
     activeNav = mapped[activeTab] || "dashboard";
   }
@@ -479,6 +623,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
             pal: "pal",
             tasks: "tasks",
             verifications: "verifications",
+            assignment_verification: "assignment_verification",
           };
           const targetTab = mapped[item.id] || "overview";
           if (targetTab === "overview") {
@@ -667,7 +812,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
                               <div className="row-subtitle mono">{formatPercent(course.completion_rate)}</div>
                             </td>
                             <td>
-                              <Badge tone={course.status === "active" ? "success" : "warn"}>{titleize(course.status)}</Badge>
+                              <Badge tone={course.status === "published" || course.status === "active" ? "success" : course.status === "draft" ? "neutral" : "warn"}>{titleize(course.status)}</Badge>
                             </td>
                             <td>
                               <div className="split-actions">
@@ -1044,6 +1189,188 @@ function CategoryAdminPageContent({ session, onLogout }) {
             </div>
           ) : null}
 
+          {activeTab === "assignment_verification" ? (
+            <div className="dashboard-stack">
+              <div className="grid-4">
+                <StatCard accent="#D97706" label="Pending Assignments" value={assignmentQueue?.stats?.pending || 0} meta="Awaiting review" />
+                <StatCard accent="#059669" label="Approved Assignments" value={assignmentQueue?.stats?.approved || 0} meta="Verified" />
+                <StatCard accent="#DC2626" label="Rejected Assignments" value={assignmentQueue?.stats?.rejected || 0} meta="Needs learner action" />
+                <StatCard accent="#2563EB" label="Total Submitted" value={assignmentQueue?.stats?.total || 0} meta="All statuses" />
+              </div>
+
+              <Panel title="Assignment Verification" subtitle="Review learner submissions across this category">
+                <div className="toolbar" style={{ marginBottom: 16 }}>
+                  <label className="field" style={{ minWidth: 180 }}>
+                    <span className="field__label">Status</span>
+                    <select className="field__input" value={assignmentFilters.status} onChange={(event) => setAssignmentFilters((current) => ({ ...current, status: event.target.value }))}>
+                      <option value="">All statuses</option>
+                      <option value="pending_verification">Pending Verification</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </label>
+                  <label className="field" style={{ minWidth: 220 }}>
+                    <span className="field__label">Course</span>
+                    <select className="field__input" value={assignmentFilters.course_id} onChange={(event) => setAssignmentFilters((current) => ({ ...current, course_id: event.target.value }))}>
+                      <option value="">All courses</option>
+                      {(dashboard?.courses || []).map((course) => (
+                        <option key={course.id} value={course.id}>{course.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field" style={{ flex: 1, minWidth: 240 }}>
+                    <span className="field__label">Search</span>
+                    <input className="field__input" value={assignmentFilters.search} onChange={(event) => setAssignmentFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Learner or course" />
+                  </label>
+                  <Button tone="ghost" onClick={loadAssignmentQueue} disabled={assignmentLoading}>{assignmentLoading ? "Loading..." : "Refresh"}</Button>
+                </div>
+
+                {assignmentLoading ? (
+                  <LoadingState title="Loading submissions..." body="Fetching assignments awaiting verification." />
+                ) : (assignmentQueue?.submissions || []).length === 0 ? (
+                  <EmptyState title="No submissions found" body="Assignments matching these filters will appear here." />
+                ) : (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Learner</th>
+                          <th>Course</th>
+                          <th>Assignment</th>
+                          <th>Submitted</th>
+                          <th>Status</th>
+                          <th>Attempt</th>
+                          <th>Time</th>
+                          <th>Progress</th>
+                          <th>File</th>
+                          <th>Review</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(assignmentQueue?.submissions || []).map((submission) => {
+                          const files = submission.files || submission.submission_files_json || [];
+                          const firstFile = files[0];
+                          const isPending = ["submitted", "resubmitted", "pending_verification"].includes(submission.status);
+                          return (
+                            <tr key={submission.id}>
+                              <td>
+                                <div className="row-title">{submission.learner?.name}</div>
+                                <div className="row-subtitle">{submission.learner?.email}</div>
+                              </td>
+                              <td>
+                                <div className="row-title">{submission.course?.name}</div>
+                                <div className="row-subtitle">{submission.course?.category_slug}</div>
+                              </td>
+                              <td>{submission.assignment_name}</td>
+                              <td className="mono">{formatDateTime(submission.submitted_at)}</td>
+                              <td><Badge tone={submission.status === "approved" ? "success" : submission.status === "rejected" ? "danger" : "warn"}>{titleize(String(submission.status).replace("_", " "))}</Badge></td>
+                              <td className="mono">{submission.attempt_number || 1}</td>
+                              <td className="mono">{formatDuration(submission.time_spent_seconds || submission.course_time_seconds_at_submission || 0)}</td>
+                              <td className="mono">{formatPercent(submission.course_progress || submission.course_progress_pct_at_submission || 0)}</td>
+                              <td>
+                                {files.length ? (
+                                  <button
+                                    type="button"
+                                    className="link-button"
+                                    onClick={(event) => handleAssignmentDownload(event, submission, firstFile)}
+                                  >
+                                    View/Download
+                                  </button>
+                                ) : <span className="muted">No file</span>}
+                              </td>
+                              <td style={{ minWidth: 240 }}>
+                                <textarea
+                                  className="field__input"
+                                  rows={2}
+                                  disabled={!isPending}
+                                  value={reviewDrafts[submission.id] ?? submission.feedback ?? ""}
+                                  onChange={(event) => setReviewDrafts((current) => ({ ...current, [submission.id]: event.target.value }))}
+                                  placeholder="Feedback or remarks"
+                                />
+                                <div className="split-actions" style={{ marginTop: 8 }}>
+                                  <Button tone="success" disabled={!isPending} onClick={() => handleAssignmentReview(submission.id, "approve")}>Approve</Button>
+                                  <Button tone="danger" disabled={!isPending} onClick={() => handleAssignmentReview(submission.id, "reject")}>Reject</Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Panel>
+            </div>
+          ) : null}
+
+
+          {activeTab === "quiz_attempts" ? (
+            <div className="dashboard-stack">
+              <div className="grid-4">
+                <StatCard accent="#2563EB" label="Learners" value={(quizStatistics.rows || []).length} meta="With quiz visibility" />
+                <StatCard accent="#7C3AED" label="Attempts Used" value={(quizStatistics.rows || []).reduce((sum, row) => sum + Number(row.attempts_used || 0), 0)} meta="Across all quizzes" />
+                <StatCard accent="#059669" label="Highest Score" value={`${Math.round(Math.max(0, ...(quizStatistics.rows || []).map((row) => Number(row.highest_score || 0))))}%`} meta="Best learner score" />
+                <StatCard accent="#D97706" label="Avg Score" value={`${Math.round((quizStatistics.rows || []).reduce((sum, row) => sum + Number(row.average_score || 0), 0) / Math.max(1, (quizStatistics.rows || []).filter((row) => Number(row.attempts_used || 0) > 0).length))}%`} meta="Attempted learners" />
+              </div>
+              <Panel title="Quiz Attempts" subtitle="Attempts used, remaining, best score, and status for every learner">
+                <div className="toolbar" style={{ marginBottom: 16 }}>
+                  <Button tone="ghost" onClick={loadQuizStatistics} disabled={quizStatsLoading}>{quizStatsLoading ? "Loading..." : "Refresh"}</Button>
+                </div>
+                {quizStatsLoading ? (
+                  <LoadingState title="Loading quiz attempts..." body="Fetching learner attempt history." />
+                ) : (quizStatistics.rows || []).length === 0 ? (
+                  <EmptyState title="No quiz data found" body="Learner quiz attempts will appear here once quizzes are submitted." />
+                ) : (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Learner</th>
+                          <th style={{ textAlign: "right" }}>Used</th>
+                          <th style={{ textAlign: "right" }}>Remaining</th>
+                          <th style={{ textAlign: "right" }}>Highest</th>
+                          <th style={{ textAlign: "right" }}>Latest</th>
+                          <th style={{ textAlign: "right" }}>Average</th>
+                          <th>Status</th>
+                          <th>Quiz Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(quizStatistics.rows || []).map((row) => (
+                          <tr key={row.learner?.id}>
+                            <td>
+                              <div className="row-title">{row.learner?.full_name}</div>
+                              <div className="row-subtitle">{row.learner?.email}</div>
+                            </td>
+                            <td className="mono" style={{ textAlign: "right" }}>{row.attempts_used}</td>
+                            <td className="mono" style={{ textAlign: "right" }}>{row.attempts_remaining === null ? "Unlimited" : row.attempts_remaining}</td>
+                            <td className="mono" style={{ textAlign: "right" }}>{Math.round(row.highest_score || 0)}%</td>
+                            <td className="mono" style={{ textAlign: "right" }}>{row.latest_score === null || row.latest_score === undefined ? "-" : `${Math.round(row.latest_score)}%`}</td>
+                            <td className="mono" style={{ textAlign: "right" }}>{Math.round(row.average_score || 0)}%</td>
+                            <td><Badge tone={row.completion_status === "completed" ? "success" : row.completion_status === "attempted" ? "warn" : "neutral"}>{titleize(String(row.completion_status || "not_started").replace("_", " "))}</Badge></td>
+                            <td style={{ minWidth: 260 }}>
+                              {(row.quizzes || []).length ? (
+                                <div style={{ display: "grid", gap: 6 }}>
+                                  {(row.quizzes || []).map((quiz) => (
+                                    <div key={quiz.block_id} className="row-subtitle">
+                                      <strong>{quiz.quiz_title}</strong>: {quiz.attempts_used} used, {quiz.attempts_remaining === null ? "Unlimited" : `${quiz.attempts_remaining} left`}, best {Math.round(quiz.highest_score || 0)}%
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="muted">No quizzes assigned</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Panel>
+            </div>
+          ) : null}
+
 
 
           {activeTab === "pal" ? (
@@ -1056,165 +1383,58 @@ function CategoryAdminPageContent({ session, onLogout }) {
             ) : gradingAnalytics ? (
               <>
                 <div className="grid-4">
-                  <StatCard accent="#2563EB" label="Average Grade" value={`${gradingAnalytics.average_grade}%`} meta="Category average" />
-                  <StatCard accent="#059669" label="Pass Rate" value={`${gradingAnalytics.pass_rate}%`} meta="Grades ≥ 60%" />
-                  <StatCard accent="#DC2626" label="Fail Rate" value={`${gradingAnalytics.fail_rate}%`} meta="Grades < 60%" />
-                  <StatCard accent="#7C3AED" label="Quiz Average" value={`${gradingAnalytics.quiz_average}%`} meta="Assessment performance" />
+                  <StatCard accent="#2563EB" label="Total Learners" value={gradingAnalytics.total_learners} meta="In this category" />
+                  <StatCard accent="#7C3AED" label="Total Assessments" value={gradingAnalytics.total_assessments} meta="Quiz and assignment rows" />
+                  <StatCard accent="#F59E0B" label="Pending Evaluations" value={gradingAnalytics.pending_evaluations} meta="Awaiting review or grading" />
+                  <StatCard accent="#059669" label="Evaluated Assessments" value={gradingAnalytics.evaluated_assessments} meta="Gradebook results" />
+                </div>
+                <div className="grid-4" style={{ marginTop: 18 }}>
+                  <StatCard accent="#7C3AED" label="Average Quiz Score" value={`${gradingAnalytics.quiz_average}%`} meta="Auto-graded quiz results" />
+                  <StatCard accent="#059669" label="Average Assignment Score" value={`${gradingAnalytics.assignment_average}%`} meta="Graded assignments" />
+                  <StatCard accent="#2563EB" label="Overall Course Average" value={`${gradingAnalytics.overall_course_average}%`} meta="All evaluated assessments" />
+                  <StatCard accent="#DC2626" label="Pass / Fail Rate" value={`${gradingAnalytics.pass_rate}% / ${gradingAnalytics.fail_rate}%`} meta="Pass threshold 60%" />
                 </div>
 
-                <div className="grid-2-wide" style={{ marginTop: 18 }}>
-                  <Panel title="Course Grade Distribution" subtitle="Average grades by course">
-                    <ChartCanvas
-                      type="bar"
-                      height={200}
-                      labels={gradingAnalytics.course_grade_distribution.map(c => c.course_name)}
-                      datasets={[
-                        {
-                          label: "Average Grade",
-                          data: gradingAnalytics.course_grade_distribution.map(c => c.average),
-                          backgroundColor: "#2563EB",
-                          borderRadius: 8,
-                        },
-                      ]}
-                      options={{
-                        plugins: { legend: { display: false } },
-                        scales: { y: { beginAtZero: true, max: 100 } },
-                      }}
-                    />
-                  </Panel>
-
-                  <Panel title="Assessment Breakdown" subtitle="Quiz vs Assignment performance">
-                    <div className="grid-2">
-                      <div className="soft-card">
-                        <div className="row-title">Quiz Average</div>
-                        <div className="row-subtitle mono" style={{ fontSize: "32px", fontWeight: 700, color: "#7C3AED" }}>
-                          {gradingAnalytics.quiz_average}%
-                        </div>
-                      </div>
-                      <div className="soft-card">
-                        <div className="row-title">Assignment Average</div>
-                        <div className="row-subtitle mono" style={{ fontSize: "32px", fontWeight: 700, color: "#059669" }}>
-                          {gradingAnalytics.assignment_average}%
-                        </div>
-                      </div>
-                    </div>
-                  </Panel>
-                </div>
-
-                <div className="grid-2-wide" style={{ marginTop: 18 }}>
-                  <Panel title="Learners At Risk" subtitle="Grades below 60%">
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Learner</th>
-                            <th style={{ textAlign: "right" }}>Grade</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gradingAnalytics.learners_at_risk.length > 0 ? (
-                            gradingAnalytics.learners_at_risk.map((learner, idx) => (
-                              <tr key={idx}>
-                                <td>{learner.full_name}</td>
-                                <td className="mono" style={{ textAlign: "right", color: "#DC2626", fontWeight: 700 }}>
-                                  {learner.grade}%
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan="2">
-                                <EmptyState title="No at-risk learners" body="All learners are performing above threshold." />
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Panel>
-
-                  <Panel title="Top Performers" subtitle="Grades 90% and above">
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Learner</th>
-                            <th style={{ textAlign: "right" }}>Grade</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gradingAnalytics.top_performers.length > 0 ? (
-                            gradingAnalytics.top_performers.map((learner, idx) => (
-                              <tr key={idx}>
-                                <td>{learner.full_name}</td>
-                                <td className="mono" style={{ textAlign: "right", color: "#059669", fontWeight: 700 }}>
-                                  {learner.grade}%
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan="2">
-                                <EmptyState title="No top performers yet" body="Learners with 90%+ grades will appear here." />
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Panel>
-                </div>
-
-                <Panel title="Grade Trend" subtitle="Last 6 months" style={{ marginTop: 18 }}>
-                  <ChartCanvas
-                    type="line"
-                    height={200}
-                    labels={gradingAnalytics.grade_trend.map(t => t.month)}
-                    datasets={[
-                      {
-                        label: "Average Grade",
-                        data: gradingAnalytics.grade_trend.map(t => t.average),
-                        borderColor: "#2563EB",
-                        backgroundColor: "rgba(37, 99, 235, 0.1)",
-                        fill: true,
-                        tension: 0.4,
-                      },
-                    ]}
-                    options={{
-                      plugins: { legend: { display: false } },
-                      scales: { y: { beginAtZero: true, max: 100 } },
-                    }}
-                  />
+                <Panel title="Filters" subtitle="Refine learner grades and assessment details" style={{ marginTop: 18 }}>
+                  <div className="grid-4">
+                    <label className="field"><span>Course</span><select value={gradingFilters.course} onChange={(e) => setGradingFilters((v) => ({ ...v, course: e.target.value }))}><option value="">All courses</option>{(gradingAnalytics.filters?.courses || []).map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select></label>
+                    <label className="field"><span>Learner</span><select value={gradingFilters.learner} onChange={(e) => setGradingFilters((v) => ({ ...v, learner: e.target.value }))}><option value="">All learners</option>{(gradingAnalytics.filters?.learners || []).map((learner) => <option key={learner.id} value={learner.id}>{learner.name}</option>)}</select></label>
+                    <label className="field"><span>Assessment Type</span><select value={gradingFilters.type} onChange={(e) => setGradingFilters((v) => ({ ...v, type: e.target.value }))}><option value="">All types</option><option value="quiz">Quiz</option><option value="assignment">Assignment</option></select></label>
+                    <label className="field"><span>Status</span><select value={gradingFilters.status} onChange={(e) => setGradingFilters((v) => ({ ...v, status: e.target.value }))}><option value="">All statuses</option>{(gradingAnalytics.filters?.statuses || []).map((status) => <option key={status} value={status}>{titleize(status)}</option>)}</select></label>
+                    <label className="field"><span>Grade</span><select value={gradingFilters.grade} onChange={(e) => setGradingFilters((v) => ({ ...v, grade: e.target.value }))}><option value="">All grades</option>{(gradingAnalytics.filters?.grades || []).map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></label>
+                    <label className="field"><span>From</span><input type="date" value={gradingFilters.from} onChange={(e) => setGradingFilters((v) => ({ ...v, from: e.target.value }))} /></label>
+                    <label className="field"><span>To</span><input type="date" value={gradingFilters.to} onChange={(e) => setGradingFilters((v) => ({ ...v, to: e.target.value }))} /></label>
+                    <label className="field"><span>Search</span><input value={gradingFilters.search} onChange={(e) => setGradingFilters((v) => ({ ...v, search: e.target.value }))} placeholder="Learner or course" /></label>
+                  </div>
                 </Panel>
 
-                <Panel title="Grade Summary" subtitle="Key metrics" style={{ marginTop: 18 }}>
-                  <div className="grid-3">
-                    <div className="soft-card">
-                      <div className="row-title">Total Graded</div>
-                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#2563EB" }}>
-                        {gradingAnalytics.grade_summary.total_graded}
-                      </div>
-                    </div>
-                    <div className="soft-card">
-                      <div className="row-title">Total Assessments</div>
-                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#7C3AED" }}>
-                        {gradingAnalytics.grade_summary.total_assessments}
-                      </div>
-                    </div>
-                    <div className="soft-card">
-                      <div className="row-title">Assignment Average</div>
-                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#059669" }}>
-                        {gradingAnalytics.assignment_average}%
-                      </div>
-                    </div>
-                  </div>
+                <div className="grid-2-wide" style={{ marginTop: 18 }}>
+                  <Panel title="Grade Distribution" subtitle="Evaluated assessment grades"><ChartCanvas type="bar" height={220} labels={(gradingAnalytics.grade_distribution || []).map((g) => g.grade)} datasets={[{ label: "Learners", data: (gradingAnalytics.grade_distribution || []).map((g) => g.count), backgroundColor: "#2563EB", borderRadius: 8 }]} options={{ plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }} /></Panel>
+                  <Panel title="Pass vs Fail" subtitle="Learner course outcomes"><ChartCanvas type="doughnut" height={220} labels={(gradingAnalytics.pass_fail || []).map((p) => p.label)} datasets={[{ data: (gradingAnalytics.pass_fail || []).map((p) => p.value), backgroundColor: ["#059669", "#DC2626"] }]} options={{ plugins: { legend: { position: "bottom" } } }} /></Panel>
+                </div>
+                <div className="grid-2-wide" style={{ marginTop: 18 }}>
+                  <Panel title="Quiz Average" subtitle="Current quiz gradebook results"><ChartCanvas type="bar" height={200} labels={["Quiz"]} datasets={[{ label: "Average", data: [gradingAnalytics.quiz_average], backgroundColor: "#7C3AED", borderRadius: 8 }]} options={{ plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }} /></Panel>
+                  <Panel title="Assignment Average" subtitle="Current assignment gradebook results"><ChartCanvas type="bar" height={200} labels={["Assignment"]} datasets={[{ label: "Average", data: [gradingAnalytics.assignment_average], backgroundColor: "#059669", borderRadius: 8 }]} options={{ plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }} /></Panel>
+                </div>
+                <Panel title="Course Performance" subtitle="Average grades by course" style={{ marginTop: 18 }}><ChartCanvas type="bar" height={220} labels={(gradingAnalytics.course_performance || []).map((c) => c.course_name)} datasets={[{ label: "Average Grade", data: (gradingAnalytics.course_performance || []).map((c) => c.average), backgroundColor: "#2563EB", borderRadius: 8 }]} options={{ plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }} /></Panel>
+
+                <div className="grid-2-wide" style={{ marginTop: 18 }}>
+                  <Panel title="Top Performers" subtitle="Highest overall grades"><div className="table-wrap"><table><thead><tr><th>Learner</th><th style={{ textAlign: "right" }}>Grade</th></tr></thead><tbody>{(gradingAnalytics.top_performers || []).length ? gradingAnalytics.top_performers.map((learner, idx) => <tr key={idx}><td>{learner.full_name}</td><td className="mono" style={{ textAlign: "right", color: "#059669", fontWeight: 700 }}>{learner.grade}%</td></tr>) : <tr><td colSpan="2"><EmptyState title="No top performers yet" body="Learners with evaluated grades will appear here." /></td></tr>}</tbody></table></div></Panel>
+                  <Panel title="Lowest Performers" subtitle="Lowest overall grades"><div className="table-wrap"><table><thead><tr><th>Learner</th><th style={{ textAlign: "right" }}>Grade</th></tr></thead><tbody>{(gradingAnalytics.lowest_performers || []).length ? gradingAnalytics.lowest_performers.map((learner, idx) => <tr key={idx}><td>{learner.full_name}</td><td className="mono" style={{ textAlign: "right", color: learner.grade < 60 ? "#DC2626" : "#2563EB", fontWeight: 700 }}>{learner.grade}%</td></tr>) : <tr><td colSpan="2"><EmptyState title="No graded learners yet" body="Learner grades will appear after evaluation." /></td></tr>}</tbody></table></div></Panel>
+                </div>
+
+                <Panel title="Learner Grade Table" subtitle="Per-learner course grading analytics" style={{ marginTop: 18 }}>
+                  <div className="table-wrap"><table><thead><tr><th>Learner Name</th><th>Email</th><th>Course</th><th>Quiz Avg</th><th>Assignment Avg</th><th>Grade</th><th>Overall %</th><th>Completed</th><th>Pending</th><th>PAL Score</th><th>Certificate Eligible</th></tr></thead><tbody>{filteredGradingLearners.length ? filteredGradingLearners.map((row) => <tr key={`${row.learner_id}-${row.course_id}`}><td>{row.learner_name}</td><td>{row.email}</td><td>{row.course}</td><td className="mono">{row.quiz_average}%</td><td className="mono">{row.assignment_average}%</td><td>{row.overall_grade}</td><td className="mono">{row.overall_percentage}%</td><td>{row.completed_assessments}</td><td>{row.pending_assessments}</td><td className="mono">{row.pal_score}%</td><td>{row.certificate_eligible}</td></tr>) : <tr><td colSpan="11"><EmptyState title="No learner grades match the filters" body="Adjust filters or wait for grading activity." /></td></tr>}</tbody></table></div>
+                </Panel>
+
+                <Panel title="Assessment Details" subtitle="Quiz and assignment grading records" style={{ marginTop: 18 }}>
+                  <div className="table-wrap"><table><thead><tr><th>Assessment</th><th>Type</th><th>Learner</th><th>Course</th><th>Marks</th><th>Max</th><th>%</th><th>Grade</th><th>Status</th><th>Submission Date</th><th>Evaluation Date</th><th>Evaluator</th></tr></thead><tbody>{filteredAssessmentDetails.length ? filteredAssessmentDetails.map((row, idx) => <tr key={`${row.assessment_type}-${row.learner_name}-${idx}`}><td>{row.assessment_name || row.quiz_name || row.assignment_name}</td><td>{titleize(row.assessment_type)}</td><td>{row.learner_name}</td><td>{row.course}</td><td className="mono">{row.marks_obtained ?? "-"}</td><td className="mono">{row.maximum_marks ?? "-"}</td><td className="mono">{row.percentage == null ? "-" : `${row.percentage}%`}</td><td>{row.grade}</td><td>{titleize(row.status)}</td><td>{formatShortDate(row.submission_date)}</td><td>{formatShortDate(row.evaluation_date)}</td><td>{row.evaluator}</td></tr>) : <tr><td colSpan="12"><EmptyState title="No assessment details match the filters" body="Quiz and assignment grading records will appear here." /></td></tr>}</tbody></table></div>
                 </Panel>
               </>
             ) : (
               <EmptyState title="No grading data available" body="Grading analytics will appear once courses have been graded." />
             )
           ) : null}
-
           {activeTab === "tasks" ? (
             <TasksTab pendingTasks={pendingTasks} completedTasks={completedTasks} toggleTask={toggleTask} setTaskModal={setTaskModal} onReviewTask={handleReviewTask} />
           ) : null}
@@ -1792,3 +2012,4 @@ export default function CategoryAdminPage(props) {
     </ErrorBoundary>
   );
 }
+

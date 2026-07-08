@@ -98,7 +98,7 @@
 .tb-user-role { font-size: 10px; color: var(--tx3); }
 
 /* ── MAIN ── */
-#main-wrap { margin-left: var(--sidebar-w); padding-top: 56px; min-height: 100vh; transition: margin-left .2s; }
+#main-wrap { margin-left: var(--sidebar-w); padding-top: 56px; min-height: 100vh; transition: margin-left .2s; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
 #sidebar.collapsed ~ #main-wrap { margin-left: 56px; }
 .page { padding: 24px; display: block; animation: fadeIn .2s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

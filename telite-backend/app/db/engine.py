@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, close_all_sessions, sessionmaker
 
 logger = logging.getLogger("telite.db.engine")
 
@@ -248,6 +248,7 @@ def platform_db_session():
 def dispose_engine() -> None:
     """Dispose the engine connection pool (called on app shutdown)."""
     global _engine, _SessionLocal
+    close_all_sessions()
     if _engine is not None:
         _engine.dispose()
         _engine = None

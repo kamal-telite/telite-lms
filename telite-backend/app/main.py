@@ -225,6 +225,9 @@ def create_app() -> FastAPI:
     from app.api.routes.player_api import player_router
     from app.api.routes.authoring import authoring_router
     from app.api.routes.question_bank import question_bank_router
+    from app.api.routes.quiz_authoring import quiz_authoring_router
+    from app.api.routes.quiz_execution import quiz_execution_router
+    from app.api.routes.quiz_grading import quiz_grading_router
     from app.api.routes.notifications import notifications_router
     from app.api.routes.certificates import cert_router, public_cert_router
     from app.api.routes.gradebook import gradebook_router
@@ -236,6 +239,9 @@ def create_app() -> FastAPI:
     app.include_router(v1_enrol_router, prefix="/api/v1")
     app.include_router(authoring_router)
     app.include_router(question_bank_router, prefix="/api/v1")
+    app.include_router(quiz_authoring_router)
+    app.include_router(quiz_execution_router)
+    app.include_router(quiz_grading_router)
     app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(cert_router, prefix="/api")
     app.include_router(public_cert_router)
@@ -285,7 +291,13 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Media not found") from exc
         if not candidate.is_file():
             raise HTTPException(status_code=404, detail="Media not found")
-        return FileResponse(candidate)
+        
+        # Set appropriate Content-Type for PDFs
+        media_type = None
+        if filename.lower().endswith('.pdf'):
+            media_type = 'application/pdf'
+        
+        return FileResponse(candidate, media_type=media_type)
 
     app.mount("/uploads/branding", StaticFiles(directory=branding_dir), name="branding_uploads")
     app.mount("/uploads/certificates", StaticFiles(directory=certificate_dir), name="certificate_uploads")

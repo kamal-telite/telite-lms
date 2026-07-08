@@ -1,6 +1,6 @@
-"""add_section_progress_table
+"""add_section_progress
 
-Revision ID: i1j2k3l4m5n6
+Revision ID: add_section_progress
 Revises: h1e2f3g4h5i6
 Create Date: 2026-06-30 00:00:00.000000
 
@@ -11,16 +11,21 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.engine.reflection import Inspector
 
 # revision identifiers, used by Alembic.
-revision: str = 'i1j2k3l4m5n6'
+revision: str = 'add_section_progress'
 down_revision: Union[str, None] = 'h1e2f3g4h5i6'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create section_progress table
+    conn = op.get_bind()
+    inspector = Inspector.from_engine(conn)
+    if 'section_progress' in inspector.get_table_names():
+        return
+
     op.create_table('section_progress',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('user_id', sa.String(length=50), nullable=False),
@@ -44,4 +49,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table('section_progress')
+    conn = op.get_bind()
+    inspector = Inspector.from_engine(conn)
+    if 'section_progress' in inspector.get_table_names():
+        op.drop_table('section_progress')

@@ -162,3 +162,4 @@ context.md
 /telite-backend/test_question_*.py
 /telite-backend/test_rls_phase_b1.py
 /telite-backend/verify_out.txt
+/PRODUCTION_QA_AUDIT_REPORT.md

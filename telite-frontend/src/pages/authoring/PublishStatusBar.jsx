@@ -109,8 +109,11 @@ export function PublishStatusBar({ courseId, courseStatus, onStatusChanged, vali
         </div>
         
         <div style={{ display: "flex", gap: "8px" }}>
-          {normalizedStatus === "draft" && canSubmit && (
-            <Button tone="primary" size="small" disabled={loading || saveStateValue === 'saving'} onClick={() => openWorkflowDialog("submit_for_review")}>Submit For Review</Button>
+          {normalizedStatus === "draft" && (
+            <>
+              {canSubmit && <Button tone="neutral" size="small" disabled={loading || saveStateValue === 'saving'} onClick={() => openWorkflowDialog("submit_for_review")}>Submit For Review</Button>}
+              {canPublish && <Button tone="primary" size="small" disabled={loading || saveStateValue === 'saving'} onClick={() => openWorkflowDialog("publish")}>Publish</Button>}
+            </>
           )}
           {normalizedStatus === "review" && (
             <>

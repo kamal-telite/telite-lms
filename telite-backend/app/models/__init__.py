@@ -44,12 +44,14 @@ from app.models.question import Question, QuestionVersion
 from app.models.question_category import QuestionCategory
 from app.models.question_tag import QuestionTag, QuestionTagMap
 from app.models.question_import_job import QuestionImportJob
+from app.models.quiz_models import QuizDefinition, QuizDefinitionQuestion, QuizSettings
 from app.models.quiz_attempt import QuizAttempt, QuizAttemptQuestion, QuizAttemptEvent
 from app.models.quiz_answer import QuizAnswer, GradingEvent
 from app.models.rubric import GradingRubric, RubricCriteria
 from app.models.role_permission import RolePermission
 
 from app.models.assignment_submission import AssignmentSubmission
+from app.models.learning_session import LearningSession
 from app.models.interactive_tracking import InteractiveTracking
 from app.models.certificate import Certificate
 from app.models.progression_rule import ProgressionRule
@@ -115,6 +117,9 @@ __all__ = [
     "QuestionTag",
     "QuestionTagMap",
     "QuestionImportJob",
+    "QuizDefinition",
+    "QuizDefinitionQuestion",
+    "QuizSettings",
     "QuizAttempt",
     "QuizAttemptQuestion",
     "QuizAttemptEvent",
@@ -124,6 +129,7 @@ __all__ = [
     "RubricCriteria",
     "RolePermission",
     "AssignmentSubmission",
+    "LearningSession",
     "InteractiveTracking",
     "Certificate",
     "ProgressionRule",

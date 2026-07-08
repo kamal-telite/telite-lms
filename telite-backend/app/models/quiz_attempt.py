@@ -6,7 +6,8 @@ class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
     
     id = Column(Integer, primary_key=True, index=True)
-    lesson_block_id = Column(Integer, ForeignKey("lesson_blocks.id"), nullable=False, index=True)
+    lesson_block_id = Column(Integer, ForeignKey("lesson_blocks.id"), nullable=True, index=True)
+    quiz_definition_id = Column(Integer, ForeignKey("quiz_definitions.id"), nullable=True, index=True)
     user_id = Column(String(50), ForeignKey("users.id"), nullable=False, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     status = Column(String(50), nullable=False, default="in_progress") # in_progress, submitted, needs_manual_grading, graded

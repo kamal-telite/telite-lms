@@ -9,14 +9,14 @@ const GradingDashboard = () => {
   ];
 
   return (
-    <div className="flex h-[800px] bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+    <div className="flex flex-col lg:flex-row bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
       {/* Sidebar Queue */}
-      <div className="w-1/3 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+      <div className="w-full lg:w-1/3 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col min-h-0">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
           <h2 className="text-lg font-bold text-slate-800">Pending Grading</h2>
           <p className="text-sm text-slate-500">{pendingAttempts.length} submissions to review</p>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 -webkit-overflow-scrolling-touch">
           {pendingAttempts.map(attempt => (
             <div 
               key={attempt.id}
@@ -35,15 +35,15 @@ const GradingDashboard = () => {
       </div>
 
       {/* Main Grading Area */}
-      <div className="flex-1 flex flex-col bg-slate-50">
+      <div className="hidden lg:flex flex-1 flex-col bg-slate-50 min-h-0">
         {selectedAttempt ? (
           <>
-            <div className="p-6 border-b border-slate-200 bg-white">
+            <div className="p-6 border-b border-slate-200 bg-white flex-shrink-0">
               <h2 className="text-2xl font-bold text-slate-800">{selectedAttempt.student}&apos;s Submission</h2>
               <p className="text-slate-500">{selectedAttempt.quiz}</p>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 -webkit-overflow-scrolling-touch">
               <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
                 <h4 className="font-semibold text-slate-800 mb-2">Question 1 (Essay)</h4>
                 <p className="text-slate-600 mb-4">Explain the concept of closures in JavaScript.</p>

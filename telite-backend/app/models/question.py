@@ -13,6 +13,14 @@ class Question(Base):
     current_draft_version_id = Column(Integer, ForeignKey("question_versions.id", use_alter=True, name="fk_question_draft_version"), nullable=True)
     current_published_version_id = Column(Integer, ForeignKey("question_versions.id", use_alter=True, name="fk_question_pub_version"), nullable=True)
 
+    @property
+    def current_version_id(self):
+        return self.current_draft_version_id or self.current_published_version_id
+
+    @current_version_id.setter
+    def current_version_id(self, value):
+        self.current_draft_version_id = value
+
 class QuestionVersion(Base):
     __tablename__ = "question_versions"
     

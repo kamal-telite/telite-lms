@@ -254,8 +254,64 @@ export async function fetchStatsDashboard(slug) {
   return unwrap(await api.get(`/dashboard/categories/${slug}/stats`));
 }
 
+export async function fetchCategoryGradingAnalytics(slug) {
+  return unwrap(await api.get(`/dashboard/categories/${slug}/grading-analytics`));
+}
+
 export async function fetchLearnerDashboard() {
   return unwrap(await api.get("/dashboard/learner"));
+}
+
+export async function fetchAssignmentVerifications(slug, params = {}) {
+  return unwrap(await api.get(`/api/v1/admin/categories/${slug}/assignment-verifications`, { params }));
+}
+
+export async function approveAssignmentSubmission(submissionId, feedback = "") {
+  return unwrap(await api.post(`/api/v1/admin/submissions/${submissionId}/approve`, { feedback }));
+}
+
+export async function rejectAssignmentSubmission(submissionId, feedback = "") {
+  return unwrap(await api.post(`/api/v1/admin/submissions/${submissionId}/reject`, { feedback }));
+}
+
+function filenameFromContentDisposition(disposition) {
+  if (!disposition) return null;
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+  const asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return asciiMatch?.[1] || null;
+}
+
+export async function downloadAssignmentSubmissionFile(submissionId, assetId = null) {
+  const params = assetId ? { asset_id: assetId } : {};
+  const response = await api.get(`/api/v1/submissions/${submissionId}/download`, {
+    params,
+    responseType: "blob",
+  });
+  return {
+    blob: response.data,
+    filename: filenameFromContentDisposition(response.headers["content-disposition"]) || `assignment-submission-${submissionId}`,
+  };
+}
+
+export async function startLearningSession(payload) {
+  return unwrap(await api.post("/api/v1/learner/learning-sessions/start", payload));
+}
+
+export async function heartbeatLearningSession(payload) {
+  return unwrap(await api.post("/api/v1/learner/learning-sessions/heartbeat", payload));
+}
+
+export async function endLearningSession(payload) {
+  return unwrap(await api.post("/api/v1/learner/learning-sessions/end", payload));
+}
+
+export async function fetchQuizStats(blockId) {
+  return unwrap(await api.get(`/api/v1/learner/blocks/${blockId}/quiz/stats`));
+}
+
+export async function fetchCategoryQuizStatistics(slug) {
+  return unwrap(await api.get(`/api/v1/learner/admin/categories/${slug}/quiz-statistics`));
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────

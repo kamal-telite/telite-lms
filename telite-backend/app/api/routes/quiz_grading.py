@@ -9,17 +9,9 @@ from app.db.engine import db_session
 from app.models.quiz_attempt import QuizAttempt, QuizAttemptEvent
 from app.models.quiz_answer import QuizAnswer, GradingEvent
 
-def _native_quiz_engine_only():
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail="Deprecated. TELITE V1 quiz grading is handled by the Native Quiz Block learner submission endpoint.",
-    )
-
-
 quiz_grading_router = APIRouter(
     prefix="/quiz-grading",
     tags=["Quiz Grading"],
-    dependencies=[Depends(_native_quiz_engine_only)],
 )
 
 @quiz_grading_router.get("/pending", dependencies=[Depends(require_admin)])

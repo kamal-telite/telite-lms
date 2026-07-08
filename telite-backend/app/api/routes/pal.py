@@ -9,6 +9,7 @@ from app.api.auth import TokenData, ensure_org_access, get_current_user, require
 from app.db.engine import db_session
 from app.repositories.user_repo import UserRepository
 from app.models.user import User
+from app.services.pal_score_service import PALScoreService
 
 pal_router = APIRouter(prefix="/pal", tags=["PAL"])
 
@@ -37,6 +38,11 @@ def _list_pal_leaderboard(db: Session, category_slug: str, org_id: int | None = 
         stmt = stmt.limit(limit)
         
     users = db.execute(stmt).scalars().all()
+    if org_id is not None:
+        service = PALScoreService(db)
+        for user in users:
+            service.recompute_user(user.id, org_id)
+        users.sort(key=lambda user: (-(user.pal_score or 0), user.full_name or ""))
     return [u.to_dict() for u in users]
 
 @pal_router.get("/leaderboard/{category_slug}")
@@ -68,15 +74,23 @@ def get_pal_user(
         
     ensure_org_access(current_user, target.org_id)
     
+    metrics = PALScoreService(db).recompute_user(target.id, target.org_id)
+    rank = PALScoreService(db).rank_for_user(target.id, target.category_scope, target.org_id)
     return {
         "user": target.to_dict(),
         "metrics": {
-            "completion_pct": getattr(target, 'pal_completion_pct', 0) or 0,
-            "quiz_avg": getattr(target, 'pal_quiz_avg', 0) or 0,
+            "completion_pct": metrics["course_completion"],
+            "quiz_avg": metrics["quiz_average"],
+            "assignment_average": metrics["assignment_average"],
             "time_spent_hours": getattr(target, 'pal_time_spent_hours', 0) or 0,
-            "task_completion_pct": getattr(target, 'pal_task_completion_pct', 0) or 0,
+            "task_completion_pct": metrics["task_completion"],
             "streak_days": getattr(target, 'streak_days', 0) or 0,
-            "pal_score": getattr(target, 'pal_score', 0) or 0,
+            "pal_score": metrics["pal_score"],
+            "current_rank": rank,
+            "progress_trend": metrics["progress_trend"],
+            "strengths": metrics["strengths"],
+            "weak_areas": metrics["weak_areas"],
+            "completion_timeline": metrics["completion_timeline"],
         },
         "course_progress": getattr(target, 'course_progress', []),
     }
@@ -129,4 +143,11 @@ def post_compute(
     if current_user.role == "category_admin":
         category_slug = current_user.category_scope
         
-    return {"status": "success", "message": "PAL recomputation queued successfully"}
+    service = PALScoreService(db)
+    if category_slug:
+        rows = service.recompute_category(category_slug, scoped_org_id)
+    else:
+        users = db.execute(select(User).where(User.role == "learner", User.org_id == scoped_org_id)).scalars().all()
+        rows = [service.recompute_user(user.id, scoped_org_id) for user in users]
+    db.commit()
+    return {"status": "success", "message": "PAL recomputed successfully", "updated": len(rows)}

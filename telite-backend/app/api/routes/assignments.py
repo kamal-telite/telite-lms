@@ -27,6 +27,10 @@ class GradeRequest(BaseModel):
     returned: bool = False
 
 
+class ReviewRequest(BaseModel):
+    feedback: str | None = None
+
+
 def _service(db: Session, current_user: TokenData) -> AssignmentService:
     set_assignment_actor_context(db, current_user)
     return AssignmentService(db)
@@ -106,6 +110,26 @@ def list_assignment_submissions(
     return _service(db, current_user).list_submissions(block_id, current_user)
 
 
+@assignment_router.get("/admin/categories/{category_slug}/assignment-verifications")
+def list_assignment_verifications(
+    category_slug: str,
+    status: str | None = Query(default=None),
+    course_id: str | None = Query(default=None),
+    learner_id: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(require_admin),
+):
+    return _service(db, current_user).list_verification_queue(
+        category_slug,
+        current_user,
+        status_filter=status,
+        course_id=course_id,
+        learner_id=learner_id,
+        search=search,
+    )
+
+
 @assignment_router.get("/admin/submissions/{submission_id}")
 def get_admin_submission(
     submission_id: int,
@@ -128,6 +152,36 @@ def grade_submission(
         grade=body.grade,
         feedback=body.feedback,
         returned=body.returned,
+    )
+
+
+@assignment_router.post("/admin/submissions/{submission_id}/approve")
+def approve_submission(
+    submission_id: int,
+    body: ReviewRequest | None = None,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(require_admin),
+):
+    return _service(db, current_user).review(
+        submission_id,
+        current_user,
+        approved=True,
+        feedback=body.feedback if body else None,
+    )
+
+
+@assignment_router.post("/admin/submissions/{submission_id}/reject")
+def reject_submission(
+    submission_id: int,
+    body: ReviewRequest,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(require_admin),
+):
+    return _service(db, current_user).review(
+        submission_id,
+        current_user,
+        approved=False,
+        feedback=body.feedback,
     )
 
 

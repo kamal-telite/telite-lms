@@ -139,8 +139,8 @@ class BlockValidator(BaseValidator):
             if passing_score is None or not isinstance(passing_score, (int, float)) or passing_score < 0 or passing_score > 100:
                 results.append(ValidationResultItem(type="invalid_passing_score", severity="error", section_id=sec_id, module_id=module.id, block_id=block.id, message=f"Quiz block #{b_num} in '{mod_title}' must have a passing score between 0 and 100.", fix_target=fix_target))
             max_attempts = settings.get("max_attempts", 0)
-            if not isinstance(max_attempts, int) or max_attempts < 0:
-                results.append(ValidationResultItem(type="invalid_max_attempts", severity="error", section_id=sec_id, module_id=module.id, block_id=block.id, message=f"Quiz block #{b_num} in '{mod_title}' must have max attempts of 0 or greater.", fix_target=fix_target))
+            if not isinstance(max_attempts, int) or max_attempts < 0 or max_attempts > 100:
+                results.append(ValidationResultItem(type="invalid_max_attempts", severity="error", section_id=sec_id, module_id=module.id, block_id=block.id, message=f"Quiz block #{b_num} in '{mod_title}' must have max attempts between 1 and 100, or 0 for unlimited.", fix_target=fix_target))
             questions = settings.get("questions", [])
             if not questions:
                 results.append(ValidationResultItem(type="missing_questions", severity="error", section_id=sec_id, module_id=module.id, block_id=block.id, message=f"Quiz block #{b_num} in '{mod_title}' has no questions.", fix_target=fix_target))

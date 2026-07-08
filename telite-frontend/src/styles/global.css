@@ -100,6 +100,20 @@ a {
   text-decoration: none;
 }
 
+.link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
 .dashboard-shell {
   display: flex;
   min-height: 100vh;
@@ -274,6 +288,7 @@ a {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -288,6 +303,7 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
+  flex-shrink: 0;
 }
 
 .topbar h1 {
@@ -312,6 +328,8 @@ a {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 24px;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
 .tabbar__row {
@@ -339,7 +357,10 @@ a {
 .dashboard-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 22px 24px 32px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
 }
 
 .dashboard-content [id] {

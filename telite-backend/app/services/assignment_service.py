@@ -17,11 +17,14 @@ from app.repositories.notification_repo import NotificationRepository
 from app.repositories.progress_repo import ProgressRepository
 from app.services.assignment_storage import StorageProvider, get_storage_provider
 from app.services.gradebook_service import GradebookService
+from app.services.pal_score_service import PALScoreService
+from app.services.audit_service import AuditService
 from datetime import datetime, timezone
 
 
 ADMIN_ROLES = {"platform_admin", "super_admin", "category_admin", "instructor", "author", "reviewer"}
-MUTABLE_STATUSES = {"draft", "returned"}
+MUTABLE_STATUSES = {"draft", "returned", "rejected"}
+PENDING_STATUSES = {"submitted", "resubmitted", "pending_verification"}
 
 
 def set_assignment_actor_context(db: Session, user: TokenData) -> None:
@@ -107,9 +110,9 @@ class AssignmentService:
     async def submit(self, block_id: int, user: TokenData, submission_text: str | None, files: list[UploadFile] | None, *, resubmit: bool = False) -> dict:
         block, module, course = self._require_learner_access(block_id, user)
         existing = self.repo.get_submission_for_learner(block_id, user.id, user.org_id)
-        if existing and existing.status == "graded" and not resubmit:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot update a graded assignment without resubmitting")
-        if existing and existing.status == "submitted" and resubmit:
+        if existing and existing.status in {"approved", "graded"} and not resubmit:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot update a reviewed assignment without resubmitting")
+        if existing and existing.status in PENDING_STATUSES and resubmit:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submission is already awaiting review")
 
         uploaded = await self._store_files(block_id=block_id, user=user, files=files)
@@ -118,15 +121,27 @@ class AssignmentService:
         if not (submission_text or "").strip() and not all_files:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submission text or file is required")
 
+        progress = ProgressRepository(self.db).get_course_progress(user.id, course.id, user.org_id)
         submission = self.repo.save_submission(
             block_id=block_id,
             learner_id=user.id,
             org_id=user.org_id,
             submission_text=submission_text,
             files=all_files,
-            status="resubmitted" if resubmit else "submitted",
+            status="pending_verification",
+            course_time_seconds_at_submission=progress.time_spent_seconds if progress else 0,
+            course_progress_pct_at_submission=progress.completion_percentage if progress else 0.0,
         )
         self._mark_assignment_complete(user=user, block_id=block_id, module_id=module.id, course_id=course.id, files_count=len(all_files))
+        NotificationRepository(self.db).create(
+            user_id=user.id,
+            org_id=user.org_id,
+            title="Assignment Submitted",
+            body="Your assignment is pending verification.",
+            notif_type=NotificationType.INFO,
+            source_type="assignment",
+            source_id=str(submission.id),
+        )
         self.db.commit()
         return {"message": "Assignment submitted successfully", "submission": submission.to_dict()}
 
@@ -180,6 +195,51 @@ class AssignmentService:
                 }
                 for submission, learner in rows
             ],
+        }
+
+    def list_verification_queue(
+        self,
+        category_slug: str,
+        user: TokenData,
+        *,
+        status_filter: str | None = None,
+        course_id: str | None = None,
+        learner_id: str | None = None,
+        search: str | None = None,
+    ) -> dict:
+        if not user.is_platform_admin:
+            if user.role not in ADMIN_ROLES:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+            if user.role == "category_admin" and user.category_scope and user.category_scope != category_slug:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Category access denied")
+        rows = self.repo.list_category_submissions(
+            category_slug=category_slug,
+            org_id=user.org_id,
+            status=status_filter,
+            course_id=course_id,
+            learner_id=learner_id,
+            search=search,
+        )
+        stats = self.repo.category_submission_stats(category_slug=category_slug, org_id=user.org_id)
+        return {
+            "stats": stats,
+            "submissions": [
+                self._verification_row(submission, learner, block, module, course, progress, total_sessions)
+                for submission, learner, block, module, course, progress, total_sessions in rows
+            ],
+        }
+
+    def _verification_row(self, submission, learner, block, module, course, progress, total_sessions) -> dict:
+        title = (block.metadata_json or {}).get("title") or block.content or "Assignment"
+        return {
+            **submission.to_dict(),
+            "learner": {"id": learner.id, "name": learner.full_name, "email": learner.email},
+            "course": {"id": course.id, "name": course.name, "category_slug": course.category_slug},
+            "module": {"id": module.id, "title": module.title},
+            "assignment_name": title,
+            "time_spent_seconds": progress.time_spent_seconds if progress else submission.course_time_seconds_at_submission or 0,
+            "course_progress": progress.completion_percentage if progress else submission.course_progress_pct_at_submission or 0.0,
+            "total_sessions": int(total_sessions or 0),
         }
 
     def get_admin_submission(self, submission_id: int, user: TokenData) -> dict:
@@ -248,8 +308,48 @@ class AssignmentService:
                 submission_id=updated.id,
             ),
         )
+        PALScoreService(self.db).recompute_user(updated.user_id, updated.org_id)
         self.db.commit()
         return {"message": "Submission graded", "submission": updated.to_dict()}
+
+    def review(self, submission_id: int, user: TokenData, *, approved: bool, feedback: str | None = None) -> dict:
+        submission = self._require_submission_access(submission_id, user, admin=True)
+        block, module, course = self._require_admin_access(submission.block_id, user)
+        if submission.status in {"approved", "rejected", "graded", "returned"}:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Submission has already been reviewed")
+        if submission.status not in PENDING_STATUSES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only submitted assignments can be reviewed")
+        next_status = "approved" if approved else "rejected"
+        previous_status = submission.status
+        updated = self.repo.review_submission(
+            submission,
+            status=next_status,
+            feedback=feedback,
+            reviewed_by=user.id,
+        )
+        AuditService.log(
+            self.db,
+            org_id=updated.org_id,
+            user_id=user.id,
+            entity_type="assignment_submission",
+            entity_id=updated.id,
+            action=f"assignment.{next_status}",
+            course_id=course.id,
+            before_dict={"status": previous_status},
+            after_dict={"status": next_status, "feedback": feedback},
+        )
+        NotificationRepository(self.db).create(
+            user_id=updated.user_id,
+            org_id=updated.org_id,
+            title="Assignment Approved" if approved else "Assignment Rejected",
+            body="Your assignment has been approved." if approved else (feedback or "Your assignment was rejected. Please review the feedback."),
+            notif_type=NotificationType.INFO,
+            source_type="assignment",
+            source_id=str(updated.id),
+        )
+        PALScoreService(self.db).recompute_user(updated.user_id, updated.org_id)
+        self.db.commit()
+        return {"message": f"Submission {next_status}", "submission": updated.to_dict()}
 
     def _require_submission_access(self, submission_id: int, user: TokenData, *, admin: bool = False) -> AssignmentSubmission:
         submission = self.repo.get_submission(submission_id, None if user.is_platform_admin else user.org_id)

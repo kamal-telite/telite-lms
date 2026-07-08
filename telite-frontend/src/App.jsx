@@ -27,6 +27,7 @@ import LearnerRouter from "./routes/learner_router";
 const Login = lazy(() => import("./pages/auth/Login"));
 
 const LandingPage = lazy(() => import("./pages/landing/LandingPage"));
+
 const AcceptInvitePage = lazy(() => import("./pages/auth/AcceptInvitePage"));
 const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
 const CertificateVerifyPage = lazy(() => import("./pages/public/CertificateVerifyPage"));

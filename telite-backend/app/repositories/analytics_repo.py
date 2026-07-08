@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from datetime import datetime, timedelta
-from sqlalchemy import func, select, desc
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import String, func, select, desc
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
@@ -23,11 +23,14 @@ from app.models.course_progress import CourseProgress
 from app.models.module_progress import ModuleProgress
 from app.models.enrollment import EnrollmentRequest
 from app.models.pending_verification import PendingVerification
+from app.models.assignment_submission import AssignmentSubmission
+from app.models.learning_session import LearningSession
 from app.models.task import Task
 from app.models.task_workflow import TaskAssignment
 from app.models.audit import AuditLog
 from app.models.pal import PalQuizScore
 from app.repositories.base_repo import BaseRepository
+from app.services.pal_score_service import PALScoreService
 
 
 class AnalyticsRepository(BaseRepository[LearnerEvent]):
@@ -209,6 +212,10 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             
         courses = self.session.execute(course_stmt).scalars().all()
         learners = self.session.execute(learner_stmt).scalars().all()
+        if org_id:
+            pal_service = PALScoreService(self.session)
+            for learner in learners:
+                pal_service.recompute_user(learner.id, org_id)
         pending_requests = self.session.execute(enroll_stmt).scalars().all()
         pending_verifications = self.session.execute(verification_stmt).scalar() or 0
         course_ids = [course.id for course in courses]
@@ -499,6 +506,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         user = self.session.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
         if not user:
             raise ValueError("User not found.")
+        pal_metrics = PALScoreService(self.session).recompute_user(user.id, user.org_id)
             
         progress = self.session.execute(select(CourseProgress).where(CourseProgress.user_id == user_id)).scalars().all()
         progress_by_course = {row.course_id: row for row in progress}
@@ -511,6 +519,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         course_stmt = select(Course).where(
             Course.org_id == user.org_id,
             Course.status.in_(("active", "published")),
+            Course.status != "draft",
         )
         if user.role == "learner" and user.category_scope:
             course_stmt = course_stmt.where(Course.category_slug == user.category_scope)
@@ -574,26 +583,45 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         elif course_rows:
             current_course = course_rows[0]
         
-        # Determine stats from events
+        # Determine stats from events and session ledger
         quiz_submit_stmt = select(func.count(LearnerEvent.id)).where(LearnerEvent.user_id == user_id, LearnerEvent.event_type == "QUIZ_SUBMITTED")
         quizzes_submitted = self.session.execute(quiz_submit_stmt).scalar() or 0
         
-        from sqlalchemy import Integer
-        heartbeat_stmt = select(func.sum(func.cast(LearnerEvent.payload_json.op('->>')('time_spent_seconds'), Integer))).where(
-            LearnerEvent.user_id == user_id, LearnerEvent.event_type == "HEARTBEAT"
-        )
-        total_time_seconds = self.session.execute(heartbeat_stmt).scalar() or 0
+        total_time_seconds = self.session.execute(
+            select(func.sum(LearningSession.active_seconds)).where(
+                LearningSession.user_id == user_id,
+                LearningSession.org_id == user.org_id,
+            )
+        ).scalar() or 0
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_time_seconds = self.session.execute(
+            select(func.sum(LearningSession.active_seconds)).where(
+                LearningSession.user_id == user_id,
+                LearningSession.org_id == user.org_id,
+                LearningSession.started_at >= today_start,
+            )
+        ).scalar() or 0
+        last_session = self.session.execute(
+            select(LearningSession)
+            .where(LearningSession.user_id == user_id, LearningSession.org_id == user.org_id)
+            .order_by(LearningSession.started_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        latest_assignment = self.session.execute(
+            select(AssignmentSubmission)
+            .where(AssignmentSubmission.user_id == user_id, AssignmentSubmission.org_id == user.org_id)
+            .order_by(AssignmentSubmission.submitted_at.desc().nullslast(), AssignmentSubmission.updated_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
 
-        # Calculate PAL breakdown from user fields and progress
+        # Calculate PAL breakdown from live learner performance
         completed_courses_count = len([p for p in progress if p.status == 'completed'])
         total_courses_count = len(courses) or 1
-        completion_pct = (completed_courses_count / total_courses_count * 100.0) if total_courses_count else 0.0
+        completion_pct = pal_metrics["course_completion"]
         
-        # Get quiz average from PalQuizScore or user.pal_quiz_avg
-        quiz_avg = user.pal_quiz_avg if hasattr(user, 'pal_quiz_avg') else 0.0
+        quiz_avg = pal_metrics["quiz_average"]
         
-        # Task completion from user field
-        task_completion = user.pal_task_completion_pct if hasattr(user, 'pal_task_completion_pct') else 0.0
+        task_completion = pal_metrics["task_completion"]
 
         task_stmt = (
             select(Task, TaskAssignment, User)
@@ -639,8 +667,11 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             "hero": {
                 "headline": f"Good morning, {user.full_name.split()[0]}",
                 "subtext": "Keep your streak alive.",
-                "pal_score": getattr(user, 'pal_score', 0),
+                "pal_score": pal_metrics["pal_score"],
                 "time_spent_hours": round(total_time_seconds / 3600, 1),
+                "today_time_seconds": today_time_seconds,
+                "last_session": last_session.to_dict() if last_session else None,
+                "assignment_status": latest_assignment.status if latest_assignment else None,
                 "streak_days": user.streak_days,
                 "current_course": current_course,
                 "rank": user_rank,
@@ -656,7 +687,16 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             "pal_breakdown": {
                 "completion": completion_pct,
                 "pal_quiz_avg": quiz_avg,
+                "assignment_average": pal_metrics["assignment_average"],
                 "task_completion": task_completion,
+                "overall_pal_score": pal_metrics["pal_score"],
+                "weights": pal_metrics["weights"],
+                "current_rank": user_rank,
+                "progress_trend": pal_metrics["progress_trend"],
+                "strengths": pal_metrics["strengths"],
+                "weak_areas": pal_metrics["weak_areas"],
+                "completion_timeline": pal_metrics["completion_timeline"],
+                "leaderboard_position": user_rank,
             },
             "recommendation": {
                 "leaderboard": leaderboard_data[:5],
@@ -691,35 +731,31 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         return [{"date": r.day.isoformat() if hasattr(r.day, 'isoformat') else str(r.day), "interactions": r.interactions} for r in results]
 
     def get_cohort_rankings(self, category_slug: str | None = None, org_id: int | None = None, limit: int | None = None) -> list[dict[str, Any]]:
-        """Returns PAL leaderboard rankings based on aggregated quiz scores."""
-        # Use LEFT JOIN to include users without quiz scores
-        stmt = select(
-            User.id,
-            User.full_name,
-            func.coalesce(func.avg(PalQuizScore.score), 0.0).label('avg_score'),
-            User.streak_days,
-            User.pal_score
-        ).outerjoin(PalQuizScore, PalQuizScore.user_id == User.id)
-        
+        """Returns PAL leaderboard rankings based on dynamic PAL scores."""
+        stmt = select(User).where(User.role == "learner", User.is_active == True)
+
         if category_slug:
             stmt = stmt.where(User.category_scope == category_slug)
         if org_id:
             stmt = stmt.where(User.org_id == org_id)
-        
-        stmt = stmt.group_by(User.id, User.full_name, User.streak_days, User.pal_score).order_by(desc('avg_score'))
+
+        users = self.session.execute(stmt).scalars().all()
+        if org_id:
+            service = PALScoreService(self.session)
+            for user in users:
+                service.recompute_user(user.id, org_id)
+        users.sort(key=lambda user: (-(user.pal_score or 0), user.full_name or ""))
         if limit:
-            stmt = stmt.limit(limit)
-            
-        results = self.session.execute(stmt).all()
+            users = users[:limit]
         return [
             {
-                "id": row.id,
-                "full_name": row.full_name,
-                "pal_score": round(float(row.avg_score), 2),
-                "streak_days": row.streak_days or 0,
+                "id": user.id,
+                "full_name": user.full_name,
+                "pal_score": round(float(user.pal_score or 0), 2),
+                "streak_days": user.streak_days or 0,
                 "rank": idx + 1,
             }
-            for idx, row in enumerate(results)
+            for idx, user in enumerate(users)
         ]
 
     def get_grading_analytics_super_admin(self, org_id: int | None = None) -> dict[str, Any]:
@@ -935,6 +971,277 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         }
 
     def get_grading_analytics_category_admin(self, category_slug: str, org_id: int | None = None) -> dict[str, Any]:
+        """Returns live category grading analytics for Category Admin dashboard."""
+        from app.models.gradebook import GradeResult, GradeItem
+
+        category_stmt = select(Category).where(Category.slug == category_slug)
+        if org_id:
+            category_stmt = category_stmt.where(Category.org_id == org_id)
+        category = self.session.execute(category_stmt).scalar_one_or_none()
+        if not category:
+            return {}
+
+        course_stmt = select(Course).where(Course.category_slug == category_slug, Course.status != "archived")
+        if org_id:
+            course_stmt = course_stmt.where(Course.org_id == org_id)
+        courses = self.session.execute(course_stmt.order_by(Course.name)).scalars().all()
+        course_ids = [course.id for course in courses]
+        empty = {
+            "average_grade": 0.0,
+            "overall_course_average": 0.0,
+            "pass_rate": 0.0,
+            "fail_rate": 0.0,
+            "quiz_average": 0.0,
+            "assignment_average": 0.0,
+            "total_learners": 0,
+            "total_assessments": 0,
+            "pending_evaluations": 0,
+            "evaluated_assessments": 0,
+            "course_grade_distribution": [],
+            "grade_distribution": [],
+            "course_performance": [],
+            "pass_fail": [{"label": "Pass", "value": 0}, {"label": "Fail", "value": 0}],
+            "learners_at_risk": [],
+            "top_performers": [],
+            "lowest_performers": [],
+            "learner_grades": [],
+            "assessment_details": [],
+            "grade_trend": [],
+            "grade_summary": {"total_graded": 0, "total_assessments": 0},
+            "filters": {"courses": [], "learners": [], "assessment_types": ["quiz", "assignment"], "statuses": [], "grades": []},
+        }
+        if not course_ids:
+            return empty
+
+        learner_stmt = (
+            select(User)
+            .join(CourseProgress, CourseProgress.user_id == User.id)
+            .where(CourseProgress.course_id.in_(course_ids))
+        )
+        if org_id:
+            learner_stmt = learner_stmt.where(User.org_id == org_id, CourseProgress.org_id == org_id)
+        learners = self.session.execute(learner_stmt.distinct().order_by(User.full_name)).scalars().all()
+        learners_by_id = {learner.id: learner for learner in learners}
+
+        result_stmt = (
+            select(GradeResult, GradeItem, Course, User)
+            .join(GradeItem, GradeItem.id == GradeResult.grade_item_id)
+            .join(Course, Course.id == GradeResult.course_id)
+            .join(User, User.id == GradeResult.user_id)
+            .where(
+                GradeResult.course_id.in_(course_ids),
+                GradeResult.is_current.is_(True),
+                GradeResult.status == "graded",
+            )
+        )
+        if org_id:
+            result_stmt = result_stmt.where(GradeResult.org_id == org_id, GradeItem.org_id == org_id, Course.org_id == org_id, User.org_id == org_id)
+        result_rows = self.session.execute(result_stmt.order_by(Course.name, User.full_name, GradeItem.title)).all()
+
+        pending_stmt = (
+            select(AssignmentSubmission, User, Course, GradeItem)
+            .join(GradeItem, GradeItem.source_id == func.cast(AssignmentSubmission.block_id, String))
+            .join(Course, Course.id == GradeItem.course_id)
+            .join(User, User.id == AssignmentSubmission.user_id)
+            .where(
+                Course.id.in_(course_ids),
+                GradeItem.source_type == "assignment_block",
+                AssignmentSubmission.status.in_(["submitted", "resubmitted", "pending_verification", "approved", "rejected"]),
+            )
+        )
+        if org_id:
+            pending_stmt = pending_stmt.where(AssignmentSubmission.org_id == org_id, GradeItem.org_id == org_id, Course.org_id == org_id, User.org_id == org_id)
+        pending_rows = self.session.execute(pending_stmt).all()
+
+        progress_rows = self.session.execute(
+            select(CourseProgress).where(
+                CourseProgress.course_id.in_(course_ids),
+                CourseProgress.user_id.in_(list(learners_by_id.keys()) or [""]),
+            )
+        ).scalars().all()
+        completion_by_user_course = {(row.user_id, row.course_id): self._round(row.completion_percentage) for row in progress_rows}
+
+        grade_values: list[float] = []
+        quiz_values: list[float] = []
+        assignment_values: list[float] = []
+        by_learner_course: dict[tuple[str, str], dict[str, Any]] = {}
+        assessment_details: list[dict[str, Any]] = []
+
+        def letter_grade(percentage: float | None) -> str:
+            value = float(percentage or 0)
+            if value >= 90:
+                return "A"
+            if value >= 80:
+                return "B"
+            if value >= 70:
+                return "C"
+            if value >= 60:
+                return "D"
+            return "F"
+
+        for result, item, course, learner in result_rows:
+            pct = self._round(result.percentage)
+            grade_values.append(pct)
+            assessment_type = "quiz" if "quiz" in (item.source_type or result.source_type) else "assignment"
+            if assessment_type == "quiz":
+                quiz_values.append(pct)
+            else:
+                assignment_values.append(pct)
+            key = (learner.id, course.id)
+            row = by_learner_course.setdefault(key, {
+                "learner_id": learner.id,
+                "learner_name": learner.full_name,
+                "email": learner.email,
+                "course_id": course.id,
+                "course": course.name,
+                "quiz_scores": [],
+                "assignment_scores": [],
+                "completed_assessments": 0,
+                "pending_assessments": 0,
+                "pal_score": self._round(getattr(learner, "pal_score", None)),
+            })
+            row[f"{assessment_type}_scores"].append(pct)
+            row["completed_assessments"] += 1
+            evaluator = "System" if result.graded_by == "system" else None
+            if result.graded_by and result.graded_by != "system":
+                evaluator_user = self.session.get(User, result.graded_by)
+                evaluator = evaluator_user.full_name if evaluator_user else result.graded_by
+            assessment_details.append({
+                "learner_id": learner.id,
+                "learner_name": learner.full_name,
+                "email": learner.email,
+                "course_id": course.id,
+                "course": course.name,
+                "quiz_name": item.title if assessment_type == "quiz" else "",
+                "assignment_name": item.title if assessment_type == "assignment" else "",
+                "assessment_name": item.title,
+                "assessment_type": assessment_type,
+                "marks_obtained": self._round(result.points_awarded),
+                "maximum_marks": self._round(result.points_possible),
+                "percentage": pct,
+                "grade": letter_grade(pct),
+                "status": "approved" if result.status == "graded" else result.status,
+                "submission_date": self._iso(result.created_at),
+                "evaluation_date": self._iso(result.graded_at),
+                "evaluator": evaluator or "-",
+            })
+
+        for submission, learner, course, item in pending_rows:
+            key = (learner.id, course.id)
+            row = by_learner_course.setdefault(key, {
+                "learner_id": learner.id,
+                "learner_name": learner.full_name,
+                "email": learner.email,
+                "course_id": course.id,
+                "course": course.name,
+                "quiz_scores": [],
+                "assignment_scores": [],
+                "completed_assessments": 0,
+                "pending_assessments": 0,
+                "pal_score": self._round(getattr(learner, "pal_score", None)),
+            })
+            row["pending_assessments"] += 1
+            assessment_details.append({
+                "learner_id": learner.id,
+                "learner_name": learner.full_name,
+                "email": learner.email,
+                "course_id": course.id,
+                "course": course.name,
+                "quiz_name": "",
+                "assignment_name": item.title,
+                "assessment_name": item.title,
+                "assessment_type": "assignment",
+                "marks_obtained": None,
+                "maximum_marks": self._round(item.points_possible),
+                "percentage": None,
+                "grade": "-",
+                "status": submission.status,
+                "submission_date": self._iso(submission.submitted_at),
+                "evaluation_date": self._iso(submission.graded_at or submission.reviewed_at),
+                "evaluator": "-",
+            })
+
+        learner_grades = []
+        for row in by_learner_course.values():
+            quiz_avg = self._round(sum(row["quiz_scores"]) / len(row["quiz_scores"])) if row["quiz_scores"] else 0.0
+            assignment_avg = self._round(sum(row["assignment_scores"]) / len(row["assignment_scores"])) if row["assignment_scores"] else 0.0
+            all_scores = row["quiz_scores"] + row["assignment_scores"]
+            overall = self._round(sum(all_scores) / len(all_scores)) if all_scores else 0.0
+            completed = row["completed_assessments"]
+            pending = row["pending_assessments"]
+            learner_grades.append({
+                "learner_id": row["learner_id"],
+                "learner_name": row["learner_name"],
+                "email": row["email"],
+                "course_id": row["course_id"],
+                "course": row["course"],
+                "quiz_average": quiz_avg,
+                "assignment_average": assignment_avg,
+                "overall_grade": letter_grade(overall) if completed else "-",
+                "overall_percentage": overall,
+                "completed_assessments": completed,
+                "pending_assessments": pending,
+                "pal_score": row["pal_score"],
+                "certificate_eligible": "Yes" if overall >= 60 and pending == 0 and completion_by_user_course.get((row["learner_id"], row["course_id"]), 0) >= 100 else "No",
+            })
+
+        overall_average = self._round(sum(grade_values) / len(grade_values)) if grade_values else 0.0
+        passed = len([value for value in [row["overall_percentage"] for row in learner_grades if row["completed_assessments"]] if value >= 60])
+        failed = len([value for value in [row["overall_percentage"] for row in learner_grades if row["completed_assessments"]] if value < 60])
+        total_final = passed + failed
+        buckets = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+        for value in grade_values:
+            buckets[letter_grade(value)] += 1
+
+        course_performance = []
+        for course in courses:
+            values = [row["overall_percentage"] for row in learner_grades if row["course_id"] == course.id and row["completed_assessments"]]
+            course_performance.append({"course_name": course.name, "average": self._round(sum(values) / len(values)) if values else 0.0})
+
+        top = sorted([row for row in learner_grades if row["completed_assessments"]], key=lambda row: row["overall_percentage"], reverse=True)[:10]
+        low = sorted([row for row in learner_grades if row["completed_assessments"]], key=lambda row: row["overall_percentage"])[:10]
+
+        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        trend = []
+        for idx in range(5, -1, -1):
+            start = (month_start - timedelta(days=idx * 31)).replace(day=1)
+            end = (start + timedelta(days=32)).replace(day=1)
+            values = [self._round(result.percentage) for result, _, _, _ in result_rows if result.graded_at and start <= result.graded_at < end]
+            trend.append({"month": start.strftime("%b"), "average": self._round(sum(values) / len(values)) if values else 0.0})
+
+        statuses = sorted({row["status"] for row in assessment_details if row["status"]})
+        return {
+            "average_grade": overall_average,
+            "overall_course_average": overall_average,
+            "pass_rate": self._round(passed / total_final * 100.0) if total_final else 0.0,
+            "fail_rate": self._round(failed / total_final * 100.0) if total_final else 0.0,
+            "quiz_average": self._round(sum(quiz_values) / len(quiz_values)) if quiz_values else 0.0,
+            "assignment_average": self._round(sum(assignment_values) / len(assignment_values)) if assignment_values else 0.0,
+            "total_learners": len(learners),
+            "total_assessments": len(result_rows) + len(pending_rows),
+            "pending_evaluations": len(pending_rows),
+            "evaluated_assessments": len(result_rows),
+            "course_grade_distribution": course_performance,
+            "grade_distribution": [{"grade": key, "count": value} for key, value in buckets.items()],
+            "course_performance": course_performance,
+            "pass_fail": [{"label": "Pass", "value": passed}, {"label": "Fail", "value": failed}],
+            "learners_at_risk": [{"full_name": row["learner_name"], "grade": row["overall_percentage"]} for row in low if row["overall_percentage"] < 60],
+            "top_performers": [{"full_name": row["learner_name"], "grade": row["overall_percentage"]} for row in top],
+            "lowest_performers": [{"full_name": row["learner_name"], "grade": row["overall_percentage"]} for row in low],
+            "learner_grades": learner_grades,
+            "assessment_details": assessment_details,
+            "grade_trend": trend,
+            "grade_summary": {"total_graded": len(result_rows), "total_assessments": len(result_rows) + len(pending_rows)},
+            "filters": {
+                "courses": [{"id": course.id, "name": course.name} for course in courses],
+                "learners": [{"id": learner.id, "name": learner.full_name, "email": learner.email} for learner in learners],
+                "assessment_types": ["quiz", "assignment"],
+                "statuses": statuses,
+                "grades": ["A", "B", "C", "D", "F"],
+            },
+        }
+
+    def get_grading_analytics_category_admin_legacy(self, category_slug: str, org_id: int | None = None) -> dict[str, Any]:
         """Returns category-specific grading analytics for Category Admin dashboard."""
         from app.models.gradebook import CourseGrade, GradeResult, GradeItem, GradeCategory
         
@@ -1031,11 +1338,11 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         pass_rate = self._round((pass_count / total_grades * 100.0) if total_grades > 0 else 0.0)
         fail_rate = self._round(100.0 - pass_rate) if total_grades > 0 else 0.0
         
-        # Quiz average (from grade results with source_type = quiz_block)
+        # Quiz average (from native and legacy quiz grade results)
         quiz_avg_result = self.session.execute(
             select(func.avg(GradeResult.percentage)).where(
                 GradeResult.course_id.in_(course_ids),
-                GradeResult.source_type == "quiz_block",
+                GradeResult.source_type.in_(("quiz_block", "quiz_submission")),
                 GradeResult.percentage.isnot(None),
                 GradeResult.status == "graded"
             )
@@ -1046,7 +1353,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
                 select(func.avg(GradeResult.percentage)).where(
                     GradeResult.org_id == org_id,
                     GradeResult.course_id.in_(course_ids),
-                    GradeResult.source_type == "quiz_block",
+                    GradeResult.source_type.in_(("quiz_block", "quiz_submission")),
                     GradeResult.percentage.isnot(None),
                     GradeResult.status == "graded"
                 )
@@ -1054,11 +1361,11 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         
         quiz_average = self._round(quiz_avg_result) if quiz_avg_result else 0.0
         
-        # Assignment average (from grade results with source_type = assignment_block)
+        # Assignment average (from native and legacy assignment grade results)
         assignment_avg_result = self.session.execute(
             select(func.avg(GradeResult.percentage)).where(
                 GradeResult.course_id.in_(course_ids),
-                GradeResult.source_type == "assignment_block",
+                GradeResult.source_type.in_(("assignment_block", "assignment_submission")),
                 GradeResult.percentage.isnot(None),
                 GradeResult.status == "graded"
             )
@@ -1069,7 +1376,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
                 select(func.avg(GradeResult.percentage)).where(
                     GradeResult.org_id == org_id,
                     GradeResult.course_id.in_(course_ids),
-                    GradeResult.source_type == "assignment_block",
+                    GradeResult.source_type.in_(("assignment_block", "assignment_submission")),
                     GradeResult.percentage.isnot(None),
                     GradeResult.status == "graded"
                 )
@@ -1242,74 +1549,208 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
     def get_grading_analytics_learner(self, user_id: str) -> dict[str, Any]:
         """Returns learner-specific grading analytics for Learner dashboard."""
         from app.models.gradebook import CourseGrade, GradeResult, GradeItem, GradeCategory
-        
-        # Get learner's course grades
+        from app.models.lesson_block import LessonBlock
+
+        learner = self.session.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+        org_id = learner.org_id if learner else None
+
+        def letter_grade(percentage: float | int | None) -> str:
+            score = float(percentage or 0)
+            if score >= 90:
+                return "A"
+            if score >= 80:
+                return "B"
+            if score >= 70:
+                return "C"
+            if score >= 60:
+                return "D"
+            return "F"
+
+        def normalize_percentage(value: float | int | None) -> float:
+            raw = float(value or 0)
+            if 0 < raw <= 1:
+                raw *= 100
+            return self._round(raw)
+
+        grade_results = self.session.execute(
+            select(GradeResult).where(
+                GradeResult.user_id == user_id,
+                GradeResult.is_current == True,
+                GradeResult.percentage.isnot(None),
+            ).order_by(GradeResult.graded_at.desc().nullslast(), GradeResult.created_at.desc())
+        ).scalars().all()
+        if org_id:
+            grade_results = [row for row in grade_results if row.org_id == org_id]
+
+        grade_items = {}
+        if grade_results:
+            grade_item_rows = self.session.execute(
+                select(GradeItem).where(GradeItem.id.in_([row.grade_item_id for row in grade_results]))
+            ).scalars().all()
+            grade_items = {item.id: item for item in grade_item_rows}
+
+        course_ids = sorted({row.course_id for row in grade_results if row.course_id})
+        courses = {}
+        if course_ids:
+            course_rows = self.session.execute(select(Course).where(Course.id.in_(course_ids))).scalars().all()
+            courses = {course.id: course for course in course_rows}
+
+        evaluator_ids = sorted({row.graded_by for row in grade_results if row.graded_by})
+        evaluators = {}
+        if evaluator_ids:
+            evaluator_rows = self.session.execute(select(User).where(User.id.in_(evaluator_ids))).scalars().all()
+            evaluators = {user.id: user for user in evaluator_rows}
+
+        assessment_rows = []
+        for result in grade_results:
+            item = grade_items.get(result.grade_item_id)
+            course = courses.get(result.course_id)
+            percentage = normalize_percentage(result.percentage)
+            if result.source_type in {"assignment_block", "assignment_submission"}:
+                assessment_type = "Assignment"
+            elif result.source_type in {"quiz_block", "quiz_submission"}:
+                assessment_type = "Quiz"
+            else:
+                assessment_type = str(result.source_type or "Assessment").replace("_", " ").title()
+            evaluator = evaluators.get(result.graded_by)
+            metadata = result.metadata_json or {}
+            assessment_rows.append({
+                "id": result.id,
+                "course_id": result.course_id,
+                "course_name": course.name if course else "Unknown Course",
+                "assessment_name": item.title if item else result.source_id or "Assessment",
+                "quiz_name": item.title if assessment_type == "Quiz" and item else None,
+                "assignment_name": item.title if assessment_type == "Assignment" and item else None,
+                "assessment_type": assessment_type,
+                "source_type": result.source_type,
+                "source_id": result.source_id,
+                "attempt_number": result.attempt_number,
+                "attempts_used": result.attempt_number,
+                "attempts_remaining": metadata.get("attempts_remaining"),
+                "highest_score": normalize_percentage(metadata.get("highest_score")) if metadata.get("highest_score") is not None else percentage,
+                "best_attempt": metadata.get("best_attempt"),
+                "marks_obtained": self._round(result.points_awarded),
+                "maximum_marks": self._round(result.points_possible),
+                "percentage": percentage,
+                "grade": letter_grade(percentage),
+                "passed": percentage >= 60,
+                "pass_fail": "Pass" if percentage >= 60 else "Fail",
+                "submission_date": result.created_at.isoformat() if result.created_at else None,
+                "evaluation_date": result.graded_at.isoformat() if result.graded_at else None,
+                "evaluator_name": evaluator.full_name if evaluator else "System",
+                "feedback": result.feedback,
+                "status": result.status,
+            })
+
+        assignment_rows = self.session.execute(
+            select(AssignmentSubmission, LessonBlock, CourseModule, Course)
+            .join(LessonBlock, AssignmentSubmission.block_id == LessonBlock.id)
+            .join(CourseModule, LessonBlock.module_id == CourseModule.id)
+            .join(Course, CourseModule.course_id == Course.id)
+            .where(AssignmentSubmission.user_id == user_id)
+        ).all()
+        graded_source_ids = {str(row["source_id"]) for row in assessment_rows if row["source_type"] in {"assignment_block", "assignment_submission"}}
+        graded_assignment_block_ids = {
+            str(grade_items[result.grade_item_id].source_id)
+            for result in grade_results
+            if result.source_type in {"assignment_block", "assignment_submission"} and result.grade_item_id in grade_items
+        }
+        for submission, block, module, course in assignment_rows:
+            if org_id and submission.org_id != org_id:
+                continue
+            if str(submission.id) in graded_source_ids or str(submission.block_id) in graded_assignment_block_ids:
+                continue
+            percentage = normalize_percentage(submission.grade) if submission.grade is not None else None
+            assessment_rows.append({
+                "id": f"assignment-{submission.id}",
+                "course_id": course.id,
+                "course_name": course.name,
+                "assessment_name": block.content or "Assignment",
+                "quiz_name": None,
+                "assignment_name": block.content or "Assignment",
+                "assessment_type": "Assignment",
+                "source_type": "assignment_submission",
+                "source_id": str(submission.id),
+                "attempt_number": submission.attempt_number,
+                "attempts_used": submission.attempt_number,
+                "attempts_remaining": None,
+                "highest_score": percentage,
+                "best_attempt": None,
+                "marks_obtained": self._round(submission.grade) if submission.grade is not None else None,
+                "maximum_marks": 100,
+                "percentage": percentage,
+                "grade": letter_grade(percentage) if percentage is not None else None,
+                "passed": percentage >= 60 if percentage is not None else None,
+                "pass_fail": "Pass" if percentage is not None and percentage >= 60 else "Fail" if percentage is not None else "Pending",
+                "submission_date": submission.submitted_at.isoformat() if submission.submitted_at else None,
+                "evaluation_date": (submission.graded_at or submission.reviewed_at).isoformat() if (submission.graded_at or submission.reviewed_at) else None,
+                "evaluator_name": None,
+                "feedback": submission.feedback,
+                "status": submission.status,
+            })
+
         course_grades = self.session.execute(
             select(CourseGrade).where(
                 CourseGrade.user_id == user_id,
                 CourseGrade.percentage.isnot(None)
             )
         ).scalars().all()
-        
-        if not course_grades:
+        if org_id:
+            course_grades = [grade for grade in course_grades if grade.org_id == org_id]
+        course_grades_by_course = {grade.course_id: grade for grade in course_grades}
+
+        if not assessment_rows and not course_grades:
             return {
                 "has_grades": False,
                 "message": "Grade will be available after evaluation."
             }
-        
-        # Calculate overall statistics
-        grades_list = [g.percentage for g in course_grades if g.percentage is not None]
-        overall_average = self._round(sum(grades_list) / len(grades_list)) if grades_list else 0.0
-        
-        # Pass/fail status based on most recent or highest grade
-        passed_grades = [g for g in course_grades if g.passed is True]
-        overall_passed = bool(passed_grades)
-        
-        # Quiz average
-        quiz_results = self.session.execute(
-            select(GradeResult).where(
-                GradeResult.user_id == user_id,
-                GradeResult.source_type == "quiz_block",
-                GradeResult.percentage.isnot(None),
-                GradeResult.status == "graded"
-            )
-        ).scalars().all()
-        
-        quiz_scores = [r.percentage for r in quiz_results if r.percentage is not None]
-        quiz_average = self._round(sum(quiz_scores) / len(quiz_scores)) if quiz_scores else 0.0
-        
-        # Assignment average
-        assignment_results = self.session.execute(
-            select(GradeResult).where(
-                GradeResult.user_id == user_id,
-                GradeResult.source_type == "assignment_block",
-                GradeResult.percentage.isnot(None),
-                GradeResult.status == "graded"
-            )
-        ).scalars().all()
-        
-        assignment_scores = [r.percentage for r in assignment_results if r.percentage is not None]
-        assignment_average = self._round(sum(assignment_scores) / len(assignment_scores)) if assignment_scores else 0.0
-        
-        # Current percentage (most recent course grade)
-        current_percentage = self._round(course_grades[0].percentage) if course_grades else 0.0
-        
-        # Grade summary by course
+
+        graded_assessments = [row for row in assessment_rows if row.get("percentage") is not None and row.get("status") == "graded"]
+        graded_percentages = [float(row["percentage"]) for row in graded_assessments]
+        quiz_rows = [row for row in assessment_rows if row["assessment_type"] == "Quiz" and row.get("percentage") is not None]
+        assignment_grade_rows = [row for row in assessment_rows if row["assessment_type"] == "Assignment" and row.get("percentage") is not None]
+        pending_count = len([row for row in assessment_rows if row.get("status") in {"submitted", "resubmitted", "pending_verification", "approved"} and row.get("percentage") is None])
+
+        if graded_percentages:
+            overall_average = self._round(sum(graded_percentages) / len(graded_percentages))
+        else:
+            course_grade_values = [normalize_percentage(grade.percentage) for grade in course_grades if grade.percentage is not None]
+            overall_average = self._round(sum(course_grade_values) / len(course_grade_values)) if course_grade_values else 0.0
+        quiz_average = self._round(sum(float(row["percentage"]) for row in quiz_rows) / len(quiz_rows)) if quiz_rows else 0.0
+        assignment_average = self._round(sum(float(row["percentage"]) for row in assignment_grade_rows) / len(assignment_grade_rows)) if assignment_grade_rows else 0.0
+        current_percentage = overall_average
+        overall_passed = overall_average >= 60 if (graded_percentages or course_grades) else False
+
         grade_summary = []
-        for grade in course_grades:
-            course = self.session.execute(
-                select(Course).where(Course.id == grade.course_id)
-            ).scalar_one_or_none()
-            
+        summary_course_ids = sorted({row["course_id"] for row in assessment_rows if row.get("course_id")} | set(course_grades_by_course))
+        progress_rows = self.session.execute(select(CourseProgress).where(CourseProgress.user_id == user_id)).scalars().all()
+        progress_by_course = {row.course_id: row for row in progress_rows if not org_id or row.org_id == org_id}
+        missing_courses = [course_id for course_id in summary_course_ids if course_id not in courses]
+        if missing_courses:
+            for course in self.session.execute(select(Course).where(Course.id.in_(missing_courses))).scalars().all():
+                courses[course.id] = course
+
+        for course_id in summary_course_ids:
+            course = courses.get(course_id)
+            course_assessments = [row for row in assessment_rows if row.get("course_id") == course_id and row.get("percentage") is not None]
+            course_quizzes = [row for row in course_assessments if row["assessment_type"] == "Quiz"]
+            course_assignments = [row for row in course_assessments if row["assessment_type"] == "Assignment"]
+            course_grade = course_grades_by_course.get(course_id)
+            course_average = self._round(sum(float(row["percentage"]) for row in course_assessments) / len(course_assessments)) if course_assessments else normalize_percentage(course_grade.percentage) if course_grade else 0.0
+            progress = progress_by_course.get(course_id)
             grade_summary.append({
                 "course_name": course.name if course else "Unknown Course",
-                "percentage": self._round(grade.percentage),
-                "display_grade": grade.display_grade,
-                "passed": grade.passed,
-                "status": grade.status
+                "completion_percentage": self._round(progress.completion_percentage) if progress else 0.0,
+                "average_quiz_score": self._round(sum(float(row["percentage"]) for row in course_quizzes) / len(course_quizzes)) if course_quizzes else 0.0,
+                "average_assignment_score": self._round(sum(float(row["percentage"]) for row in course_assignments) / len(course_assignments)) if course_assignments else 0.0,
+                "percentage": course_average,
+                "overall_course_grade": course_average,
+                "display_grade": course_grade.display_grade if course_grade and course_grade.display_grade else letter_grade(course_average),
+                "passed": course_grade.passed if course_grade and course_grade.passed is not None else course_average >= 60,
+                "status": course_grade.status if course_grade else "calculated",
+                "certificate_eligibility": bool((progress and progress.completion_percentage >= 100) and course_average >= 60),
             })
-        
-        # Grade progress (trend over time)
+
         grade_progress = [
             {
                 "course_name": gs["course_name"],
@@ -1317,15 +1758,21 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             }
             for gs in grade_summary
         ]
-        
+
         return {
             "has_grades": True,
             "final_grade": overall_average,
+            "overall_grade": letter_grade(overall_average),
             "current_percentage": current_percentage,
             "quiz_average": quiz_average,
             "assignment_average": assignment_average,
             "pass_fail_status": "Pass" if overall_passed else "Fail",
+            "completed_assessments": len(graded_assessments),
+            "pending_evaluations": pending_count,
+            "highest_score": self._round(max(graded_percentages)) if graded_percentages else 0.0,
+            "lowest_score": self._round(min(graded_percentages)) if graded_percentages else 0.0,
+            "assessments": assessment_rows,
             "grade_summary": grade_summary,
             "grade_progress": grade_progress,
-            "total_courses_graded": len(course_grades)
+            "total_courses_graded": len(grade_summary)
         }

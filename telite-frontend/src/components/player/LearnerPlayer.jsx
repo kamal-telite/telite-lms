@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, EmptyState, LoadingState, ErrorState, Icon, useToast } from "../common/ui";
 import { CourseSidebar } from "./CourseSidebar";
 import { BlockRenderer } from "./BlockRenderer";
-import { api } from "../../services/client";
+import { api, endLearningSession, heartbeatLearningSession, startLearningSession } from "../../services/client";
 
 export function LearnerPlayer({ courseId, onExit }) {
   const { showToast } = useToast();
+  const scrollRef = useRef(null);
   const [courseData, setCourseData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -60,17 +61,88 @@ export function LearnerPlayer({ courseId, onExit }) {
   }, [courseId]);
 
   useEffect(() => {
-    // Heartbeat for time spent
-    const interval = setInterval(() => {
-      if (!courseId) return;
-      api.post("/api/v1/learner/heartbeat", {
+    if (!courseId) return undefined;
+    let cancelled = false;
+    let sessionId = null;
+    let lastActiveAt = Date.now();
+    let accumulatedSeconds = 0;
+    let lastTickAt = Date.now();
+
+    const markActive = () => {
+      lastActiveAt = Date.now();
+    };
+    const isActivelyLearning = () => (
+      document.visibilityState === "visible"
+      && document.hasFocus()
+      && Date.now() - lastActiveAt <= 120000
+    );
+    const flush = async () => {
+      if (!sessionId || accumulatedSeconds <= 0) return;
+      const seconds = Math.min(accumulatedSeconds, 90);
+      accumulatedSeconds -= seconds;
+      try {
+        await heartbeatLearningSession({
+          session_id: sessionId,
           course_id: courseId,
           module_id: activeModule?.id || null,
-          time_spent_seconds: 15
-      }).catch(() => {});
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [courseId, activeModule]);
+          active_seconds: seconds,
+        });
+      } catch {
+        accumulatedSeconds += seconds;
+      }
+    };
+
+    startLearningSession({ course_id: courseId, module_id: activeModule?.id || null })
+      .then((data) => {
+        if (!cancelled) sessionId = data?.session?.id;
+      })
+      .catch(() => {});
+
+    const tick = setInterval(() => {
+      const now = Date.now();
+      const delta = Math.max(0, Math.round((now - lastTickAt) / 1000));
+      lastTickAt = now;
+      if (isActivelyLearning()) {
+        accumulatedSeconds += Math.min(delta, 15);
+      }
+    }, 5000);
+    const heartbeat = setInterval(() => {
+      flush();
+    }, 30000);
+
+    const end = (reason = "ended") => {
+      cancelled = true;
+      clearInterval(tick);
+      clearInterval(heartbeat);
+      const pending = Math.min(accumulatedSeconds, 90);
+      if (sessionId && pending > 0 && navigator.sendBeacon) {
+        const payload = JSON.stringify({
+          session_id: sessionId,
+          course_id: courseId,
+          module_id: activeModule?.id || null,
+          active_seconds: pending,
+        });
+        navigator.sendBeacon("/api/v1/learner/learning-sessions/heartbeat", new Blob([payload], { type: "application/json" }));
+      } else {
+        flush();
+      }
+      if (sessionId) {
+        endLearningSession({ session_id: sessionId, reason }).catch(() => {});
+      }
+    };
+
+    ["mousemove", "keydown", "scroll", "click", "touchstart"].forEach((eventName) => window.addEventListener(eventName, markActive, { passive: true }));
+    const handleBeforeUnload = () => end("browser_closed");
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", markActive);
+
+    return () => {
+      ["mousemove", "keydown", "scroll", "click", "touchstart"].forEach((eventName) => window.removeEventListener(eventName, markActive));
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", markActive);
+      end("module_changed");
+    };
+  }, [courseId, activeModule?.id]);
 
   useEffect(() => {
     // Emit MODULE_STARTED
@@ -247,12 +319,76 @@ export function LearnerPlayer({ courseId, onExit }) {
     setSidebarOpen(false); // Auto-close sidebar on mobile after selection
   };
 
+  const canScrollVertically = (element, deltaY) => {
+    if (!element || !(element instanceof HTMLElement)) return false;
+    const style = window.getComputedStyle(element);
+    if (!["auto", "scroll"].includes(style.overflowY)) return false;
+    if (element.scrollHeight <= element.clientHeight + 1) return false;
+    if (deltaY < 0) return element.scrollTop > 0;
+    if (deltaY > 0) return element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+    return false;
+  };
+
+  const nestedScrollableOwnsWheel = (target, root, deltaY) => {
+    let node = target;
+    while (node && node !== root) {
+      if (canScrollVertically(node, deltaY)) return true;
+      node = node.parentElement;
+    }
+    return false;
+  };
+
+  const handleLessonWheel = (event) => {
+    const root = scrollRef.current;
+    if (!root || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    if (nestedScrollableOwnsWheel(event.target, root, event.deltaY)) return;
+    if (!canScrollVertically(root, event.deltaY)) return;
+    event.preventDefault();
+    root.scrollTop += event.deltaY;
+  };
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return undefined;
+    root.addEventListener("wheel", handleLessonWheel, { capture: true, passive: false });
+    return () => root.removeEventListener("wheel", handleLessonWheel, { capture: true });
+  });
+
   if (loading) return <LoadingState title="Loading course player..." />;
   if (error) return <ErrorState body={error} action={<Button onClick={onExit}>Back to Dashboard</Button>} />;
 
   return (
     <>
       <style>{`
+        html, body {
+          -webkit-user-select: text;
+          user-select: text;
+        }
+
+        * {
+          box-sizing: border-box;
+        }
+
+        .learner-player {
+          scroll-behavior: auto;
+          pointer-events: auto;
+          touch-action: auto;
+        }
+        
+        .lesson-scroll-region {
+          scroll-behavior: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior-y: auto;
+          pointer-events: auto;
+          touch-action: pan-y;
+          will-change: scroll-position;
+          min-height: 0;
+        }
+
+        .lesson-scroll-region > div {
+          pointer-events: auto;
+        }
+        
         @media (max-width: 767px) {
           .mobile-menu-toggle {
             display: flex !important;
@@ -279,11 +415,11 @@ export function LearnerPlayer({ courseId, onExit }) {
             overflow-x: hidden !important;
           }
           
-          .player-main > div:last-child {
+          .lesson-scroll-region {
             padding: 20px 16px !important;
           }
           
-          .player-main > div:last-child > div {
+          .lesson-scroll-region > div {
             max-width: 100% !important;
           }
         }
@@ -398,7 +534,11 @@ export function LearnerPlayer({ courseId, onExit }) {
         </header>
 
         {/* Scrollable Content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "40px", display: "flex", justifyContent: "center" }}>
+        <div
+          ref={scrollRef}
+          className="lesson-scroll-region"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "40px", display: "flex", justifyContent: "center", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "auto", touchAction: "pan-y" }}
+        >
           <div style={{ maxWidth: "800px", width: "100%" }}>
             {showCompletionSuccess ? (
               <div style={{ textAlign: "center", padding: "60px 20px" }}>

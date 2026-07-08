@@ -24,9 +24,10 @@ class LearnerRepository:
             stmt = stmt.where(
                 Course.category_slug == user.category_scope,
                 Course.status.in_(("active", "published")),
+                Course.status != "draft",
             )
         elif user and user.role == "learner":
-            stmt = stmt.where(Course.status.in_(("active", "published")))
+            stmt = stmt.where(Course.status.in_(("active", "published")), Course.status != "draft")
         return list(self.session.scalars(stmt))
 
     def get_course(self, course_id: str, user_id: str, org_id: int) -> Optional[Course]:
@@ -36,7 +37,7 @@ class LearnerRepository:
             Course.org_id == org_id
         )
         if user and user.role == "learner":
-            stmt = stmt.where(Course.status.in_(("active", "published")))
+            stmt = stmt.where(Course.status.in_(("active", "published")), Course.status != "draft")
         return self.session.scalar(stmt)
 
     def get_learning_paths(self, user_id: str, org_id: int) -> List[LearningPath]:

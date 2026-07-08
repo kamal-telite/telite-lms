@@ -109,7 +109,10 @@ def _require_h5p_permission(current_user: TokenData, permission: str) -> None:
 
 def _download_url_for(asset: MediaAsset) -> str:
     if asset.object_key.startswith("/uploads/"):
-        return asset.object_key
+        # Return absolute URL for local files to avoid React Router interception
+        from app.core.runtime import get_api_base_url
+        base_url = get_api_base_url()
+        return f"{base_url}{asset.object_key}"
     return generate_presigned_download_url(asset.object_key)
 
 def _usage_count(db: Session, asset_id: int, org_id: int) -> int:

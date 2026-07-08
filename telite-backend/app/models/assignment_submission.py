@@ -24,9 +24,13 @@ class AssignmentSubmission(Base, TenantMixin):
     status = Column(String(20), nullable=False, default="draft", index=True)
     grade = Column(Float, nullable=True)
     feedback = Column(Text, nullable=True)
+    course_time_seconds_at_submission = Column(Integer, nullable=False, default=0)
+    course_progress_pct_at_submission = Column(Float, nullable=False, default=0.0)
     
     graded_by = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     graded_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
     submitted_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -35,7 +39,7 @@ class AssignmentSubmission(Base, TenantMixin):
     __table_args__ = (
         UniqueConstraint('block_id', 'user_id', name='uq_assignment_submission_block_user'),
         CheckConstraint(
-            "status IN ('draft', 'submitted', 'graded', 'returned', 'resubmitted')",
+            "status IN ('draft', 'submitted', 'graded', 'returned', 'resubmitted', 'pending_verification', 'approved', 'rejected')",
             name="chk_assignment_submissions_status",
         ),
     )
@@ -73,8 +77,12 @@ class AssignmentSubmission(Base, TenantMixin):
             "status": self.status,
             "grade": self.grade,
             "feedback": self.feedback,
+            "course_time_seconds_at_submission": self.course_time_seconds_at_submission or 0,
+            "course_progress_pct_at_submission": self.course_progress_pct_at_submission or 0.0,
             "graded_by": self.graded_by,
             "graded_at": self.graded_at.isoformat() if self.graded_at else None,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
             "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

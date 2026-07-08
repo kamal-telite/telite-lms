@@ -121,7 +121,8 @@ class CourseRepository(BaseRepository[Course]):
         stmt = (
             select(Course)
             .where(Course.org_id == org_id)
-            .where(Course.status == "active")
+            .where(Course.status.in_(("active", "published")))
+            .where(Course.status != "draft")
             .where(Course.price_paise > 0)
             .order_by(Course.name)
         )
@@ -138,7 +139,7 @@ class CourseRepository(BaseRepository[Course]):
         **extra: Any,
     ) -> Course:
         slug = extra.pop("slug", None) or slugify(name)
-        status = extra.pop("status", "active")
+        status = extra.pop("status", "draft")
         modules = extra.pop("modules", None)
         modules_json = extra.pop("modules_json", None)
         if modules_json is None and modules is not None:

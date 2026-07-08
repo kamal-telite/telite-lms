@@ -26,7 +26,7 @@ class Course(Base, TenantMixin, TimestampMixin):
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tier: Mapped[str] = mapped_column(String(50), nullable=False, default="Basic")
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
 
     # Content metadata
     module_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

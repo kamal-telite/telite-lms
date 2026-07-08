@@ -2,12 +2,15 @@
 
 import copy
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, TokenData
+from app.api.auth import get_current_user, require_admin, TokenData
+from app.core.storage_paths import media_upload_root
 from app.db.engine import db_session
 from app.repositories.learner_repo import LearnerRepository
 from app.repositories.enrollment_repo import EnrollmentRepository
@@ -18,12 +21,16 @@ from app.services.learning_path_unlock_service import LearningPathUnlockService
 from app.services.progression_rule_engine import ProgressionRuleEngine
 from app.models.learner_event import LearnerEvent
 from app.models.course_progress import CourseProgress
+from app.models.course import Course
 from app.models.module_progress import ModuleProgress
 from app.models.section_progress import SectionProgress
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
 from app.models.lesson_block import LessonBlock
 from app.models.media_asset import MediaAsset
+from app.models.learning_session import LearningSession
+from app.models.user import User
+from app.services.pal_score_service import PALScoreService
 
 learner_router = APIRouter(prefix="/learner", tags=["Learner APIs"])
 
@@ -89,6 +96,22 @@ class HeartbeatRequest(BaseModel):
     module_id: Optional[int] = None
     block_id: Optional[int] = None
     time_spent_seconds: int
+
+class LearningSessionStartRequest(BaseModel):
+    course_id: str
+    module_id: Optional[int] = None
+    block_id: Optional[int] = None
+
+class LearningSessionHeartbeatRequest(BaseModel):
+    session_id: int
+    course_id: str
+    module_id: Optional[int] = None
+    block_id: Optional[int] = None
+    active_seconds: int
+
+class LearningSessionEndRequest(BaseModel):
+    session_id: int
+    reason: Optional[str] = "ended"
 
 class AccessValidationRequest(BaseModel):
     target_type: str
@@ -503,6 +526,7 @@ def update_progress(
         ))
 
     progress_repo.upsert_course_progress(course_progress)
+    PALScoreService(db).recompute_user(current_user.id, current_user.org_id)
     db.commit()
 
     if evaluation.completed_now:
@@ -595,6 +619,171 @@ def heartbeat(
 
     db.commit()
     return {"status": "success"}
+
+
+def _module_section_id(db: Session, module_id: int | None, org_id: int) -> int | None:
+    if not module_id:
+        return None
+    module = db.query(CourseModule).filter(CourseModule.id == module_id, CourseModule.org_id == org_id).first()
+    return module.section_id if module else None
+
+
+def _apply_active_seconds(
+    db: Session,
+    *,
+    current_user: TokenData,
+    course_id: str,
+    module_id: int | None,
+    block_id: int | None,
+    active_seconds: int,
+) -> None:
+    seconds = max(0, min(int(active_seconds or 0), 90))
+    if seconds <= 0:
+        return
+    now = datetime.now(timezone.utc)
+    progress_repo = ProgressRepository(db)
+    cp = progress_repo.get_course_progress(current_user.id, course_id, current_user.org_id)
+    if not cp:
+        cp = CourseProgress(
+            user_id=current_user.id,
+            course_id=course_id,
+            org_id=current_user.org_id,
+            status="in_progress",
+            completion_percentage=0.0,
+            time_spent_seconds=0,
+            started_at=now,
+        )
+        db.add(LearnerEvent(
+            user_id=current_user.id,
+            course_id=course_id,
+            event_type="COURSE_STARTED",
+            schema_version="1.0",
+            payload_json={},
+            created_at=now,
+            org_id=current_user.org_id,
+        ))
+    elif cp.status == "not_started":
+        cp.status = "in_progress"
+        cp.started_at = cp.started_at or now
+    cp.time_spent_seconds = (cp.time_spent_seconds or 0) + seconds
+    cp.last_viewed_at = now
+    progress_repo.upsert_course_progress(cp)
+
+    if module_id:
+        mp = progress_repo.get_module_progress(current_user.id, module_id, current_user.org_id)
+        if not mp:
+            mp = ModuleProgress(user_id=current_user.id, module_id=module_id, org_id=current_user.org_id, status="in_progress", started_at=now)
+        elif mp.status == "not_started":
+            mp.status = "in_progress"
+            mp.started_at = mp.started_at or now
+        mp.time_spent_seconds = (mp.time_spent_seconds or 0) + seconds
+        mp.last_viewed_at = now
+        if block_id:
+            mp.last_block_id = str(block_id)
+        progress_repo.upsert_module_progress(mp)
+
+    if block_id and module_id:
+        bp = progress_repo.get_block_progress(current_user.id, block_id, current_user.org_id)
+        if not bp:
+            bp = LessonBlockProgress(user_id=current_user.id, module_id=module_id, block_id=block_id, org_id=current_user.org_id, status="not_started")
+        bp.time_spent_seconds = (bp.time_spent_seconds or 0) + seconds
+        bp.last_viewed_at = now
+        progress_repo.upsert_block_progress(bp)
+
+    db.add(LearnerEvent(
+        user_id=current_user.id,
+        course_id=course_id,
+        module_id=module_id,
+        block_id=block_id,
+        event_type="HEARTBEAT",
+        schema_version="1.0",
+        payload_json={"time_spent_seconds": seconds, "source": "learning_session"},
+        created_at=now,
+        org_id=current_user.org_id,
+    ))
+
+
+@learner_router.post("/learning-sessions/start")
+def start_learning_session(
+    req: LearningSessionStartRequest,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if not EnrollmentRepository(db).has_access(current_user.id, req.course_id, current_user.org_id):
+        raise HTTPException(status_code=403, detail="Not enrolled or access denied")
+    now = datetime.now(timezone.utc)
+    session = LearningSession(
+        user_id=current_user.id,
+        course_id=req.course_id,
+        module_id=req.module_id,
+        section_id=_module_section_id(db, req.module_id, current_user.org_id),
+        block_id=req.block_id,
+        org_id=current_user.org_id,
+        started_at=now,
+        last_heartbeat_at=now,
+        status="active",
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return {"session": session.to_dict()}
+
+
+@learner_router.post("/learning-sessions/heartbeat")
+def heartbeat_learning_session(
+    req: LearningSessionHeartbeatRequest,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user),
+):
+    session = db.query(LearningSession).filter(
+        LearningSession.id == req.session_id,
+        LearningSession.user_id == current_user.id,
+        LearningSession.org_id == current_user.org_id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Learning session not found")
+    if session.status != "active":
+        raise HTTPException(status_code=409, detail="Learning session is closed")
+    if not EnrollmentRepository(db).has_access(current_user.id, req.course_id, current_user.org_id):
+        raise HTTPException(status_code=403, detail="Not enrolled or access denied")
+    seconds = max(0, min(int(req.active_seconds or 0), 90))
+    session.course_id = req.course_id
+    session.module_id = req.module_id
+    session.section_id = _module_section_id(db, req.module_id, current_user.org_id)
+    session.block_id = req.block_id
+    session.active_seconds = (session.active_seconds or 0) + seconds
+    session.last_heartbeat_at = datetime.now(timezone.utc)
+    _apply_active_seconds(
+        db,
+        current_user=current_user,
+        course_id=req.course_id,
+        module_id=req.module_id,
+        block_id=req.block_id,
+        active_seconds=seconds,
+    )
+    db.commit()
+    return {"session": session.to_dict()}
+
+
+@learner_router.post("/learning-sessions/end")
+def end_learning_session(
+    req: LearningSessionEndRequest,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user),
+):
+    session = db.query(LearningSession).filter(
+        LearningSession.id == req.session_id,
+        LearningSession.user_id == current_user.id,
+        LearningSession.org_id == current_user.org_id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Learning session not found")
+    if session.status == "active":
+        session.status = "ended"
+        session.ended_at = datetime.now(timezone.utc)
+        session.end_reason = req.reason or "ended"
+        db.commit()
+    return {"session": session.to_dict()}
 
 @learner_router.post("/events")
 def record_events(
@@ -862,6 +1051,7 @@ def submit_course(
     ))
     
     progress_repo.upsert_course_progress(cp)
+    PALScoreService(db).recompute_user(current_user.id, current_user.org_id)
     db.commit()
     
     # Auto-generate certificate
@@ -927,8 +1117,216 @@ def _resolve_block_for_learner(block_id: int, db: Session, user_id: str, org_id:
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+def _resolve_local_media_path(storage_key: str, org_id: int):
+    expected_prefix = f"/uploads/media/{org_id}/"
+    if not storage_key.startswith(expected_prefix):
+        raise HTTPException(status_code=404, detail="Media not found")
+    filename = storage_key[len(expected_prefix):]
+    org_dir = (media_upload_root() / str(org_id)).resolve()
+    candidate = (org_dir / filename).resolve()
+    try:
+        candidate.relative_to(org_dir)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Media not found") from exc
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Media not found")
+    return candidate
+
+def _inline_pdf_disposition(filename: str) -> str:
+    fallback = "".join(ch if ch.isalnum() or ch in ".-_" else "_" for ch in (filename or "document.pdf"))
+    quoted = quote(filename or fallback)
+    return f'inline; filename="{fallback}"; filename*=UTF-8\'\'{quoted}'
+
 class QuizSubmitRequest(BaseModel):
     answers: dict
+
+
+@learner_router.get("/blocks/{block_id}/pdf")
+def view_pdf_block(
+    block_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user),
+):
+    block, _ = _resolve_block_for_learner(block_id, db, current_user.id, current_user.org_id)
+    if block.get("block_type") != "pdf":
+        raise HTTPException(status_code=400, detail="Block is not a PDF")
+
+    settings = block.get("metadata_json") or block.get("settings") or {}
+    asset_id = block.get("media_asset_id") or settings.get("asset_id")
+    if not asset_id:
+        raise HTTPException(status_code=404, detail="PDF asset is not configured")
+    try:
+        asset_id = int(asset_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="PDF asset is not configured") from exc
+
+    asset = db.query(MediaAsset).filter(
+        MediaAsset.id == asset_id,
+        MediaAsset.org_id == current_user.org_id,
+        MediaAsset.deleted_at.is_(None),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="PDF asset not found")
+    if asset.mime_type != "application/pdf" and not asset.file_name.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Configured asset is not a PDF")
+
+    if asset.storage_key.startswith("/uploads/"):
+        path = _resolve_local_media_path(asset.storage_key, current_user.org_id)
+        return FileResponse(
+            path,
+            media_type="application/pdf",
+            filename=asset.file_name,
+            headers={
+                "Content-Disposition": _inline_pdf_disposition(asset.file_name),
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    from app.services.r2_client import generate_presigned_download_url
+    return RedirectResponse(generate_presigned_download_url(asset.storage_key), status_code=302)
+
+
+def _quiz_attempt_limit(settings: dict) -> int | None:
+    raw = settings.get("max_attempts", settings.get("attempt_limit", 0))
+    try:
+        value = int(raw or 0)
+    except (TypeError, ValueError):
+        value = 0
+    return value if value > 0 else None
+
+
+def _quiz_attempt_history(db: Session, *, user_id: str, org_id: int, course_id: str, block_id: int) -> list[dict]:
+    events = db.query(LearnerEvent).filter(
+        LearnerEvent.user_id == user_id,
+        LearnerEvent.org_id == org_id,
+        LearnerEvent.course_id == course_id,
+        LearnerEvent.block_id == block_id,
+        LearnerEvent.event_type == "QUIZ_SUBMITTED",
+    ).order_by(LearnerEvent.created_at.asc(), LearnerEvent.id.asc()).all()
+    history = []
+    for index, event in enumerate(events, start=1):
+        payload = event.payload_json or {}
+        score = float(payload.get("score") or 0)
+        history.append({
+            "attempt_id": event.id,
+            "attempt_number": int(payload.get("attempt_number") or index),
+            "attempt_date": event.created_at.isoformat() if event.created_at else None,
+            "score": score,
+            "status": "passed" if payload.get("passed") else "failed",
+            "passed": bool(payload.get("passed")),
+            "correct": payload.get("correct"),
+            "total": payload.get("total"),
+            "points_awarded": payload.get("points_awarded"),
+            "points_total": payload.get("points_total"),
+        })
+    return history
+
+
+def _quiz_stats_payload(settings: dict, history: list[dict]) -> dict:
+    max_attempts = _quiz_attempt_limit(settings)
+    attempts_used = len(history)
+    attempts_remaining = None if max_attempts is None else max(max_attempts - attempts_used, 0)
+    highest_score = max((attempt["score"] for attempt in history), default=0.0)
+    latest_score = history[-1]["score"] if history else None
+    best_attempt = max(history, key=lambda item: item["score"], default=None)
+    average_score = sum(attempt["score"] for attempt in history) / attempts_used if attempts_used else 0.0
+    completion_status = "completed" if any(attempt["passed"] for attempt in history) else "attempted" if history else "not_started"
+    return {
+        "maximum_attempts": max_attempts,
+        "max_attempts": max_attempts,
+        "attempts_used": attempts_used,
+        "attempts_remaining": attempts_remaining,
+        "highest_score": round(highest_score, 2),
+        "latest_score": round(latest_score, 2) if latest_score is not None else None,
+        "best_attempt": best_attempt,
+        "average_score": round(average_score, 2),
+        "completion_status": completion_status,
+        "attempt_history": history,
+    }
+
+
+@learner_router.get("/blocks/{block_id}/quiz/stats")
+async def get_quiz_stats(
+    block_id: int,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    block, course_id = _resolve_block_for_learner(block_id, db, current_user.id, current_user.org_id)
+    if block.get("block_type") not in ("quiz", "native_quiz"):
+        raise HTTPException(status_code=400, detail="Block is not a quiz")
+    settings = block.get("metadata_json", {})
+    history = _quiz_attempt_history(db, user_id=current_user.id, org_id=current_user.org_id, course_id=course_id, block_id=block_id)
+    return _quiz_stats_payload(settings, history)
+
+
+@learner_router.get("/admin/categories/{category_slug}/quiz-statistics")
+def get_category_quiz_statistics(
+    category_slug: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(require_admin),
+):
+    if current_user.role == "category_admin" and current_user.category_scope != category_slug:
+        raise HTTPException(status_code=403, detail="You do not have access to this category.")
+
+    learners = db.query(User).filter(
+        User.role == "learner",
+        User.category_scope == category_slug,
+        User.org_id == current_user.org_id,
+    ).order_by(User.full_name.asc()).all()
+    quiz_blocks = db.query(LessonBlock, CourseModule, Course).join(
+        CourseModule, LessonBlock.module_id == CourseModule.id
+    ).join(
+        Course, CourseModule.course_id == Course.id
+    ).filter(
+        LessonBlock.org_id == current_user.org_id,
+        Course.org_id == current_user.org_id,
+        Course.category_slug == category_slug,
+        LessonBlock.block_type.in_(("quiz", "native_quiz")),
+        LessonBlock.deleted_at.is_(None),
+        CourseModule.deleted_at.is_(None),
+    ).all()
+
+    rows = []
+    for learner in learners:
+        learner_attempts = []
+        for block, module, course in quiz_blocks:
+            settings = block.metadata_json or {}
+            history = _quiz_attempt_history(
+                db,
+                user_id=learner.id,
+                org_id=current_user.org_id,
+                course_id=course.id,
+                block_id=block.id,
+            )
+            stats = _quiz_stats_payload(settings, history)
+            learner_attempts.append({
+                "course_id": course.id,
+                "course_name": course.name,
+                "module_id": module.id,
+                "module_title": module.title,
+                "block_id": block.id,
+                "quiz_title": block.content or settings.get("title") or "Quiz",
+                **stats,
+            })
+        scores = [item["highest_score"] for item in learner_attempts if item["attempts_used"] > 0]
+        rows.append({
+            "learner": {
+                "id": learner.id,
+                "full_name": learner.full_name,
+                "email": learner.email,
+            },
+            "attempts_used": sum(item["attempts_used"] for item in learner_attempts),
+            "attempts_remaining": None if any(item["attempts_remaining"] is None for item in learner_attempts) else sum(item["attempts_remaining"] for item in learner_attempts),
+            "highest_score": round(max(scores), 2) if scores else 0.0,
+            "latest_score": next((item["latest_score"] for item in reversed(learner_attempts) if item["latest_score"] is not None), None),
+            "best_attempt": max((item["best_attempt"] for item in learner_attempts if item["best_attempt"]), key=lambda item: item["score"], default=None),
+            "average_score": round(sum(scores) / len(scores), 2) if scores else 0.0,
+            "completion_status": "completed" if any(item["completion_status"] == "completed" for item in learner_attempts) else "attempted" if scores else "not_started",
+            "quizzes": learner_attempts,
+        })
+
+    return {"rows": rows}
+
 
 @learner_router.post("/blocks/{block_id}/quiz/submit")
 async def submit_quiz(
@@ -946,7 +1344,7 @@ async def submit_quiz(
     if not questions:
         raise HTTPException(status_code=400, detail="Quiz has no questions")
 
-    max_attempts = int(settings.get("max_attempts") or 0)
+    max_attempts = _quiz_attempt_limit(settings)
     prior_attempts = db.query(LearnerEvent).filter(
         LearnerEvent.user_id == current_user.id,
         LearnerEvent.org_id == current_user.org_id,
@@ -954,8 +1352,8 @@ async def submit_quiz(
         LearnerEvent.block_id == block_id,
         LearnerEvent.event_type == "QUIZ_SUBMITTED",
     ).count()
-    if max_attempts > 0 and prior_attempts >= max_attempts:
-        raise HTTPException(status_code=403, detail="Maximum quiz attempts reached")
+    if max_attempts is not None and prior_attempts >= max_attempts:
+        raise HTTPException(status_code=403, detail="You have reached the maximum number of allowed attempts.")
 
     correct = 0
     total = len(questions)
@@ -1052,7 +1450,10 @@ async def submit_quiz(
             "source_event_id": quiz_event.id,
         },
     )
+    PALScoreService(db).recompute_user(current_user.id, current_user.org_id)
     db.commit()
+    history = _quiz_attempt_history(db, user_id=current_user.id, org_id=current_user.org_id, course_id=course_id, block_id=block_id)
+    stats = _quiz_stats_payload(settings, history)
     
     return {
         "score": score,
@@ -1061,7 +1462,12 @@ async def submit_quiz(
         "passed": passed,
         "attempt_number": prior_attempts + 1,
         "max_attempts": max_attempts,
-        "attempts_remaining": max(max_attempts - prior_attempts - 1, 0) if max_attempts > 0 else None,
+        "attempts_remaining": stats["attempts_remaining"],
+        "attempts_used": stats["attempts_used"],
+        "highest_score": stats["highest_score"],
+        "latest_score": stats["latest_score"],
+        "best_attempt": stats["best_attempt"],
+        "attempt_history": stats["attempt_history"],
         "question_results": question_results,
     }
 

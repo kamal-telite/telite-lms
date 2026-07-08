@@ -598,15 +598,19 @@ function SortableBlock({
                 />
               </label>
               <label className="field">
-                <span className="field__label">Max Attempts (0 = infinite)</span>
-                <input
+                <span className="field__label">Maximum Attempts</span>
+                <select
                   className="field__input"
-                  type="number"
-                  min="0"
-                  value={settings.max_attempts ?? 3}
-                  onChange={(e) => handleSettingsChange("max_attempts", Number(e.target.value))}
+                  value={Number(settings.max_attempts || 0) === 0 ? "unlimited" : String(settings.max_attempts)}
+                  onChange={(e) => handleSettingsChange("max_attempts", e.target.value === "unlimited" ? 0 : Number(e.target.value))}
                   disabled={isLocked}
-                />
+                >
+                  <option value="unlimited">Unlimited</option>
+                  {[1, 2, 3, 5].map((value) => <option key={value} value={value}>{value}</option>)}
+                  {Number(settings.max_attempts || 0) > 0 && ![1, 2, 3, 5].includes(Number(settings.max_attempts)) ? (
+                    <option value={settings.max_attempts}>{settings.max_attempts}</option>
+                  ) : null}
+                </select>
               </label>
             </div>
 

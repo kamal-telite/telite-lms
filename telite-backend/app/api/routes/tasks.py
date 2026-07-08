@@ -16,6 +16,9 @@ from app.repositories.notification_repo import NotificationRepository
 from app.core.notification_payloads import task_notification_metadata
 from app.core.rbac import ROLE_PERMISSIONS, Permission
 from app.models.notification import NotificationType
+from app.models.learner_event import LearnerEvent
+from app.services.pal_score_service import PALScoreService
+from datetime import datetime
 
 
 task_router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -320,6 +323,7 @@ def submit_task_work(
     )
     task.status = task_repo.task_status(assignment.status)
     response = task_repo.task_payload(task, assignment)
+    PALScoreService(db).recompute_user(actor.id, actor.org_id)
     db.commit()
     return response
 
@@ -368,6 +372,17 @@ def review_task(
             source_id=task.id,
             metadata=task_notification_metadata(task.id, assignment.id),
         )
+        if review_status == "approved":
+            db.add(LearnerEvent(
+                user_id=assignment.learner_id,
+                course_id=None,
+                event_type="TASK_APPROVED",
+                schema_version="1.0",
+                payload_json={"task_id": task.id, "assignment_id": assignment.id},
+                created_at=datetime.utcnow(),
+                org_id=task.org_id,
+            ))
+        PALScoreService(db).recompute_user(assignment.learner_id, task.org_id)
     response = task_repo.task_payload(task, assignment)
     db.commit()
     return response

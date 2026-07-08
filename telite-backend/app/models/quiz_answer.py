@@ -20,7 +20,7 @@ class GradingEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     attempt_id = Column(Integer, ForeignKey("quiz_attempts.id"), nullable=False, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    grader_id = Column(String(50), ForeignKey("users.id"), nullable=False)
+    grader_id = Column(String(50), nullable=True)
     previous_score = Column(Float, nullable=True)
     new_score = Column(Float, nullable=False)
     action = Column(String(50), nullable=False)

@@ -18,6 +18,14 @@ import {
 import { useLearnerStore } from "../../store/learnerStore";
 import { LearnerPlayer } from "../../components/player/LearnerPlayer";
 
+function formatLearningTime(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 function PalRing({ score, size = 120 }) {
   const radius = 50;
   const stroke = 8;
@@ -415,9 +423,9 @@ export default function LearnerPage({ session, onLogout }) {
 
             <div className="grid-4">
               <StatCard accent="#059669" label="Courses Completed" value={stats.courses_completed ?? 0} meta="Completed and archived" />
-              <StatCard accent="#D97706" label="Courses Remaining" value={stats.courses_remaining ?? Math.max(0, courses.length - (stats.courses_completed ?? 0))} meta="Keep pushing the modules" />
-              <StatCard accent="#2563EB" label="Avg Quiz Score" value={avgQuizScore} suffix="%" meta="Assessment consistency" />
-              <StatCard accent="#7C3AED" label="Cohort Rank" value={cohortRankLabel} meta="You lead the cohort" />
+              <StatCard accent="#D97706" label="Today's Learning Time" value={formatLearningTime(hero.today_time_seconds || 0)} meta="Active time only" />
+              <StatCard accent="#2563EB" label="Total Time Spent" value={`${Math.round(hero.time_spent_hours || 0)}h`} meta={hero.last_session ? "Last session recorded" : "No sessions yet"} />
+              <StatCard accent="#7C3AED" label="Assignment Status" value={hero.assignment_status ? titleize(String(hero.assignment_status).replace("_", " ")) : "None"} meta={`Rank ${cohortRankLabel}`} />
             </div>
 
             <Panel title="Recent Courses" subtitle="Resume where you left off" action={<button className="panel-link" onClick={() => changeSection({ id: 'section-courses' })}>View all →</button>}>
@@ -511,6 +519,12 @@ export default function LearnerPage({ session, onLogout }) {
         {/* PAL PROGRESS PAGE */}
         {activeNav === "section-pal" && (
           <section id="section-pal">
+            {(() => {
+              const palBreakdown = data.pal_breakdown || {};
+              const trend = palBreakdown.progress_trend || [];
+              const timeline = palBreakdown.completion_timeline || [];
+              return (
+                <>
             <div className="hero-banner" style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", padding: "40px 20px" }}>
               <div style={{ textAlign: "center", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
                 <PalRing score={Math.round(Number(hero.pal_score) || 0)} />
@@ -523,9 +537,10 @@ export default function LearnerPage({ session, onLogout }) {
             <Panel title="PAL Dimensions" subtitle="How your score is calculated">
                <div className="pal-list">
                  {[
-                   { label: "Course Completion", value: data.pal_breakdown?.completion || 0, weight: 0.3 },
-                   { label: "Quiz Average", value: data.pal_breakdown?.pal_quiz_avg || 0, weight: 0.3 },
-                   { label: "Task Completion", value: data.pal_breakdown?.task_completion || 0, weight: 0.2 },
+                   { label: "Course Completion", value: palBreakdown.completion || 0, weight: 0.3 },
+                   { label: "Quiz Average", value: palBreakdown.pal_quiz_avg || 0, weight: 0.3 },
+                   { label: "Assignment Average", value: palBreakdown.assignment_average || 0, weight: 0.2 },
+                   { label: "Task Completion", value: palBreakdown.task_completion || 0, weight: 0.2 },
                  ].map((dim) => (
                    <div className="pal-item" key={dim.label}>
                      <div className="pal-item__info">
@@ -542,6 +557,46 @@ export default function LearnerPage({ session, onLogout }) {
                  ))}
                </div>
             </Panel>
+            <div className="grid-4" style={{ marginTop: 18 }}>
+              <StatCard accent="#2563EB" label="Current Rank" value={palBreakdown.current_rank ? `#${palBreakdown.current_rank}` : "-"} meta="Category leaderboard" />
+              <StatCard accent="#059669" label="Leaderboard Position" value={palBreakdown.leaderboard_position ? `#${palBreakdown.leaderboard_position}` : "-"} meta="Dynamic PAL score" />
+              <StatCard accent="#7C3AED" label="Highest Strength" value={(palBreakdown.strengths || [])[0] || "Building"} meta={`${(palBreakdown.strengths || []).length} strong areas`} />
+              <StatCard accent="#D97706" label="Focus Area" value={(palBreakdown.weak_areas || [])[0] || "Balanced"} meta={`${(palBreakdown.weak_areas || []).length} weak areas`} />
+            </div>
+            <div className="grid-2" style={{ marginTop: 18 }}>
+              <Panel title="Progress Trend" subtitle="Recent learning activity">
+                {trend.length ? (
+                  <ChartCanvas
+                    type="bar"
+                    height={180}
+                    labels={trend.map((item) => item.label)}
+                    datasets={[{ label: "Activity", data: trend.map((item) => item.value), backgroundColor: "#2563EB", borderRadius: 8 }]}
+                  />
+                ) : (
+                  <EmptyState title="No trend yet" body="Learning activity will appear here automatically." />
+                )}
+              </Panel>
+              <Panel title="Completion Timeline" subtitle="Latest modules, quizzes, and submissions">
+                {timeline.length ? (
+                  <div className="activity-list">
+                    {timeline.slice(0, 5).map((item, index) => (
+                      <div className="activity-item" key={`${item.type}-${item.created_at}-${index}`}>
+                        <div className="activity-item__main">
+                          <div className="activity-item__title">{titleize(String(item.type || "").replaceAll("_", " "))}</div>
+                          <div className="activity-item__meta">{item.created_at ? formatDateTime(item.created_at) : "Recently"}</div>
+                        </div>
+                        {item.payload?.score !== undefined ? <Badge tone="info">{Math.round(item.payload.score)}%</Badge> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState title="No completions yet" body="Completed activities will appear here automatically." />
+                )}
+              </Panel>
+            </div>
+                </>
+              );
+            })()}
           </section>
         )}
 
@@ -554,39 +609,96 @@ export default function LearnerPage({ session, onLogout }) {
               gradingAnalytics.has_grades ? (
                 <>
                   <div className="grid-4">
-                    <StatCard accent="#7C3AED" label="Final Grade" value={`${gradingAnalytics.final_grade}%`} meta="Overall average" />
-                    <StatCard accent="#2563EB" label="Current Percentage" value={`${gradingAnalytics.current_percentage}%`} meta="Most recent course" />
+                    <StatCard accent="#7C3AED" label="Overall Grade" value={gradingAnalytics.overall_grade || `${gradingAnalytics.final_grade}%`} meta={`${gradingAnalytics.final_grade}% overall`} />
+                    <StatCard accent="#2563EB" label="Completed Assessments" value={gradingAnalytics.completed_assessments || 0} meta={`${gradingAnalytics.pending_evaluations || 0} pending`} />
                     <StatCard accent="#059669" label="Quiz Average" value={`${gradingAnalytics.quiz_average}%`} meta="Assessment performance" />
                     <StatCard accent="#F59E0B" label="Assignment Average" value={`${gradingAnalytics.assignment_average}%`} meta="Task performance" />
                   </div>
+                  <div className="grid-4" style={{ marginTop: 18 }}>
+                    <StatCard accent="#2563EB" label="Overall Percentage" value={`${gradingAnalytics.current_percentage}%`} meta="Live gradebook average" />
+                    <StatCard accent="#059669" label="Highest Score" value={`${gradingAnalytics.highest_score || 0}%`} meta="Best assessment" />
+                    <StatCard accent="#DC2626" label="Lowest Score" value={`${gradingAnalytics.lowest_score || 0}%`} meta="Lowest graded item" />
+                    <StatCard accent="#7C3AED" label="Status" value={gradingAnalytics.pass_fail_status} meta="Current standing" />
+                  </div>
 
-                  <Panel title="Pass/Fail Status" subtitle="Your overall standing" style={{ marginTop: 18 }}>
-                    <div className="soft-card" style={{ textAlign: "center", padding: 32 }}>
-                      <div className="row-title" style={{ fontSize: "16px", marginBottom: 8 }}>Overall Status</div>
-                      <Badge tone={gradingAnalytics.pass_fail_status === "Pass" ? "success" : "danger"} style={{ fontSize: "24px", padding: "12px 32px" }}>
-                        {gradingAnalytics.pass_fail_status}
-                      </Badge>
-                    </div>
+                  <Panel title="Assessment Grades" subtitle="Quizzes, assignments, feedback, and evaluation status" style={{ marginTop: 18 }}>
+                    {(gradingAnalytics.assessments || []).length ? (
+                      <div className="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Course</th>
+                              <th>Assessment</th>
+                              <th>Type</th>
+                              <th style={{ textAlign: "right" }}>Marks</th>
+                              <th style={{ textAlign: "right" }}>Percentage</th>
+                              <th>Grade</th>
+                              <th>Status</th>
+                              <th>Submitted</th>
+                              <th>Evaluated</th>
+                              <th>Evaluator</th>
+                              <th>Feedback</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(gradingAnalytics.assessments || []).map((item) => (
+                              <tr key={item.id}>
+                                <td>{item.course_name}</td>
+                                <td>
+                                  <div className="row-title">{item.assessment_name || item.quiz_name || item.assignment_name}</div>
+                                  {item.attempt_number ? <div className="row-subtitle">Attempt {item.attempt_number}{item.attempts_remaining !== null && item.attempts_remaining !== undefined ? ` · ${item.attempts_remaining} left` : ""}</div> : null}
+                                </td>
+                                <td>{item.assessment_type}</td>
+                                <td className="mono" style={{ textAlign: "right" }}>{item.marks_obtained ?? "-"} / {item.maximum_marks ?? "-"}</td>
+                                <td className="mono" style={{ textAlign: "right", color: item.percentage !== null && item.percentage !== undefined ? getScoreColor(item.percentage) : undefined, fontWeight: 700 }}>
+                                  {item.percentage !== null && item.percentage !== undefined ? `${item.percentage}%` : "-"}
+                                </td>
+                                <td>{item.grade || "-"}</td>
+                                <td><Badge tone={item.status === "graded" || item.status === "approved" ? "success" : item.status === "rejected" ? "danger" : "warn"}>{titleize(String(item.status || "pending").replace("_", " "))}</Badge></td>
+                                <td className="mono">{item.submission_date ? formatDateTime(item.submission_date) : "-"}</td>
+                                <td className="mono">{item.evaluation_date ? formatDateTime(item.evaluation_date) : "-"}</td>
+                                <td>{item.evaluator_name || "-"}</td>
+                                <td>{item.feedback || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <EmptyState title="No assessment grades yet" body="Quiz and assignment grades will appear here after evaluation." />
+                    )}
                   </Panel>
 
-                  <Panel title="Grade Summary" subtitle="Breakdown by course" style={{ marginTop: 18 }}>
+                  <Panel title="Course Grades" subtitle="Course completion and assessment averages" style={{ marginTop: 18 }}>
                     <div className="table-wrap">
                       <table>
                         <thead>
                           <tr>
                             <th>Course</th>
-                            <th style={{ textAlign: "right" }}>Grade</th>
-                            <th style={{ textAlign: "right" }}>Status</th>
+                            <th style={{ textAlign: "right" }}>Completion</th>
+                            <th style={{ textAlign: "right" }}>Quiz Avg</th>
+                            <th style={{ textAlign: "right" }}>Assignment Avg</th>
+                            <th style={{ textAlign: "right" }}>Course Grade</th>
+                            <th>Certificate</th>
+                            <th>Status</th>
                           </tr>
                         </thead>
                         <tbody>
                           {gradingAnalytics.grade_summary.map((grade, idx) => (
                             <tr key={idx}>
                               <td>{grade.course_name}</td>
+                              <td className="mono" style={{ textAlign: "right" }}>{formatPercent(grade.completion_percentage || 0)}</td>
+                              <td className="mono" style={{ textAlign: "right" }}>{formatPercent(grade.average_quiz_score || 0)}</td>
+                              <td className="mono" style={{ textAlign: "right" }}>{formatPercent(grade.average_assignment_score || 0)}</td>
                               <td className="mono" style={{ textAlign: "right", color: getScoreColor(grade.percentage), fontWeight: 700 }}>
-                                {grade.percentage}%
+                                {grade.percentage}% {grade.display_grade ? `(${grade.display_grade})` : ""}
                               </td>
-                              <td style={{ textAlign: "right" }}>
+                              <td>
+                                <Badge tone={grade.certificate_eligibility ? "success" : "neutral"}>
+                                  {grade.certificate_eligibility ? "Eligible" : "Not yet"}
+                                </Badge>
+                              </td>
+                              <td>
                                 <Badge tone={grade.passed ? "success" : "danger"}>
                                   {grade.passed ? "Pass" : "Fail"}
                                 </Badge>
@@ -616,18 +728,6 @@ export default function LearnerPage({ session, onLogout }) {
                         scales: { y: { beginAtZero: true, max: 100 } },
                       }}
                     />
-                  </Panel>
-
-                  <Panel title="Course Grade" subtitle="Your most recent course performance" style={{ marginTop: 18 }}>
-                    <div className="soft-card">
-                      <div className="row-title">Current Course Grade</div>
-                      <div className="row-subtitle mono" style={{ fontSize: "48px", fontWeight: 700, color: getScoreColor(gradingAnalytics.current_percentage) }}>
-                        {gradingAnalytics.current_percentage}%
-                      </div>
-                      <div className="row-subtitle" style={{ marginTop: 8 }}>
-                        {gradingAnalytics.pass_fail_status === "Pass" ? "You are passing!" : "Keep working to improve your grade."}
-                      </div>
-                    </div>
                   </Panel>
                 </>
               ) : (

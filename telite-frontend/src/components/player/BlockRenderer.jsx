@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api } from "../../services/client";
+import { api, fetchQuizStats } from "../../services/client";
 
 const richTextThemeStyles = `
   .native-block-content,
@@ -242,8 +242,77 @@ function H5PBlock({ title, src, filename, courseId, moduleId, blockId, assetId, 
   );
 }
 
-function PdfBlock({ title, src, filename }) {
-  if (!src) {
+function PdfBlock({ title, src, filename, blockId, allowDownload = true }) {
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [directUrl, setDirectUrl] = useState("");
+  const [loading, setLoading] = useState(Boolean(blockId || src));
+  const [error, setError] = useState("");
+  const frameRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+    const endpoint = blockId ? `/api/v1/learner/blocks/${blockId}/pdf` : src;
+    if (!endpoint) {
+      setLoading(false);
+      setPdfUrl("");
+      setDirectUrl("");
+      return undefined;
+    }
+
+    setDirectUrl(api.getUri({ url: endpoint }));
+    setLoading(true);
+    setError("");
+    api.get(endpoint, { responseType: "blob" })
+      .then((response) => {
+        if (cancelled) return;
+        const contentType = response.headers?.["content-type"] || response.data?.type || "";
+        if (!String(contentType).includes("application/pdf")) {
+          throw new Error("The server did not return a PDF file.");
+        }
+        objectUrl = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+        setPdfUrl(objectUrl);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPdfUrl("");
+        setError(err?.response?.data?.detail || err?.message || "Unable to load this PDF.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [blockId, src]);
+
+  const openPdf = () => {
+    const targetUrl = directUrl || pdfUrl;
+    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const downloadPdf = () => {
+    if (!pdfUrl) return;
+    const link = document.createElement("a");
+    link.href = pdfUrl;
+    link.download = filename || `${title || "document"}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const toggleFullscreen = () => {
+    const target = frameRef.current?.parentElement;
+    if (target?.requestFullscreen) {
+      target.requestFullscreen();
+    } else {
+      openPdf();
+    }
+  };
+
+  if (!blockId && !src) {
     return (
       <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-muted)" }}>
         PDF is not configured.
@@ -259,15 +328,33 @@ function PdfBlock({ title, src, filename }) {
           {filename ? <div style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "2px" }}>{filename}</div> : null}
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <a href={src} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", fontWeight: 700 }}>Open</a>
-          <a href={src} download style={{ color: "var(--primary)", fontWeight: 700 }}>Download</a>
+          <button type="button" className="link-button" onClick={openPdf} disabled={!pdfUrl} style={{ color: "var(--primary)", fontWeight: 700 }}>Open</button>
+          <button type="button" className="link-button" onClick={toggleFullscreen} disabled={!pdfUrl} style={{ color: "var(--primary)", fontWeight: 700 }}>Full Screen</button>
+          {allowDownload ? (
+            <button type="button" className="link-button" onClick={downloadPdf} disabled={!pdfUrl} style={{ color: "var(--primary)", fontWeight: 700 }}>Download</button>
+          ) : null}
         </div>
       </div>
-      <iframe
-        src={src}
-        title={title || filename || "PDF document"}
-        style={{ width: "100%", height: "680px", border: 0, display: "block", background: "var(--surface-bg)" }}
-      />
+      {loading ? (
+        <div style={{ minHeight: "360px", display: "grid", placeItems: "center", color: "var(--text-muted)", background: "var(--surface-bg)" }}>
+          Loading PDF...
+        </div>
+      ) : error ? (
+        <div style={{ minHeight: "260px", padding: "24px", display: "grid", placeItems: "center", textAlign: "center", color: "var(--text-muted)", background: "var(--surface-bg)" }}>
+          <div>
+            <div style={{ fontWeight: 700, color: "var(--text-primary)", marginBottom: "6px" }}>PDF could not be loaded</div>
+            <div>{error}</div>
+          </div>
+        </div>
+      ) : (
+        <iframe
+          ref={frameRef}
+          src={pdfUrl}
+          title={title || filename || "PDF document"}
+          style={{ width: "100%", height: "min(78vh, 760px)", minHeight: "520px", border: 0, display: "block", background: "var(--surface-bg)" }}
+          onError={() => setError("The browser could not display this PDF. Use Open to view it in a new tab.")}
+        />
+      )}
     </div>
   );
 }
@@ -563,7 +650,7 @@ function renderNativeBlock(block, courseId, moduleId) {
     case "audio":
       return <AudioBlock src={settings.url} />;
     case "pdf":
-      return <PdfBlock title={block.content} src={settings.url} filename={settings.filename} />;
+      return <PdfBlock title={block.content} src={settings.url} filename={settings.filename} blockId={block.id} allowDownload={settings.allow_download !== false} />;
     case "scorm":
       return <ScormBlock title={block.content} src={settings.url} filename={settings.filename} />;
     case "h5p":
@@ -810,8 +897,6 @@ export function PollBlock({ blockId, courseId, moduleId, settings }) {
 }
 
 export function FlashcardBlock({ blockId, courseId, moduleId, settings }) {
-  console.log("FLASHCARD SETTINGS", settings);
-  console.log(JSON.stringify(settings, null, 2));
   const [cards, setCards] = React.useState([]);
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [isFlipped, setIsFlipped] = React.useState(false);
@@ -1060,11 +1145,16 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
   const [answers, setAnswers] = React.useState({});
   const [submitted, setSubmitted] = React.useState(false);
   const [result, setResult] = React.useState(null);
+  const [stats, setStats] = React.useState(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [loadingStats, setLoadingStats] = React.useState(false);
 
   const questions = settings?.questions || [];
   const passingScore = settings?.passing_score || 80;
   const maxAttempts = Number(settings?.max_attempts || 0);
+  const effectiveMaxAttempts = stats?.maximum_attempts ?? (maxAttempts > 0 ? maxAttempts : null);
+  const attemptsUsed = stats?.attempts_used ?? 0;
+  const attemptsRemaining = stats?.attempts_remaining ?? (effectiveMaxAttempts ? Math.max(effectiveMaxAttempts - attemptsUsed, 0) : null);
   const questionResults = React.useMemo(() => {
     const byQuestion = {};
     (result?.question_results || []).forEach((item) => {
@@ -1072,6 +1162,22 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
     });
     return byQuestion;
   }, [result]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoadingStats(true);
+    fetchQuizStats(blockId)
+      .then((data) => {
+        if (!cancelled) setStats(data);
+      })
+      .catch(() => {
+        if (!cancelled) setStats(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStats(false);
+      });
+    return () => { cancelled = true; };
+  }, [blockId]);
 
   const handleOptionSelect = (qId, optId) => {
     if (submitted) return;
@@ -1089,6 +1195,17 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
     try {
       const { data } = await api.post(`/api/v1/learner/blocks/${blockId}/quiz/submit`, { answers });
       setResult(data);
+      setStats({
+        ...(stats || {}),
+        maximum_attempts: data.max_attempts,
+        max_attempts: data.max_attempts,
+        attempts_used: data.attempts_used,
+        attempts_remaining: data.attempts_remaining,
+        highest_score: data.highest_score,
+        latest_score: data.latest_score,
+        best_attempt: data.best_attempt,
+        attempt_history: data.attempt_history || [],
+      });
       setSubmitted(true);
     } catch (err) {
       const detail = err?.response?.data?.detail || "Error submitting quiz.";
@@ -1098,7 +1215,8 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
   };
 
   const allAnswered = Object.keys(answers).length === questions.length;
-  const attemptsExhausted = result?.attempts_remaining === 0 && maxAttempts > 0 && !result?.passed;
+  const attemptsExhausted = attemptsRemaining === 0 && effectiveMaxAttempts !== null && !result?.passed;
+  const history = stats?.attempt_history || result?.attempt_history || [];
 
   return (
     <div style={{ padding: "24px", borderRadius: "8px", background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", margin: "1em 0" }}>
@@ -1107,6 +1225,7 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
       </div>
       <div style={{ fontSize: "14px", color: "var(--text-muted)", marginBottom: "24px" }}>
         Passing Score: {passingScore}%{maxAttempts > 0 ? ` · Max Attempts: ${maxAttempts}` : " · Unlimited Attempts"}
+        {loadingStats ? " · Loading attempts..." : effectiveMaxAttempts ? ` · Attempts Left: ${attemptsRemaining} / ${effectiveMaxAttempts}` : " · Attempts Left: Unlimited"}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -1175,6 +1294,11 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
 
       <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         {!submitted ? (
+          attemptsExhausted ? (
+            <div style={{ padding: "10px 14px", color: "var(--error)", background: "var(--error-bg)", border: "1px solid var(--error)", borderRadius: "6px", fontWeight: 500 }}>
+              You have reached the maximum number of allowed attempts.
+            </div>
+          ) : (
           <button
             onClick={handleSubmit}
             disabled={!allAnswered || isSubmitting}
@@ -1190,6 +1314,7 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
           >
             {isSubmitting ? "Submitting..." : "Submit Quiz"}
           </button>
+          )
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px", width: "100%" }}>
             <div style={{ flex: "1 1 auto", minWidth: "200px" }}>
@@ -1198,7 +1323,7 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
               </div>
               <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px" }}>
                 {result?.passed ? "Great job! Your score meets the passing requirement." : "You did not meet the passing score requirement."}
-                {maxAttempts > 0 && result?.attempts_remaining !== undefined ? ` Attempts remaining: ${result.attempts_remaining}.` : ""}
+                {effectiveMaxAttempts ? ` Attempts remaining: ${attemptsRemaining}.` : ""}
               </div>
             </div>
             {!result?.passed && !attemptsExhausted && (
@@ -1217,6 +1342,33 @@ export function QuizBlock({ blockId, courseId, moduleId, settings }) {
           </div>
         )}
       </div>
+      {history.length > 0 && (
+        <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: "1px solid var(--border-subtle)" }}>
+          <div style={{ fontWeight: 600, marginBottom: "10px" }}>Attempt History</div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Attempt</th>
+                  <th>Date</th>
+                  <th style={{ textAlign: "right" }}>Score</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((attempt) => (
+                  <tr key={attempt.attempt_id || attempt.attempt_number}>
+                    <td className="mono">{attempt.attempt_number}</td>
+                    <td>{attempt.attempt_date ? new Date(attempt.attempt_date).toLocaleString() : "-"}</td>
+                    <td className="mono" style={{ textAlign: "right" }}>{Math.round(attempt.score)}%</td>
+                    <td>{attempt.status === "passed" ? "Passed" : "Failed"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
