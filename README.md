@@ -128,10 +128,10 @@ Important variables:
 
 Telite LMS uses one PostgreSQL server with two logically isolated databases in Docker and PostgreSQL-backed environments:
 
-| Database | Owner | Used By |
-| --- | --- | --- |
-| `moodle` | `moodleuser` | Moodle PHP application |
-| `telite_backend` | `telite_backend_user` | FastAPI backend |
+| Database           | Owner                   | Used By                |
+| ------------------ | ----------------------- | ---------------------- |
+| `moodle`         | `moodleuser`          | Moodle PHP application |
+| `telite_backend` | `telite_backend_user` | FastAPI backend        |
 
 Critical rules:
 

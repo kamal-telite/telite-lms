@@ -43,10 +43,12 @@ class StorageService:
         """
         Returns the public URL for a storage key.
         
-        For local disk storage, returns the static file URL path.
+        For local disk storage, returns the absolute URL to avoid React Router interception.
         Files are served via the /uploads static mount configured in main.py
         """
-        return f"/uploads/media/{storage_key}"
+        from app.core.runtime import get_api_base_url
+        base_url = get_api_base_url()
+        return f"{base_url}/uploads/media/{storage_key}"
     
     def get_storage_path(self, storage_key: str) -> Path:
         """

@@ -28,7 +28,10 @@ def _apply_builder_tenant_context(db: Session, current_user: TokenData) -> None:
 
 def _download_url_for_asset(asset: MediaAsset) -> str:
     if asset.object_key.startswith("/uploads/"):
-        return asset.object_key
+        # Return absolute URL for local files to avoid React Router interception
+        from app.core.runtime import get_api_base_url
+        base_url = get_api_base_url()
+        return f"{base_url}{asset.object_key}"
     return generate_presigned_download_url(asset.object_key)
 
 

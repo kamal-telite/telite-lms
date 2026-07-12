@@ -113,6 +113,10 @@ def _download_url_for(asset: MediaAsset) -> str:
         from app.core.runtime import get_api_base_url
         base_url = get_api_base_url()
         return f"{base_url}{asset.object_key}"
+    elif asset.object_key.startswith("org_"):
+        from app.core.runtime import get_api_base_url
+        base_url = get_api_base_url()
+        return f"{base_url}/uploads/media/{asset.object_key}"
     return generate_presigned_download_url(asset.object_key)
 
 def _usage_count(db: Session, asset_id: int, org_id: int) -> int:

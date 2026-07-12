@@ -28,8 +28,5 @@ def require_env(name: str) -> str:
 
 def get_api_base_url() -> str:
     """Get the base URL for the API (used for absolute URLs in media responses)."""
-    # In development, use localhost with the backend port
-    if is_development():
-        return os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
-    # In production, use the configured base URL or infer from environment
     return os.getenv("API_BASE_URL", "").rstrip("/")
+

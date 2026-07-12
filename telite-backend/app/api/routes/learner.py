@@ -1118,11 +1118,19 @@ def _resolve_block_for_learner(block_id: int, db: Session, user_id: str, org_id:
         raise HTTPException(status_code=404, detail=str(e))
 
 def _resolve_local_media_path(storage_key: str, org_id: int):
-    expected_prefix = f"/uploads/media/{org_id}/"
-    if not storage_key.startswith(expected_prefix):
-        raise HTTPException(status_code=404, detail="Media not found")
-    filename = storage_key[len(expected_prefix):]
-    org_dir = (media_upload_root() / str(org_id)).resolve()
+    if storage_key.startswith("org_"):
+        expected_prefix = f"org_{org_id}/"
+        if not storage_key.startswith(expected_prefix):
+            raise HTTPException(status_code=404, detail="Media not found")
+        filename = storage_key[len(expected_prefix):]
+        org_dir = (media_upload_root() / f"org_{org_id}").resolve()
+    else:
+        expected_prefix = f"/uploads/media/{org_id}/"
+        if not storage_key.startswith(expected_prefix):
+            raise HTTPException(status_code=404, detail="Media not found")
+        filename = storage_key[len(expected_prefix):]
+        org_dir = (media_upload_root() / str(org_id)).resolve()
+
     candidate = (org_dir / filename).resolve()
     try:
         candidate.relative_to(org_dir)
@@ -1170,7 +1178,7 @@ def view_pdf_block(
     if asset.mime_type != "application/pdf" and not asset.file_name.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Configured asset is not a PDF")
 
-    if asset.storage_key.startswith("/uploads/"):
+    if asset.storage_key.startswith("/uploads/") or asset.storage_key.startswith("org_"):
         path = _resolve_local_media_path(asset.storage_key, current_user.org_id)
         return FileResponse(
             path,
@@ -1590,7 +1598,10 @@ def download_resource(
     # Generate download URL
     from app.services.r2_client import generate_presigned_download_url
     if asset.storage_key.startswith("/uploads/"):
-        url = asset.storage_key
+        # Return absolute URL for local files to avoid React Router interception
+        from app.core.runtime import get_api_base_url
+        base_url = get_api_base_url()
+        url = f"{base_url}{asset.storage_key}"
     else:
         url = generate_presigned_download_url(asset.storage_key)
     

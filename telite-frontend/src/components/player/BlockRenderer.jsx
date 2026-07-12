@@ -102,11 +102,6 @@ function VideoBlock({ src, courseId, moduleId, blockId }) {
       >
         <a href={src} target="_blank" rel="noreferrer">Open video</a>
       </video>
-      <div style={{ marginTop: "8px" }}>
-        <a href={src} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", fontWeight: 700 }}>
-          Open video in new tab
-        </a>
-      </div>
     </div>
   );
 }
@@ -641,8 +636,19 @@ function renderNativeBlock(block, courseId, moduleId) {
     case "heading":
       return <h2 style={{ margin: "1em 0 0.5em 0", fontSize: "1.8rem", fontWeight: 600 }}>{block.content}</h2>;
     case "text":
-    case "paragraph":
+    case "paragraph": {
+      const isHtml = /<[a-z][\s\S]*>/i.test(block.content || "");
+      if (isHtml) {
+        return (
+          <div 
+            className="rich-text-content" 
+            style={{ color: "var(--text-primary)" }} 
+            dangerouslySetInnerHTML={{ __html: block.content }} 
+          />
+        );
+      }
       return <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{block.content}</p>;
+    }
     case "image":
       return <img src={settings.url} alt={settings.alt || ""} style={{ maxWidth: "100%", height: "auto", borderRadius: "8px", margin: "1em 0" }} />;
     case "video":

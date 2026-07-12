@@ -23,6 +23,7 @@ import { MediaLibrary } from "./MediaLibrary";
 import QuestionBankPicker from "../../components/authoring/QuestionBankPicker";
 import { useParams } from "react-router-dom";
 import { checkStaleQuestions } from "../../services/client";
+import RichTextEditor from "../../components/authoring/RichTextEditor";
 
 function blockKey(block) {
   return block.id || block._tempId;
@@ -243,11 +244,7 @@ function SortableBlock({
         )}
 
         {(block.block_type === "text" || block.block_type === "paragraph") && (
-          <textarea
-            ref={inputRef}
-            className="field__input"
-            style={{ minHeight: "100px", resize: "vertical" }}
-            placeholder="Enter text content..."
+          <RichTextEditor
             value={block.content || ""}
             onChange={handleContentChange}
             disabled={isLocked}

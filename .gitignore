@@ -52,6 +52,7 @@ inventory.json
 validation_output.txt
 lint-*.txt
 lint-report*.txt
+.tmp/
 
 # Environment files and credentials
 .env

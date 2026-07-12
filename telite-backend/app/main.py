@@ -276,14 +276,22 @@ def create_app() -> FastAPI:
 
     @app.get("/uploads/media/{org_id}/{filename:path}", include_in_schema=False)
     def secure_local_media(
-        org_id: int,
+        org_id: str,
         filename: str,
         current_user: TokenData = Depends(get_current_user),
     ):
-        if not current_user.is_platform_admin and current_user.org_id != org_id:
+        try:
+            if org_id.startswith("org_"):
+                url_org_id = int(org_id.split("_")[1])
+            else:
+                url_org_id = int(org_id)
+        except (ValueError, IndexError):
             raise HTTPException(status_code=404, detail="Media not found")
 
-        org_dir = (media_dir / str(org_id)).resolve()
+        if not current_user.is_platform_admin and current_user.org_id != url_org_id:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        org_dir = (media_dir / org_id).resolve()
         candidate = (org_dir / filename).resolve()
         try:
             candidate.relative_to(org_dir)

@@ -253,6 +253,8 @@ services:
       MOODLE_INTERNAL_URL: http://moodle
       MOODLE_URL: ${MOODLE_URL:-http://localhost:8082}
       MOODLE_MODE: ${MOODLE_MODE:-mock}
+    volumes:
+      - ${TELITE_UPLOADS_VOLUME:-telite-lms_uploads}:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
