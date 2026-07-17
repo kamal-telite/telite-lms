@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, fetchQuizStats } from "../../services/client";
+import { getEmbedUrl } from "../../utils/embedUtils";
 
 const richTextThemeStyles = `
   .native-block-content,
@@ -116,7 +117,7 @@ function AudioBlock({ src }) {
   );
 }
 
-function EmbedBlock({ title, src }) {
+function EmbedBlock({ title, src, sandbox_policy }) {
   if (!src) {
     return (
       <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface-raised)", border: "1px solid var(--border-subtle)" }}>
@@ -125,16 +126,21 @@ function EmbedBlock({ title, src }) {
     );
   }
 
+  const embedSrc = getEmbedUrl(src);
+
   return (
     <div style={{ margin: "1em 0" }}>
       {title ? <div style={{ fontWeight: 600, marginBottom: "8px" }}>{title}</div> : null}
-      <iframe
-        src={src}
-        title={title || "Embedded content"}
-        loading="lazy"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        style={{ width: "100%", minHeight: "420px", border: "1px solid var(--border-subtle)", borderRadius: "8px" }}
-      />
+      <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+        <iframe
+          src={embedSrc}
+          title={title || "Embedded content"}
+          loading="lazy"
+          sandbox={sandbox_policy || "allow-scripts allow-same-origin allow-forms allow-popups"}
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+          allowFullScreen
+        />
+      </div>
     </div>
   );
 }
@@ -649,8 +655,113 @@ function renderNativeBlock(block, courseId, moduleId) {
       }
       return <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{block.content}</p>;
     }
-    case "image":
-      return <img src={settings.url} alt={settings.alt || ""} style={{ maxWidth: "100%", height: "auto", borderRadius: "8px", margin: "1em 0" }} />;
+    case "image": {
+      const getImageStyle = () => {
+        const style = {
+          maxWidth: "100%",
+          height: "auto",
+          display: "block",
+        };
+
+        // Apply width
+        if (settings.width) {
+          style.width = settings.width;
+        }
+
+        // Apply height if specified
+        if (settings.height) {
+          style.height = settings.height;
+        } else if (settings.maintain_aspect_ratio !== false) {
+          style.height = "auto";
+        }
+
+        // Apply alignment
+        if (settings.alignment === "center") {
+          style.marginLeft = "auto";
+          style.marginRight = "auto";
+        } else if (settings.alignment === "left") {
+          style.marginRight = "auto";
+        } else if (settings.alignment === "right") {
+          style.marginLeft = "auto";
+        }
+
+        // Apply margins
+        if (settings.margin_top) style.marginTop = settings.margin_top;
+        if (settings.margin_bottom) style.marginBottom = settings.margin_bottom;
+        if (settings.margin_left) style.marginLeft = settings.margin_left;
+        if (settings.margin_right) style.marginRight = settings.margin_right;
+
+        // Apply border radius
+        if (settings.border_radius) {
+          style.borderRadius = settings.border_radius;
+        } else {
+          style.borderRadius = "8px";
+        }
+
+        // Apply border
+        if (settings.border_style && settings.border_style !== "none") {
+          style.borderStyle = settings.border_style;
+          if (settings.border_width) style.borderWidth = settings.border_width;
+          if (settings.border_color) style.borderColor = settings.border_color;
+        }
+
+        // Apply shadow
+        if (settings.shadow && settings.shadow !== "none") {
+          const shadows = {
+            small: "0 2px 4px rgba(0,0,0,0.1)",
+            medium: "0 4px 8px rgba(0,0,0,0.15)",
+            large: "0 8px 16px rgba(0,0,0,0.2)",
+          };
+          style.boxShadow = shadows[settings.shadow] || shadows.medium;
+        }
+
+        // Apply responsive behavior
+        if (settings.responsive !== false) {
+          style.maxWidth = "100%";
+          style.height = "auto";
+        }
+
+        return style;
+      };
+
+      const getImageWrapperStyle = () => {
+        const wrapperStyle = {};
+
+        // Apply position
+        if (settings.position === "inline") {
+          wrapperStyle.display = "inline-block";
+          wrapperStyle.verticalAlign = "middle";
+        } else if (settings.position === "above" || settings.position === "below" || settings.position === "between") {
+          wrapperStyle.display = "block";
+          wrapperStyle.textAlign = settings.alignment === "center" ? "center" : 
+                                  settings.alignment === "right" ? "right" : "left";
+        }
+
+        return wrapperStyle;
+      };
+
+      return (
+        <div style={getImageWrapperStyle()}>
+          <img 
+            src={settings.url} 
+            alt={settings.alt_text || settings.alt || ""} 
+            style={getImageStyle()} 
+          />
+          {settings.caption && (
+            <div style={{ 
+              marginTop: "8px", 
+              fontSize: "14px", 
+              color: "var(--text-secondary)",
+              textAlign: settings.alignment === "center" ? "center" : 
+                       settings.alignment === "right" ? "right" : "left",
+              fontStyle: "italic"
+            }}>
+              {settings.caption}
+            </div>
+          )}
+        </div>
+      );
+    }
     case "video":
       return <VideoBlock src={settings.url} courseId={courseId} moduleId={moduleId} blockId={block.id} />;
     case "audio":
@@ -670,7 +781,7 @@ function renderNativeBlock(block, courseId, moduleId) {
     case "quiz":
       return <QuizBlock blockId={block.id} courseId={courseId} moduleId={moduleId} settings={settings} />;
     case "embed":
-      return <EmbedBlock title={block.content} src={settings.url} />;
+      return <EmbedBlock title={block.content} src={settings.url} sandbox_policy={settings.sandbox_policy} />;
     case "assignment":
       return <AssignmentBlock title={block.content} dueDate={settings.due_date} points={settings.points} blockId={block.id} courseId={courseId} moduleId={moduleId} settings={settings} />;
     case "quiz_reference":
@@ -724,15 +835,115 @@ function renderNode(node, index, courseId, moduleId) {
       );
     case 'horizontalRule':
       return <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "2em 0" }} />;
-    case 'image':
+    case 'image': {
+      const attrs = node.attrs || {};
+      const getImageStyle = () => {
+        const style = {
+          maxWidth: "100%",
+          height: "auto",
+          display: "block",
+        };
+
+        // Apply width
+        if (attrs.width) {
+          style.width = attrs.width;
+        }
+
+        // Apply height if specified
+        if (attrs.height) {
+          style.height = attrs.height;
+        } else if (attrs.maintainAspectRatio !== false) {
+          style.height = "auto";
+        }
+
+        // Apply alignment
+        if (attrs.alignment === "center") {
+          style.marginLeft = "auto";
+          style.marginRight = "auto";
+        } else if (attrs.alignment === "left") {
+          style.marginRight = "auto";
+        } else if (attrs.alignment === "right") {
+          style.marginLeft = "auto";
+        }
+
+        // Apply margins
+        if (attrs.marginTop) style.marginTop = attrs.marginTop;
+        if (attrs.marginBottom) style.marginBottom = attrs.marginBottom;
+        if (attrs.marginLeft) style.marginLeft = attrs.marginLeft;
+        if (attrs.marginRight) style.marginRight = attrs.marginRight;
+
+        // Apply border radius
+        if (attrs.borderRadius) {
+          style.borderRadius = attrs.borderRadius;
+        } else {
+          style.borderRadius = "8px";
+        }
+
+        // Apply border
+        if (attrs.borderStyle && attrs.borderStyle !== "none") {
+          style.borderStyle = attrs.borderStyle;
+          if (attrs.borderWidth) style.borderWidth = attrs.borderWidth;
+          if (attrs.borderColor) style.borderColor = attrs.borderColor;
+        }
+
+        // Apply shadow
+        if (attrs.shadow && attrs.shadow !== "none") {
+          const shadows = {
+            small: "0 2px 4px rgba(0,0,0,0.1)",
+            medium: "0 4px 8px rgba(0,0,0,0.15)",
+            large: "0 8px 16px rgba(0,0,0,0.2)",
+          };
+          style.boxShadow = shadows[attrs.shadow] || shadows.medium;
+        }
+
+        // Apply responsive behavior
+        if (attrs.responsive !== false) {
+          style.maxWidth = "100%";
+          style.height = "auto";
+        }
+
+        return style;
+      };
+
+      const getImageWrapperStyle = () => {
+        const wrapperStyle = {};
+
+        // Apply position
+        if (attrs.position === "inline") {
+          wrapperStyle.display = "inline-block";
+          wrapperStyle.verticalAlign = "middle";
+        } else if (attrs.position === "above" || attrs.position === "below" || attrs.position === "between") {
+          wrapperStyle.display = "block";
+          wrapperStyle.textAlign = attrs.alignment === "center" ? "center" : 
+                                  attrs.alignment === "right" ? "right" : "left";
+        }
+
+        return wrapperStyle;
+      };
+
       return (
-        <img 
-          src={node.attrs?.src} 
-          alt={node.attrs?.alt || ""} 
-          title={node.attrs?.title}
-          style={{ maxWidth: "100%", height: "auto", borderRadius: "8px", margin: "1em 0" }} 
-        />
+        <div style={getImageWrapperStyle()}>
+          <img 
+            src={attrs.src} 
+            alt={attrs.alt || ""} 
+            title={attrs.title}
+            style={getImageStyle()} 
+          />
+          {attrs.caption && (
+            <div style={{ 
+              marginTop: "8px", 
+              fontSize: "14px", 
+              color: "var(--text-secondary)",
+              textAlign: attrs.alignment === "center" ? "center" : 
+                       attrs.alignment === "right" ? "right" : "left",
+              fontStyle: "italic"
+            }}>
+              {attrs.caption}
+            </div>
+          )}
+        </div>
       );
+    }
     case 'video':
       return <VideoBlock src={node.attrs?.src} courseId={courseId} moduleId={moduleId} blockId={`block_${index}`} />;
     default:

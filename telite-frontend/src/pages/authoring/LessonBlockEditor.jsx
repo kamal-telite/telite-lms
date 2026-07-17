@@ -24,6 +24,7 @@ import QuestionBankPicker from "../../components/authoring/QuestionBankPicker";
 import { useParams } from "react-router-dom";
 import { checkStaleQuestions } from "../../services/client";
 import RichTextEditor from "../../components/authoring/RichTextEditor";
+import ImagePreview from "../../components/authoring/ImagePreview";
 
 function blockKey(block) {
   return block.id || block._tempId;
@@ -269,6 +270,14 @@ function SortableBlock({
                 </div>
               )}
             </div>
+
+            {/* Image Preview with Formatting */}
+            {block.block_type === "image" && (block.settings?.url || block.media_asset_id) && (
+              <div style={{ padding: "16px", background: "var(--surface-base)", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontWeight: 600, fontSize: "13px", marginBottom: "12px", color: "var(--text-primary)" }}>Preview</div>
+                <ImagePreview settings={block.settings || {}} />
+              </div>
+            )}
 
             {block.block_type === "scorm" ? (
               <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>

@@ -431,8 +431,6 @@ export default function LandingPage({ session }) {
   const vantaHeroRef = useRef(null);
   const vantaCtaRef = useRef(null);
   const heroTypedRef = useRef(null);
-  const cursorRef = useRef(null);
-  const cursorDotRef = useRef(null);
   const priceRefsMap = useRef({});
 
   // Phase 3 states
@@ -564,15 +562,6 @@ export default function LandingPage({ session }) {
         mouseRaf = 0;
         if (!mousePoint) return;
 
-        if (cursorRef.current) {
-          cursorRef.current.style.left = mousePoint.x + "px";
-          cursorRef.current.style.top = mousePoint.y + "px";
-        }
-        if (cursorDotRef.current) {
-          cursorDotRef.current.style.left = mousePoint.x + "px";
-          cursorDotRef.current.style.top = mousePoint.y + "px";
-        }
-
         const hero = document.getElementById("hero");
         if (hero) {
           const rect = hero.getBoundingClientRect();
@@ -583,9 +572,6 @@ export default function LandingPage({ session }) {
     };
     if (enablePointerEffects) {
       document.addEventListener("mousemove", handleMouseMove, { passive: true });
-    } else {
-      if (cursorRef.current) cursorRef.current.style.display = "none";
-      if (cursorDotRef.current) cursorDotRef.current.style.display = "none";
     }
 
     const pulseInterval = setInterval(() => {
@@ -822,8 +808,6 @@ export default function LandingPage({ session }) {
         </div>
       </div>
 
-      <div className="cursor" ref={cursorRef}></div>
-      <div className="cursor-dot" ref={cursorDotRef}></div>
       <div className="loader">
         <div className="loader-logo">Telite <span>LMS</span></div>
         <div className="loader-bar-wrap"><div className="loader-bar"></div></div>

@@ -17,7 +17,6 @@ body.signup-active {
   background: #050510;
   color: var(--text);
   font-family: 'DM Sans', sans-serif;
-  cursor: none;
   overflow: hidden;
   height: 100vh;
   margin: 0;
@@ -30,30 +29,6 @@ body.signup-active {
   background-color: #050510;
 }
 
-.custom-cursor {
-  position: fixed;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  pointer-events: none;
-  z-index: 9999;
-  transform: translate(-50%, -50%);
-  transition: transform .1s, background .2s;
-  mix-blend-mode: screen;
-}
-
-.custom-cursor-trail {
-  position: fixed;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid rgba(139,124,248,.3);
-  pointer-events: none;
-  z-index: 9998;
-  transform: translate(-50%, -50%);
-  transition: left .12s ease, top .12s ease;
-}
 
 .signup-page-wrap {
   position: fixed;
@@ -151,7 +126,7 @@ body.signup-active {
   color: var(--text-dim);
   font-size: 12px;
   font-family: 'DM Sans', sans-serif;
-  cursor: none;
+  cursor: pointer;
   transition: all .25s;
   white-space: nowrap;
 }
@@ -262,7 +237,7 @@ body.signup-active {
   border-radius: var(--radius);
   border: 1px solid var(--input-border);
   background: var(--input-bg);
-  cursor: none;
+  cursor: pointer;
   transition: all .25s;
   position: relative;
   overflow: hidden;
@@ -367,7 +342,7 @@ body.signup-active {
   transition: border-color .2s, box-shadow .2s;
   -webkit-appearance: none;
   appearance: none;
-  cursor: none;
+  cursor: text;
 }
 
 .field input.is-invalid, .field select.is-invalid {
@@ -439,7 +414,7 @@ body.signup-active {
   color: var(--text-dim);
   font-size: 12px;
   font-family: 'DM Sans', sans-serif;
-  cursor: none;
+  cursor: pointer;
   transition: all .25s;
 }
 
@@ -457,7 +432,7 @@ body.signup-active {
   font-size: 13px;
   font-weight: 500;
   font-family: 'DM Sans', sans-serif;
-  cursor: none;
+  cursor: pointer;
   transition: all .3s;
   margin-left: auto;
   position: relative;
@@ -492,7 +467,7 @@ body.signup-active {
   border-radius: 50%;
   border: 1px solid var(--input-border);
   background: transparent;
-  cursor: none;
+  cursor: pointer;
   color: var(--text-dim);
   transition: all .25s;
   font-size: 14px;

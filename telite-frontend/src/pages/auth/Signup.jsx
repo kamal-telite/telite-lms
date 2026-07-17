@@ -124,8 +124,6 @@ export default function Signup() {
   const vantaRef = useRef(null);
   const cardRef = useRef(null);
   const cardWrapRef = useRef(null);
-  const cursorRef = useRef(null);
-  const trailRef = useRef(null);
   const typeTargetRef = useRef(null);
 
   const typingIntervalRef = useRef(null);
@@ -211,17 +209,6 @@ export default function Signup() {
     const onMouseMove = (e) => {
       const mx = e.clientX;
       const my = e.clientY;
-
-      if (cursorRef.current && trailRef.current) {
-        cursorRef.current.style.left = mx + 'px';
-        cursorRef.current.style.top = my + 'px';
-        setTimeout(() => {
-          if (trailRef.current) {
-            trailRef.current.style.left = mx + 'px';
-            trailRef.current.style.top = my + 'px';
-          }
-        }, 80);
-      }
 
       if (cardRef.current && cardWrapRef.current) {
         // Card shine
@@ -468,18 +455,6 @@ export default function Signup() {
     }
   }
 
-  const handleMouseEnter = () => {
-    if (cursorRef.current) {
-      cursorRef.current.style.transform = 'translate(-50%,-50%) scale(2.5)';
-      cursorRef.current.style.background = 'rgba(139,124,248,.4)';
-    }
-  };
-  const handleMouseLeave = () => {
-    if (cursorRef.current) {
-      cursorRef.current.style.transform = 'translate(-50%,-50%) scale(1)';
-      cursorRef.current.style.background = 'var(--accent)';
-    }
-  };
 
   const handleMagneticMove = (e, targetRef) => {
     if (window.gsap && targetRef.current) {
@@ -508,8 +483,6 @@ export default function Signup() {
   return (
     <>
       <div id="vanta-bg" ref={vantaRef}></div>
-      <div className="custom-cursor" id="cursor" ref={cursorRef}></div>
-      <div className="custom-cursor-trail" id="cursor-trail" ref={trailRef}></div>
 
       <div className="signup-page-wrap" id="page">
         <div className="card-wrap" id="card-wrap" ref={cardWrapRef}>
@@ -524,9 +497,8 @@ export default function Signup() {
                   className="sign-in-btn"
                   ref={signinBtnRef}
                   onClick={() => navigate("/login")}
-                  onMouseEnter={handleMouseEnter}
-                  onMouseLeave={(e) => { handleMouseLeave(); handleMagneticLeave(signinBtnRef); }}
                   onMouseMove={(e) => handleMagneticMove(e, signinBtnRef)}
+                  onMouseLeave={(e) => handleMagneticLeave(signinBtnRef)}
                 >
                   Sign in instead
                 </button>
@@ -558,16 +530,12 @@ export default function Signup() {
                 <div className="grid2">
                   <div className={`card-option ${domainType === 'college' ? 'selected' : ''}`}
                     onClick={() => handleDomainSelect('college')}
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
                   >
                     <div className="opt-title">College</div>
                     <div className="opt-sub">Student, Teacher, or College Admin</div>
                   </div>
                   <div className={`card-option ${domainType === 'company' ? 'selected' : ''}`}
                     onClick={() => handleDomainSelect('company')}
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
                   >
                     <div className="opt-title">Company</div>
                     <div className="opt-sub">Intern, Employee, or Company Admin</div>
@@ -580,7 +548,7 @@ export default function Signup() {
             {step === 2 && (
               <div className="section active" id="step2">
                 <div className="section-head">
-                  <button className="back-arrow" onClick={() => { goStep(1); typewrite("organization type"); }} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>←</button>
+                  <button className="back-arrow" onClick={() => { goStep(1); typewrite("organization type"); }}>←</button>
                   <div className="heading">Select your role — {orgLabel}</div>
                 </div>
                 
@@ -591,7 +559,7 @@ export default function Signup() {
                 ) : (
                   <div className="grid2" id="roles-grid">
                     {roles.map(r => (
-                      <div key={r.value} className="card-option" onClick={() => handleRoleSelect(r.value)} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+                      <div key={r.value} className="card-option" onClick={() => handleRoleSelect(r.value)}>
                         <div className="opt-title">{r.label}</div>
                         <div className="opt-sub">{ROLE_SUBS[r.label] || "Registration for " + r.label}</div>
                       </div>
@@ -605,7 +573,7 @@ export default function Signup() {
             {step === 3 && (
               <div className="section active" id="step3">
                 <div className="section-head">
-                  <button className="back-arrow" onClick={() => goStep(2)} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>←</button>
+                  <button className="back-arrow" onClick={() => goStep(2)}>←</button>
                   <div>
                     <div className="heading">Register as {currentRoleLabel}</div>
                     <div className="breadcrumb">
@@ -631,8 +599,6 @@ export default function Signup() {
                             className={errors[field.name] ? 'is-invalid' : ''}
                             value={formData[field.name] || ''}
                             onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                            onMouseEnter={handleMouseEnter}
-                            onMouseLeave={handleMouseLeave}
                           >
                             <option value="" disabled>Select {field.label}</option>
                             {organizations.map(org => (
@@ -650,8 +616,6 @@ export default function Signup() {
                               if (message) setErrors(prev => ({ ...prev, email: message }));
                             } : undefined}
                             placeholder={field.placeholder || ""}
-                            onMouseEnter={handleMouseEnter}
-                            onMouseLeave={handleMouseLeave}
                             autoComplete={field.type === "password" ? "new-password" : field.type === "email" ? "email" : "off"}
                           />
                         )}
@@ -669,8 +633,6 @@ export default function Signup() {
                             type="number"
                             value={captchaInput}
                             onChange={(e) => setCaptchaInput(e.target.value)}
-                            onMouseEnter={handleMouseEnter}
-                            onMouseLeave={handleMouseLeave}
                             style={{ width: '90px' }}
                             placeholder="Answer"
                           />
@@ -681,17 +643,15 @@ export default function Signup() {
                   </div>
                   
                   <div className="actions">
-                    <button className="btn-ghost" onClick={() => goStep(2)} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>Back</button>
-                    <button className="btn-reload" onClick={() => setCaptcha(generateCaptcha())} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>Reload Captcha</button>
+                    <button className="btn-ghost" onClick={() => goStep(2)}>Back</button>
+                    <button className="btn-reload" onClick={() => setCaptcha(generateCaptcha())}>Reload Captcha</button>
                     <div className="magnetic-wrap" style={{ marginLeft: "auto" }}>
                       <button
                         className="btn-primary"
                         ref={submitBtnRef}
                         disabled={submitting}
                         onClick={handleSubmit}
-                        onMouseEnter={handleMouseEnter}
-                        onMouseLeave={(e) => { handleMouseLeave(); handleMagneticLeave(submitBtnRef); }}
-                        onMouseMove={(e) => handleMagneticMove(e, submitBtnRef)}
+                        onMouseMove={(e) => handleMagneticMove(e, submitBtnRef)}}
                       >
                         {submitting ? "Submitting..." : "Submit Registration"}
                       </button>
@@ -707,7 +667,7 @@ export default function Signup() {
                 <h2>Registration Submitted!</h2>
                 <p>Your registration has been submitted successfully and is now pending admin approval. You will receive an email once your account has been reviewed.</p>
                 <div className="magnetic-wrap" style={{ marginTop: '16px' }}>
-                  <button className="btn-primary" onClick={() => navigate("/login")} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+                  <button className="btn-primary" onClick={() => navigate("/login")}>
                     Go to Login
                   </button>
                 </div>

@@ -4,6 +4,7 @@ import { LessonBlockEditor } from "./LessonBlockEditor";
 import { PublishStatusBar } from "./PublishStatusBar";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { CoursePreviewModal } from "./CoursePreviewModal";
+import { CoursePreviewPanel } from "./CoursePreviewPanel";
 import { SyllabusTree } from "./SyllabusTree";
 import { BuilderDrawer } from "./BuilderDrawer";
 import { BlockInspectorContent } from "./BlockInspectorContent";
@@ -35,6 +36,7 @@ export function CourseBuilderLayout({
   const [highlightBlockId, setHighlightBlockId] = useState(initialBlockId || null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showPreviewPanel, setShowPreviewPanel] = useState(false);
   const [courseStatus, setCourseStatus] = useState("draft");
   const [editorSaveState, setEditorSaveState] = useState({ state: "idle", lastSaved: null });
   const [showLockWarningModal, setShowLockWarningModal] = useState(false);
@@ -386,6 +388,12 @@ export function CourseBuilderLayout({
             <Button tone="neutral" icon="list" onClick={() => setShowAuditLogModal(true)}>Audit Log</Button>
           )}
           <Button tone="neutral" icon="clock" onClick={() => setShowVersionHistory(!showVersionHistory)}>History</Button>
+          <IconButton 
+            icon={showPreviewPanel ? "eye-off" : "eye"} 
+            label={showPreviewPanel ? "Hide Preview" : "Show Preview"} 
+            onClick={() => setShowPreviewPanel(!showPreviewPanel)}
+            tone={showPreviewPanel ? "primary" : "neutral"}
+          />
           <div className="builder-header__divider" />
           <ProfileDropdown 
             profile={{
@@ -400,7 +408,7 @@ export function CourseBuilderLayout({
       </header>
       
       {/* 2-Pane Body */}
-      <div className="builder-body">
+      <div className={`builder-body ${showPreviewPanel ? 'builder-body--split' : ''}`}>
         
         {/* Left Pane: Syllabus */}
         <div className="builder-syllabus">
@@ -434,7 +442,7 @@ export function CourseBuilderLayout({
         </div>
         
         {/* Main Pane: Editor (Stage 2) */}
-        <div className="builder-editor">
+        <div className={`builder-editor ${showPreviewPanel ? 'builder-editor--split' : ''}`}>
           {activeModuleId ? (
             <LessonBlockEditor
               courseId={course?.id}
@@ -456,6 +464,16 @@ export function CourseBuilderLayout({
             </div>
           )}
         </div>
+
+        {/* Right Pane: Live Preview (when enabled) */}
+        {showPreviewPanel && (
+          <CoursePreviewPanel
+            courseId={course?.id}
+            courseName={course?.name}
+            sections={sections}
+            activeModuleId={activeModuleId}
+          />
+        )}
       </div>
 
       <BuilderDrawer 

@@ -100,7 +100,6 @@ html { scroll-behavior: smooth; }
   background: var(--surface);
   color: var(--text);
   overflow-x: hidden;
-  cursor: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -109,51 +108,6 @@ html { scroll-behavior: smooth; }
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-}
-
-/* ── CUSTOM CURSOR ── */
-.cursor {
-  width: 36px; height: 36px;
-  border: 1.5px solid #4648d4;
-  border-radius: 50%;
-  position: fixed; top: 0; left: 0;
-  pointer-events: none;
-  z-index: 99999;
-  transform: translate(-50%, -50%);
-  transition: width .25s, height .25s, opacity .25s;
-  mix-blend-mode: normal;
-  will-change: transform;
-}
-[data-theme="dark"] .cursor {
-  border-color: rgba(99, 102, 241, 0.8);
-  background: rgba(70, 72, 212, 0.06);
-}
-.cursor-dot {
-  width: 5px; height: 5px;
-  background: #4648d4;
-  border-radius: 50%;
-  position: fixed; top: 0; left: 0;
-  pointer-events: none;
-  z-index: 99999;
-  transform: translate(-50%, -50%);
-  will-change: transform;
-}
-[data-theme="dark"] .cursor-dot { background: #818cf8; }
-
-body:has(a:hover) .cursor,
-body:has(button:hover) .cursor {
-  width: 60px; height: 60px;
-  background: rgba(70, 72, 212, 0.08);
-  border-color: var(--primary-light);
-}
-/* Hide custom cursor on touch/mobile devices */
-@media (hover: none), (pointer: coarse) {
-  .cursor, .cursor-dot { display: none !important; }
-  .landing-wrapper { cursor: auto; }
-  .landing-wrapper a, .landing-wrapper button,
-  .landing-wrapper [role="button"], .btn-ghost,
-  .btn-primary, .btn-hero-primary, .btn-hero-ghost,
-  .btn-plan, .faq-trigger, .toggle-switch { cursor: pointer; }
 }
 
 /* ── LOADER ── */
@@ -327,7 +281,7 @@ body:has(button:hover) .cursor {
   font-family: var(--font-body); font-size: 13px; font-weight: 600;
   color: rgba(255, 255, 255, 0.78);
   background: none; border: none;
-  cursor: none; padding: 9px 18px; border-radius: 10px;
+  cursor: pointer; padding: 9px 18px; border-radius: 10px;
   transition: color 0.3s, background 0.3s;
   letter-spacing: 0.01em; text-decoration: none;
 }
@@ -344,7 +298,7 @@ body:has(button:hover) .cursor {
   font-family: var(--font-body); font-size: 13px; font-weight: 700;
   background: linear-gradient(135deg, var(--primary), var(--primary-light));
   color: #fff;
-  border: none; cursor: none;
+  border: none; cursor: pointer;
   padding: 10px 22px; border-radius: 10px;
   position: relative; overflow: hidden;
   transition: transform 0.25s var(--ease-out-expo), box-shadow 0.3s;
@@ -546,7 +500,7 @@ body:has(button:hover) .cursor {
   background: linear-gradient(135deg, var(--primary), var(--primary-light));
   color: #fff;
   padding: 15px 32px; border-radius: 14px; border: none;
-  cursor: none; position: relative; overflow: hidden;
+  cursor: pointer; position: relative; overflow: hidden;
   transition: transform 0.25s var(--ease-out-expo), box-shadow 0.35s;
   letter-spacing: 0.01em; text-decoration: none; display: inline-block;
   box-shadow: 0 4px 20px var(--primary-glow);
@@ -568,7 +522,7 @@ body:has(button:hover) .cursor {
   background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.85);
   padding: 15px 32px; border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  cursor: none; backdrop-filter: blur(16px);
+  cursor: pointer; backdrop-filter: blur(16px);
   transition: background 0.3s, transform 0.25s var(--ease-out-expo), border-color 0.3s;
   text-decoration: none; display: inline-block;
 }

@@ -8,31 +8,8 @@
   --font-body: 'Cabinet Grotesk', sans-serif;
 }
 
-/* ── CURSOR ── */
-.custom-cursor {
-  width: 36px; height: 36px;
-  border: 1.5px solid rgba(70,72,212,0.75);
-  border-radius: 50%;
-  position: fixed; z-index: 9999;
-  top: 0; left: 0;
-  pointer-events: none;
-  transform: translate(-50%,-50%);
-  mix-blend-mode: screen;
-  transition: width .25s, height .25s;
-}
-.custom-cursor-dot {
-  width: 5px; height: 5px;
-  background: #6366f1;
-  border-radius: 50%;
-  position: fixed; z-index: 9999;
-  top: 0; left: 0;
-  pointer-events: none;
-  transform: translate(-50%,-50%);
-}
-
 /* Override body cursor when Login is mounted */
 body.login-active {
-  cursor: none;
   background: var(--navy);
   margin: 0;
   overflow: hidden;
@@ -147,7 +124,7 @@ body.login-active {
   border: 1px solid rgba(255,255,255,0.09);
   border-radius: 14px;
   padding: 16px 20px;
-  cursor: none;
+  cursor: pointer;
   transition: background 0.3s ease, border-color 0.3s ease, transform 0.25s ease, box-shadow 0.3s ease;
 }
 .auth-role-card:hover {
@@ -239,7 +216,7 @@ body.login-active {
   color: #fff;
   transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
   outline: none;
-  cursor: none;
+  cursor: text;
 }
 .auth-field-input::placeholder { color: rgba(255,255,255,0.2); }
 .auth-field-input:focus {
@@ -274,7 +251,7 @@ body.login-active {
   padding: 15px 24px;
   border: none;
   border-radius: 13px;
-  cursor: none;
+  cursor: pointer;
   margin-top: 4px;
   position: relative; overflow: hidden;
   transition: box-shadow 0.3s, transform 0.2s;
@@ -316,7 +293,7 @@ body.login-active {
   align-items: center;
   justify-content: space-between;
   padding: 11px 0;
-  cursor: none;
+  cursor: pointer;
   border-bottom: 1px solid rgba(255,255,255,0.05);
   transition: padding-left 0.25s ease, background 0.2s;
   border-radius: 8px;
@@ -355,7 +332,7 @@ body.login-active {
   text-decoration: none;
   font-weight: 600;
   transition: color 0.2s;
-  cursor: none;
+  cursor: pointer;
 }
 .auth-create-link a:hover { color: #fff; }
 
@@ -403,7 +380,7 @@ body.login-active {
   font-size: 11.5px;
   font-weight: 600;
   color: var(--primary-lt);
-  cursor: none;
+  cursor: pointer;
   transition: color 0.2s;
   text-decoration: none;
 }
@@ -420,7 +397,7 @@ body.login-active {
   font-size: 12px;
   font-weight: 600;
   color: rgba(255,255,255,0.38);
-  cursor: none;
+  cursor: pointer;
   transition: color 0.2s;
   margin-bottom: 4px;
 }
@@ -442,7 +419,7 @@ body.login-active {
   font-size: inherit;
   color: var(--primary-lt);
   font-weight: 600;
-  cursor: none;
+  cursor: pointer;
   transition: color 0.2s;
   text-decoration: none;
   display: inline;
@@ -460,7 +437,7 @@ body.login-active {
   font-size: 12px;
   font-weight: 600;
   color: rgba(255,255,255,0.38);
-  cursor: none;
+  cursor: pointer;
   transition: color 0.2s;
   margin-bottom: 16px;
 }
@@ -543,15 +520,6 @@ body.login-active{
    Mobile
 --------------------------------*/
 @media (max-width:768px){
-
-body.login-active{
-    cursor:auto;
-}
-
-.custom-cursor,
-.custom-cursor-dot{
-    display:none;
-}
 
 .auth-page-wrap{
     padding:20px;

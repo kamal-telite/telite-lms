@@ -207,6 +207,7 @@ def renew_builder_lock(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    logger.info("Heartbeat for course_id=%s, user_id=%s, org_id=%s", course_id, current_user.id, current_user.org_id)
     _apply_builder_tenant_context(db, current_user)
     now = datetime.now(timezone.utc)
     
@@ -223,6 +224,7 @@ def renew_builder_lock(
     result = db.execute(stmt)
     
     if result.rowcount == 0:
+        logger.warning("No lock found for renewal - course_id=%s, user_id=%s", course_id, current_user.id)
         raise HTTPException(status_code=403, detail="You do not hold the lock for this course.")
     
     db.commit()
@@ -231,6 +233,15 @@ def renew_builder_lock(
     from app.repositories.builder_repo import BuilderRepository
     builder_repo = BuilderRepository(db)
     lock = builder_repo.get_lock(course_id)
+    
+    # Handle edge case where lock was deleted or not found after successful UPDATE
+    if lock is None:
+        logger.warning("Lock not found after successful UPDATE - attempting auto-recovery for course_id=%s, user_id=%s", course_id, current_user.id)
+        # Auto-recovery: create a new lock since the UPDATE succeeded (user had the lock)
+        expires_at = now + timedelta(minutes=LOCK_DURATION_MINUTES)
+        lock = builder_repo.acquire_lock(course_id, current_user.id, current_user.org_id, expires_at)
+        db.commit()
+        logger.info("Auto-recovery successful - new lock created for course_id=%s", course_id)
     
     return {"success": True, "expires_at": lock.expires_at.isoformat()}
 

@@ -30,8 +30,6 @@ export default function Login({ onAuthenticated }) {
   const vantaRef = useRef(null);
   const modalRef = useRef(null);
   const btnRef = useRef(null);
-  const cursorRef = useRef(null);
-  const cursorDotRef = useRef(null);
   const typedRef = useRef(null);
 
   // ── Vanta / GSAP / cursor setup ──────────────────────────────────────────────
@@ -75,16 +73,6 @@ export default function Login({ onAuthenticated }) {
     initVanta();
 
     const onMouseMove = (e) => {
-      if (gsap && cursorRef.current && cursorDotRef.current) {
-        gsap.to(cursorRef.current, {
-          x: e.clientX,
-          y: e.clientY,
-          duration: 0.55,
-          ease: "power2.out",
-        });
-        gsap.to(cursorDotRef.current, { x: e.clientX, y: e.clientY, duration: 0.1 });
-      }
-
       if (btnRef.current && gsap) {
         const r = btnRef.current.getBoundingClientRect();
         if (
@@ -172,17 +160,6 @@ export default function Login({ onAuthenticated }) {
     };
   }, []);
 
-  // ── Cursor scale helpers ─────────────────────────────────────────────────────
-  const handleMouseEnter = () => {
-    if (window.gsap && cursorRef.current) {
-      window.gsap.to(cursorRef.current, { scale: 1.7, duration: 0.25 });
-    }
-  };
-  const handleMouseLeave = () => {
-    if (window.gsap && cursorRef.current) {
-      window.gsap.to(cursorRef.current, { scale: 1.0, duration: 0.25 });
-    }
-  };
 
   // ── Login submit ─────────────────────────────────────────────────────────────
   async function handleLoginSubmit(event) {
@@ -241,9 +218,6 @@ export default function Login({ onAuthenticated }) {
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="custom-cursor" id="cursor" ref={cursorRef}></div>
-      <div className="custom-cursor-dot" id="cursorDot" ref={cursorDotRef}></div>
-
       <div id="vanta-bg" ref={vantaRef}></div>
 
       <div className="auth-page-wrap">
@@ -255,8 +229,6 @@ export default function Login({ onAuthenticated }) {
               type="button"
               className="auth-home-btn"
               onClick={() => navigate("/")}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
               aria-label="Go to home page"
               title="Back to home"
             >
@@ -309,8 +281,6 @@ export default function Login({ onAuthenticated }) {
                         setUsername(e.target.value);
                         if (loginError) setLoginError("");
                       }}
-                      onMouseEnter={handleMouseEnter}
-                      onMouseLeave={handleMouseLeave}
                       required
                     />
                   </div>
@@ -324,8 +294,6 @@ export default function Login({ onAuthenticated }) {
                         type="button"
                         className="auth-forgot-link"
                         onClick={showForgot}
-                        onMouseEnter={handleMouseEnter}
-                        onMouseLeave={handleMouseLeave}
                       >
                         Forgot password?
                       </button>
@@ -341,8 +309,6 @@ export default function Login({ onAuthenticated }) {
                         setPassword(e.target.value);
                         if (loginError) setLoginError("");
                       }}
-                      onMouseEnter={handleMouseEnter}
-                      onMouseLeave={handleMouseLeave}
                       required
                     />
                   </div>
@@ -353,8 +319,6 @@ export default function Login({ onAuthenticated }) {
                     ref={btnRef}
                     type="submit"
                     disabled={loginLoading}
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
                   >
                     {loginLoading ? "Signing in..." : "Open workspace"}
                   </button>
@@ -371,8 +335,6 @@ export default function Login({ onAuthenticated }) {
                   type="button"
                   className="auth-back-btn"
                   onClick={showLogin}
-                  onMouseEnter={handleMouseEnter}
-                  onMouseLeave={handleMouseLeave}
                   aria-label="Back to sign in"
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -415,8 +377,6 @@ export default function Login({ onAuthenticated }) {
                         setForgotEmail(e.target.value);
                         if (forgotError) setForgotError("");
                       }}
-                      onMouseEnter={handleMouseEnter}
-                      onMouseLeave={handleMouseLeave}
                       required
                     />
                   </div>
@@ -425,8 +385,6 @@ export default function Login({ onAuthenticated }) {
                     className="auth-btn-open"
                     type="submit"
                     disabled={forgotLoading}
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
                   >
                     {forgotLoading ? "Sending..." : "Send reset link"}
                   </button>
@@ -472,8 +430,6 @@ export default function Login({ onAuthenticated }) {
                       setForgotError("");
                       setView(VIEW_FORGOT);
                     }}
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
                   >
                     try again
                   </button>
@@ -484,8 +440,6 @@ export default function Login({ onAuthenticated }) {
                   className="auth-btn-open"
                   type="button"
                   onClick={showLogin}
-                  onMouseEnter={handleMouseEnter}
-                  onMouseLeave={handleMouseLeave}
                 >
                   Back to sign in
                 </button>
