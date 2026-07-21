@@ -22,12 +22,6 @@ export const platformApi = {
   getAnalyticsOverview: () => api.get("/api/platform/analytics/overview"),
   getOrgAnalytics: (orgId) => api.get(`/api/platform/analytics/org/${orgId}`),
 
-  // Moodle
-  listMoodleTenants: () => api.get("/api/platform/moodle/tenants"),
-  listMoodleSyncLogs: (params) => api.get("/api/platform/moodle/logs", { params }),
-  getMoodleSyncReportSummary: (params) => api.get("/api/platform/moodle/reports/summary", { params }),
-  syncOrgMoodle: (orgId) => api.post(`/api/platform/moodle/sync/${orgId}`),
-  syncAllMoodle: () => api.post("/api/platform/moodle/sync-all"),
 
   // Feature Flags
   listFeatureFlags: () => api.get("/api/platform/features"),

@@ -126,6 +126,14 @@ export default function LearnerPage({ session, onLogout }) {
   const [certificates, setCertificates] = useState([]);
   const [certificatesLoading, setCertificatesLoading] = useState(false);
 
+  useEffect(() => {
+    return () => console.log("LearnerPage unmounted");
+  }, []);
+
+  useEffect(() => {
+  }, [certificates]);
+
+
   // Calculate activeNav from current path
   const currentPath = location.pathname.replace(/\/$/, "");
   const pathParts = currentPath.split("/");
@@ -282,9 +290,11 @@ export default function LearnerPage({ session, onLogout }) {
   async function fetchCertificates() {
     setCertificatesLoading(true);
     try {
-      const { data } = await api.get("/certificates");
-      setCertificates(Array.isArray(data.certificates) ? data.certificates : []);
-      console.log("Certificates refreshed:", data.certificates?.length || 0);
+      const response = await api.get("/api/certificates");
+      
+      const newCerts = Array.isArray(response.data.certificates) ? response.data.certificates : [];
+      setCertificates(newCerts);
+      
     } catch (err) {
       console.error("Failed to fetch certificates:", err);
       setCertificates([]);
@@ -941,7 +951,7 @@ export default function LearnerPage({ session, onLogout }) {
                           <span>{issueDate}</span>
                         </div>
                         <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-                          <Button tone="primary" size="small" onClick={() => window.open(`/public/verify/${cert.verification_token}`, "_blank")} style={{ flex: 1 }}>
+                          <Button tone="primary" size="small" onClick={() => window.open(`/api/certificates/${courseId}/download?inline=true`, "_blank")} style={{ flex: 1 }}>
                             View
                           </Button>
                           <Button tone="ghost" size="small" onClick={() => window.open(`/api/certificates/${courseId}/download`, "_blank")} style={{ flex: 1 }}>

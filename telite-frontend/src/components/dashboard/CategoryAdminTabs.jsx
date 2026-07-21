@@ -86,36 +86,10 @@ export function ActivityFeedTab({ events = [] }) {
 }
 
 export function SettingsTab({ dashboard }) {
-  const [moodleStatus] = useState("connected");
   const { showToast } = useToast();
 
   return (
     <div className="grid-2">
-      <div className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">Moodle Connection</h2>
-          <p className="panel-subtitle">LMS backend integration status.</p>
-        </div>
-        <div className="panel-body">
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-            <div style={{ padding: "12px", background: "var(--surface-alt)", borderRadius: "8px", flex: 1 }}>
-              <div className="row-subtitle">Instance URL</div>
-              <div className="row-title mono">https://moodle.telite.io</div>
-            </div>
-            <Badge tone={moodleStatus === "connected" ? "brand" : "warn"}>
-              {moodleStatus === "connected" ? "Connected ✓" : "Not Connected ✗"}
-            </Badge>
-          </div>
-          <Button
-            tone="ghost"
-            className="btn--block"
-            onClick={() => showToast("Re-sync request sent to Super Admin.", "success")}
-          >
-            Request re-sync from Super Admin
-          </Button>
-        </div>
-      </div>
-
       <div className="panel">
         <div className="panel-header">
           <h2 className="panel-title">Category Settings</h2>
