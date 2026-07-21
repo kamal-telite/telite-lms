@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from app.core.storage_paths import media_upload_root
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -85,6 +88,7 @@ class CoursePayload(BaseModel):
     lessons_count: int = Field(default=8, ge=0)
     hours: float = Field(default=12, ge=0)
     prerequisite_course_id: str | None = None
+    cover_image_url: str | None = None
 class UserRolePayload(BaseModel):
     role: str
     category_scope: str | None = None
@@ -540,6 +544,82 @@ def delete_course(
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@management_router.post("/categories/{category_slug}/courses/{course_id}/cover")
+async def upload_course_cover(
+    category_slug: str,
+    course_id: str,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
+):
+    course_repo = CourseRepository(db)
+    course = course_repo.get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    ensure_org_access(current_user, course.org_id)
+
+    # 1. Validate file extension
+    filename = file.filename or ""
+    if "." not in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename (no extension)")
+    ext = filename.rsplit(".", 1)[1].lower()
+    if ext not in {"jpg", "jpeg", "png", "webp"}:
+        raise HTTPException(status_code=400, detail="Invalid image format. Allowed formats: JPG, JPEG, PNG, WEBP.")
+
+    # 2. Validate file size (max 5 MB)
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 5 MB.")
+
+    # 3. Save file
+    org_dir = media_upload_root() / str(course.org_id)
+    org_dir.mkdir(parents=True, exist_ok=True)
+
+    unique_id = uuid.uuid4().hex[:8]
+    saved_name = f"course_cover_{course_id}_{unique_id}.{ext}"
+    target_path = org_dir / saved_name
+    
+    with open(target_path, "wb") as f:
+        f.write(contents)
+
+    # 4. Update Course cover_image_url
+    url_path = f"/uploads/media/{course.org_id}/{saved_name}"
+    course.cover_image_url = url_path
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {"cover_image_url": url_path}
+
+
+@management_router.delete("/categories/{category_slug}/courses/{course_id}/cover")
+def delete_course_cover(
+    category_slug: str,
+    course_id: str,
+    current_user: TokenData = Depends(require_admin),
+    db: Session = Depends(db_session),
+):
+    course_repo = CourseRepository(db)
+    course = course_repo.get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    ensure_org_access(current_user, course.org_id)
+
+    course.cover_image_url = None
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {"cover_image_url": None}
+
 
 @management_router.get("/courses/{course_id}/launch")
 def launch_course(

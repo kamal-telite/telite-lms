@@ -18,6 +18,30 @@ from app.services.completion_policy_service import CompletionPolicyService
 cert_router = APIRouter(prefix="/certificates", tags=["Certificates"])
 public_cert_router = APIRouter(prefix="/public/verify", tags=["Public Certificates"])
 
+
+@cert_router.get("")
+def get_user_certificates(
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Fetch all certificates for the current learner.
+    Returns certificate details with course information.
+    """
+    certificates = db.query(Certificate).filter(
+        Certificate.user_id == current_user.id,
+        Certificate.org_id == current_user.org_id
+    ).order_by(Certificate.issued_at.desc()).all()
+    
+    result = []
+    for cert in certificates:
+        course = db.query(Course).filter(Course.id == cert.course_id).first()
+        cert_dict = cert.to_dict()
+        cert_dict["course_name"] = course.name if course else "Unknown Course"
+        result.append(cert_dict)
+    
+    return {"certificates": result}
+
 @cert_router.post("/{course_id}/issue")
 def issue_certificate(
     course_id: str,

@@ -1,12 +1,22 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { api } from "../../services/client";
 
+function formatTime(seconds) {
+  if (!seconds || seconds === 0) return null;
+  const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${total}s`;
+}
 
-export function CourseSidebar({ course, activeModule, onSelectModule, progressData, onExit }) {
+export function CourseSidebar({ course, activeModule, onSelectModule, progressData, onExit, refreshTrigger, courseProgress }) {
   const [lockedModules, setLockedModules] = useState({});
   const [lockedSections, setLockedSections] = useState({});
   const [validating, setValidating] = useState(false);
   const [expandedSections, setExpandedSections] = useState({});
+  const [sectionProgress, setSectionProgress] = useState({});
   const validationAbortControllerRef = useRef(null);
   const validatingModuleIdsRef = useRef(new Set());
 
@@ -23,9 +33,28 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
   }, [sections, course.modules_json]);
 
   // Calculate section locking based on sequential progression
-  // A section is locked if the previous section is not completed
+  // A section is locked if the previous section is not completed (including time requirement)
+  // EXCEPTION: If course is completed/submitted, all sections are unlocked
   const sectionLocking = useMemo(() => {
     const locked = {};
+    const isCourseCompleted = courseProgress?.status === "completed" || courseProgress?.status === "submitted";
+    
+    console.log("Section locking calculation:", {
+      courseStatus: courseProgress?.status,
+      isCourseCompleted,
+      courseProgress
+    });
+    
+    // If course is completed, unlock all sections
+    if (isCourseCompleted) {
+      sections.forEach(section => {
+        locked[section.id] = false;
+      });
+      console.log("Course completed - all sections unlocked");
+      return locked;
+    }
+    
+    // Otherwise, apply sequential locking logic
     sections.forEach((section, index) => {
       // First section is always unlocked
       if (index === 0) {
@@ -40,16 +69,28 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
         return;
       }
       
-      // Check if all modules in previous section are completed
-      const previousModules = previousSection.modules || [];
-      const allPreviousCompleted = previousModules.every(mod => 
-        progressData[mod.id] === "completed"
-      );
+      // Check if previous section progress status is "completed"
+      // This includes both module completion AND minimum time requirement
+      // Handle both string and numeric IDs for compatibility
+      const previousSectionProgress = sectionProgress[previousSection.id] || sectionProgress[String(previousSection.id)];
+      const isPreviousCompleted = previousSectionProgress?.status === "completed";
       
-      locked[section.id] = !allPreviousCompleted;
+      console.log(`Section ${section.id} locking check:`, {
+        previousSectionId: previousSection.id,
+        previousSectionIdType: typeof previousSection.id,
+        previousSectionProgress,
+        isPreviousCompleted,
+        sectionProgressKeys: Object.keys(sectionProgress),
+        sectionProgressValues: sectionProgress
+      });
+      
+      // Section is locked if previous section is not completed
+      // NO FALLBACK - must use section progress with time requirement validation
+      locked[section.id] = !isPreviousCompleted;
     });
+    console.log("Final section locks:", locked);
     return locked;
-  }, [sections, progressData]);
+  }, [sections, sectionProgress, progressData, courseProgress]);
 
   // Validate module access when course or modules change
   useEffect(() => {
@@ -122,6 +163,55 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
       setExpandedSections(newExpanded);
     }
   }, [activeModule, sections]);
+
+  // Load section progress
+  useEffect(() => {
+    async function loadSectionProgress() {
+      if (!course?.id) return;
+      try {
+        const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
+        console.log("Section progress loaded:", data);
+        Object.keys(data || {}).forEach(sectionId => {
+          console.log(`Section ${sectionId} status:`, data[sectionId].status, "time_spent:", data[sectionId].time_spent_seconds);
+        });
+        setSectionProgress(data || {});
+      } catch (err) {
+        console.error("Failed to load section progress", err);
+      }
+    }
+    loadSectionProgress();
+
+    // Refresh section progress every 30 seconds to update time spent
+    const interval = setInterval(loadSectionProgress, 30000);
+    return () => clearInterval(interval);
+  }, [course?.id]);
+
+  // Refresh section progress when refreshTrigger changes (after heartbeat updates time)
+  useEffect(() => {
+    if (refreshTrigger && course?.id) {
+      console.log("Refresh trigger received, reloading section progress. Trigger value:", refreshTrigger);
+      async function loadSectionProgress() {
+        try {
+          const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
+          console.log("Section progress refreshed after heartbeat:", data);
+          Object.keys(data || {}).forEach(sectionId => {
+            console.log(`Section ${sectionId} status:`, data[sectionId].status, "time_spent:", data[sectionId].time_spent_seconds, "minimum_time:", data[sectionId].minimum_time_seconds);
+          });
+          setSectionProgress(data || {});
+        } catch (err) {
+          console.error("Failed to refresh section progress", err);
+        }
+      }
+      loadSectionProgress();
+    }
+  }, [refreshTrigger, course?.id]);
+
+  // Force section locking recalculation when section progress changes
+  useEffect(() => {
+    if (Object.keys(sectionProgress).length > 0) {
+      console.log("Section progress changed, recalculating locks");
+    }
+  }, [sectionProgress]);
 
   const toggleSection = (sectionId) => {
     setExpandedSections(prev => ({
@@ -262,6 +352,18 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
                   <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400, flexShrink: 0 }}>
                     {sectionModules.length}
                   </span>
+                  {section.minimum_time_seconds > 0 && (
+                    <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 400, flexShrink: 0 }}>
+                      ⏱ {(() => {
+                        const timeSpent = sectionProgress[String(section.id)]?.time_spent_seconds || sectionProgress[section.id]?.time_spent_seconds || 0;
+                        const remaining = Math.max(0, section.minimum_time_seconds - timeSpent);
+                        const isTimeMet = timeSpent >= section.minimum_time_seconds;
+                        return isTimeMet 
+                          ? `${formatTime(timeSpent)} ✓` 
+                          : `${formatTime(timeSpent)} / ${formatTime(section.minimum_time_seconds)}`;
+                      })()}
+                    </span>
+                  )}
                   {isSectionLocked && (
                     <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: 500 }}>
                       🔒

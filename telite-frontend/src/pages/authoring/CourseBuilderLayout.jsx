@@ -44,6 +44,7 @@ export function CourseBuilderLayout({
   const [sectionModalOpen, setSectionModalOpen] = useState(false);
   const [moduleModalSection, setModuleModalSection] = useState(null);
   const [sectionTitle, setSectionTitle] = useState("");
+  const [sectionMinimumTime, setSectionMinimumTime] = useState("");
   const [moduleTitle, setModuleTitle] = useState("");
   const [moduleType, setModuleType] = useState("page");
   const [isCreatingStructure, setIsCreatingStructure] = useState(false);
@@ -151,6 +152,7 @@ export function CourseBuilderLayout({
   const openSectionModal = () => {
     if (!course?.id) return;
     setSectionTitle(`Section ${sections.length + 1}`);
+    setSectionMinimumTime("");
     setSectionModalOpen(true);
   };
 
@@ -167,8 +169,12 @@ export function CourseBuilderLayout({
 
     setIsCreatingStructure(true);
     try {
+      const minutes = parseInt(sectionMinimumTime, 10);
+      const seconds = isNaN(minutes) || minutes < 0 ? 0 : minutes * 60;
+      
       const { data } = await api.post(`/authoring/courses/${course.id}/sections`, {
         title: sectionTitle.trim(),
+        minimum_time_seconds: seconds,
       });
       setSections([...(sections || []), { ...data, modules: [] }]);
       setSectionModalOpen(false);
@@ -219,6 +225,7 @@ export function CourseBuilderLayout({
     }
     setRenameTarget({ type: "section", item: section });
     setRenameTitle(section.title || "");
+    setSectionMinimumTime(section.minimum_time_seconds ? Math.floor(section.minimum_time_seconds / 60) : "");
   };
 
   const openRenameModule = (module) => {
@@ -279,13 +286,17 @@ export function CourseBuilderLayout({
     setIsCreatingStructure(true);
     try {
       if (renameTarget.type === "section") {
+        const minutes = parseInt(sectionMinimumTime, 10);
+        const seconds = isNaN(minutes) || minutes < 0 ? 0 : minutes * 60;
+        
         const { data } = await api.patch(`/authoring/courses/${course.id}/sections/${renameTarget.item.id}`, {
           title: renameTitle.trim(),
+          minimum_time_seconds: seconds,
         });
         setSections((current) =>
-          current.map((section) => (section.id === data.id ? { ...section, title: data.title } : section))
+          current.map((section) => (section.id === data.id ? { ...section, title: data.title, minimum_time_seconds: data.minimum_time_seconds } : section))
         );
-        showToast("Section renamed.", "success");
+        showToast("Section updated.", "success");
       } else {
         const { data } = await api.put(`/authoring/modules/${renameTarget.item.id}`, {
           title: renameTitle.trim(),
@@ -571,6 +582,21 @@ export function CourseBuilderLayout({
               autoFocus
             />
           </label>
+          <label className="field" style={{ marginTop: "12px" }}>
+            <span className="field__label">Minimum Learning Time (minutes, optional)</span>
+            <input
+              className="field__input"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="e.g., 15"
+              value={sectionMinimumTime}
+              onChange={(event) => setSectionMinimumTime(event.target.value)}
+            />
+            <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+              Learners must spend this minimum time before completing the section
+            </div>
+          </label>
         </form>
       </Modal>
 
@@ -628,13 +654,13 @@ export function CourseBuilderLayout({
       <Modal
         open={Boolean(renameTarget)}
         onClose={() => setRenameTarget(null)}
-        title={renameTarget?.type === "section" ? "Rename Section" : "Rename Module"}
+        title={renameTarget?.type === "section" ? "Edit Section" : "Rename Module"}
         width={440}
         footer={
           <>
             <Button tone="neutral" onClick={() => setRenameTarget(null)}>Cancel</Button>
             <Button tone="primary" type="submit" form="rename-structure-form" disabled={!renameTitle.trim() || isCreatingStructure}>
-              {isCreatingStructure ? "Saving..." : "Save Name"}
+              {isCreatingStructure ? "Saving..." : "Save"}
             </Button>
           </>
         }
@@ -649,6 +675,23 @@ export function CourseBuilderLayout({
               autoFocus
             />
           </label>
+          {renameTarget?.type === "section" && (
+            <label className="field" style={{ marginTop: "12px" }}>
+              <span className="field__label">Minimum Learning Time (minutes, optional)</span>
+              <input
+                className="field__input"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="e.g., 15"
+                value={sectionMinimumTime}
+                onChange={(event) => setSectionMinimumTime(event.target.value)}
+              />
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                Learners must spend this minimum time before completing the section
+              </div>
+            </label>
+          )}
         </form>
       </Modal>
 

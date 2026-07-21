@@ -151,9 +151,11 @@ def publish_course(
 class CreateSectionRequest(BaseModel):
     title: str
     sort_order: Optional[int] = None
+    minimum_time_seconds: Optional[int] = 0
 
 class UpdateSectionRequest(BaseModel):
     title: str
+    minimum_time_seconds: Optional[int] = None
 
 @authoring_router.post("/courses/{course_id}/sections", dependencies=[Depends(require_admin)])
 def create_section(
@@ -179,7 +181,8 @@ def create_section(
         course_id=course_id,
         org_id=current_user.org_id,
         title=request.title,
-        sort_order=max_order + 1
+        sort_order=max_order + 1,
+        minimum_time_seconds=request.minimum_time_seconds or 0
     )
     db.add(section)
     _persist_and_refresh(db, section, org_id=current_user.org_id)
@@ -208,6 +211,8 @@ def update_section(
         raise HTTPException(status_code=400, detail="Section title is required")
 
     section.title = title
+    if request.minimum_time_seconds is not None:
+        section.minimum_time_seconds = request.minimum_time_seconds
     _persist_and_refresh(db, section, org_id=current_user.org_id)
     return section.to_dict()
 

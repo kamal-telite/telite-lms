@@ -27,6 +27,7 @@ class Course(Base, TenantMixin, TimestampMixin):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tier: Mapped[str] = mapped_column(String(50), nullable=False, default="Basic")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    cover_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Content metadata
     module_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -65,6 +66,7 @@ class Course(Base, TenantMixin, TimestampMixin):
             "description": self.description,
             "tier": self.tier,
             "status": self.status,
+            "cover_image_url": self.cover_image_url,
             "module_count": self.module_count,
             "lessons_count": self.lessons_count,
             "hours": self.hours,

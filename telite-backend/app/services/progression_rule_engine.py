@@ -262,6 +262,112 @@ class PreviousSectionCompletedEvaluator(RuleEvaluator):
             )
 
 
+class MinimumSectionTimeEvaluator(RuleEvaluator):
+    """Evaluates whether the learner has spent the minimum required time in the previous section."""
+
+    def get_rule_type(self) -> str:
+        return "minimum_section_time"
+
+    def evaluate(
+        self, rule: ProgressionRule, context: RuleEvaluationContext
+    ) -> RuleEvaluationResult:
+        logger.info(
+            f"Evaluating minimum_section_time rule {rule.id} for user {context.user_id}, target {context.target_type}:{context.target_id}"
+        )
+        try:
+            # Get the current section
+            current_section = context.session.query(CourseSection).filter(
+                CourseSection.id == context.target_id,
+                CourseSection.org_id == context.org_id,
+                CourseSection.deleted_at.is_(None),
+            ).first()
+
+            if not current_section:
+                logger.warning(f"Section {context.target_id} not found for rule evaluation")
+                return RuleEvaluationResult(
+                    rule_type=self.get_rule_type(),
+                    passed=False,
+                    reason="Section not found",
+                )
+
+            # Find the previous section by sort order
+            previous_section = (
+                context.session.query(CourseSection)
+                .filter(
+                    CourseSection.course_id == current_section.course_id,
+                    CourseSection.org_id == context.org_id,
+                    CourseSection.deleted_at.is_(None),
+                    CourseSection.sort_order < current_section.sort_order,
+                )
+                .order_by(CourseSection.sort_order.desc())
+                .first()
+            )
+
+            if not previous_section:
+                # No previous section exists - allow access (first section)
+                logger.info(f"No previous section found for {current_section.id}, allowing access")
+                return RuleEvaluationResult(
+                    rule_type=self.get_rule_type(),
+                    passed=True,
+                    reason=None,
+                )
+
+            # Check if previous section has a minimum time requirement
+            if previous_section.minimum_time_seconds == 0:
+                # No time requirement - allow access
+                logger.info(f"Previous section {previous_section.id} has no minimum time requirement, allowing access")
+                return RuleEvaluationResult(
+                    rule_type=self.get_rule_type(),
+                    passed=True,
+                    reason=None,
+                )
+
+            # Get section progress for the previous section
+            from app.models.section_progress import SectionProgress
+            section_progress = context.session.query(SectionProgress).filter(
+                SectionProgress.user_id == context.user_id,
+                SectionProgress.section_id == previous_section.id,
+                SectionProgress.org_id == context.org_id,
+            ).first()
+
+            if not section_progress:
+                logger.info(f"No section progress found for previous section {previous_section.id}")
+                return RuleEvaluationResult(
+                    rule_type=self.get_rule_type(),
+                    passed=False,
+                    reason=f"Spend minimum time in '{previous_section.title}' first",
+                )
+
+            # Check if minimum time requirement is met
+            time_spent = section_progress.time_spent_seconds or 0
+            if time_spent < previous_section.minimum_time_seconds:
+                remaining_seconds = previous_section.minimum_time_seconds - time_spent
+                remaining_minutes = remaining_seconds / 60
+                logger.info(
+                    f"User {context.user_id} has spent {time_spent}s in previous section {previous_section.id}, "
+                    f"requirement is {previous_section.minimum_time_seconds}s"
+                )
+                return RuleEvaluationResult(
+                    rule_type=self.get_rule_type(),
+                    passed=False,
+                    reason=f"Spend {remaining_minutes:.1f} more minutes in '{previous_section.title}'",
+                )
+
+            logger.info(f"Minimum time requirement met for previous section {previous_section.id}")
+            return RuleEvaluationResult(
+                rule_type=self.get_rule_type(),
+                passed=True,
+                reason=None,
+            )
+        except Exception as e:
+            logger.error(f"Error evaluating minimum_section_time rule {rule.id}: {e}", exc_info=True)
+            return RuleEvaluationResult(
+                rule_type=self.get_rule_type(),
+                passed=False,
+                reason="Error evaluating rule",
+            )
+
+
 class ProgressionRuleEngine:
     """Main engine for evaluating progression rules.
 
@@ -278,6 +384,7 @@ class ProgressionRuleEngine:
         """Register the default rule evaluators."""
         self.register_evaluator(PreviousModuleCompletedEvaluator())
         self.register_evaluator(PreviousSectionCompletedEvaluator())
+        self.register_evaluator(MinimumSectionTimeEvaluator())
 
     def register_evaluator(self, evaluator: RuleEvaluator) -> None:
         """Register a rule evaluator for a specific rule type.

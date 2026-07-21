@@ -378,6 +378,7 @@ export async function fetchCategoryCourses(slug) {
   return unwrap(await api.get(`/categories/${slug}/courses`));
 }
 
+
 export async function createCourse(slug, payload) {
   return unwrap(await api.post(`/categories/${slug}/courses`, payload));
 }
@@ -392,6 +393,18 @@ export async function deleteCourse(slug, courseId) {
 
 export async function launchCourse(courseId) {
   return unwrap(await api.get(`/courses/${courseId}/launch`));
+}
+
+export async function uploadCourseCover(slug, courseId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap(await api.post(`/categories/${slug}/courses/${courseId}/cover`, formData, {
+    headers: { "Content-Type": "multipart/form-data" }
+  }));
+}
+
+export async function deleteCourseCover(slug, courseId) {
+  return unwrap(await api.delete(`/categories/${slug}/courses/${courseId}/cover`));
 }
 
 // ── Enrollments ───────────────────────────────────────────────────────────────

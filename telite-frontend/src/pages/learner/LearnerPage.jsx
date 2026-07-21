@@ -123,6 +123,8 @@ export default function LearnerPage({ session, onLogout }) {
   const [profileForm, setProfileForm] = useState({ full_name: "", email: "", organization_id: "1" });
   const [gradingAnalytics, setGradingAnalytics] = useState(null);
   const [gradingLoading, setGradingLoading] = useState(false);
+  const [certificates, setCertificates] = useState([]);
+  const [certificatesLoading, setCertificatesLoading] = useState(false);
 
   // Calculate activeNav from current path
   const currentPath = location.pathname.replace(/\/$/, "");
@@ -163,6 +165,12 @@ export default function LearnerPage({ session, onLogout }) {
       }
     }
     fetchGradingAnalytics();
+  }, [activeNav]);
+
+  useEffect(() => {
+    if (activeNav === "section-certificates") {
+      fetchCertificates();
+    }
   }, [activeNav]);
 
   useEffect(() => {
@@ -262,10 +270,26 @@ export default function LearnerPage({ session, onLogout }) {
       if (cert?.verification_token) {
         window.open(`/public/verify/${cert.verification_token}`, "_blank");
       }
+      // Refresh certificates after issuing
+      await fetchCertificates();
     } catch (requestError) {
       showToast(getErrorMessage(requestError, "Unable to issue certificate."), "error");
     } finally {
       setCertifyingCourseId(null);
+    }
+  }
+
+  async function fetchCertificates() {
+    setCertificatesLoading(true);
+    try {
+      const { data } = await api.get("/certificates");
+      setCertificates(Array.isArray(data.certificates) ? data.certificates : []);
+      console.log("Certificates refreshed:", data.certificates?.length || 0);
+    } catch (err) {
+      console.error("Failed to fetch certificates:", err);
+      setCertificates([]);
+    } finally {
+      setCertificatesLoading(false);
     }
   }
 
@@ -376,7 +400,7 @@ export default function LearnerPage({ session, onLogout }) {
       
       {activeCourseId && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: "#fff" }}>
-          <LearnerPlayer courseId={activeCourseId} onExit={() => { setActiveCourseId(null); load(); }} />
+          <LearnerPlayer courseId={activeCourseId} onExit={() => { setActiveCourseId(null); load(); }} onCertificateIssued={fetchCertificates} />
         </div>
       )}
 
@@ -433,30 +457,49 @@ export default function LearnerPage({ session, onLogout }) {
                 {courses.slice(0,3).map((course) => {
                   const courseId = String(course.id || course.course_id);
                   return (
-                    <article className={`course-card ${hero.current_course?.id === courseId ? "is-active" : ""}`} key={courseId}>
-                      <div className="course-card__header">
-                        <div className="course-card__title">{course.name}</div>
-                        <Badge tone={course.status === "completed" ? "success" : "neutral"}>
-                          {titleize(course.status)}
-                        </Badge>
+                    <article className={`course-card has-cover ${hero.current_course?.id === courseId ? "is-active" : ""}`} key={courseId}>
+                      <div className="course-card__cover">
+                        <img
+                          src={course.cover_image_url || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225" viewBox="0 0 400 225"><rect width="100%" height="100%" fill="%23f1f5f9"/><g transform="translate(200, 112.5)" text-anchor="middle" fill="%2364748b"><rect x="-60" y="-30" width="120" height="60" rx="6" fill="%23cbd5e1"/><text font-family="system-ui, sans-serif" font-weight="bold" font-size="28" y="10" fill="%23475569">${course.name ? encodeURIComponent(course.name.substring(0, 2).toUpperCase()) : "CO"}</text></g></svg>`}
+                          loading="lazy"
+                          alt={course.name}
+                        />
                       </div>
-                      <div className="bar-score" style={{ marginTop: 12 }}>
-                        <div className="progress-track">
-                          <div
-                            className="progress-fill"
-                            style={{
-                              width: animateProgress ? `${course.completion_pct}%` : "0%",
-                              background: getCompletionColor(course.completion_pct),
-                            }}
-                          />
+                      <div className="course-card__content">
+                        <div>
+                          <div className="course-card__header">
+                            <h3 className="course-card__title">{course.name}</h3>
+                            <Badge tone={course.status === "completed" ? "success" : "neutral"}>
+                              {titleize(course.status)}
+                            </Badge>
+                          </div>
+                          <p className="course-card__category-tier">
+                            {titleize(course.category_slug?.replace("-", " ") || "General")} • {course.tier || "Basic"}
+                          </p>
+                          <div className="course-card__progress-section">
+                            <div className="course-card__progress-bar">
+                              <div className="bar-score">
+                                <div className="progress-track">
+                                  <div
+                                    className="progress-fill"
+                                    style={{
+                                      width: animateProgress ? `${course.completion_pct}%` : "0%",
+                                      background: getCompletionColor(course.completion_pct),
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <span className="course-card__progress-text">{formatPercent(course.completion_pct)}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="course-card__footer">
-                        <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                          {formatPercent(course.completion_pct)} done
-                        </div>
-                        <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(courseId)} disabled={launchingCourseId === courseId}>
-                          {launchingCourseId === courseId ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                        <Button 
+                          className="course-card__action"
+                          tone={course.status === "completed" ? "ghost" : "primary"} 
+                          onClick={() => handleLaunch(courseId)} 
+                          disabled={launchingCourseId === courseId}
+                        >
+                          {launchingCourseId === courseId ? "Loading..." : course.status === "completed" ? "Review" : "Continue Learning"}
                         </Button>
                       </div>
                     </article>
@@ -482,30 +525,49 @@ export default function LearnerPage({ session, onLogout }) {
                 {courses.filter(c => courseFilter === "all" ? true : c.status === courseFilter).map((course) => {
                   const courseId = String(course.id || course.course_id);
                   return (
-                    <article className="course-card" key={courseId}>
-                      <div className="course-card__header">
-                        <div className="course-card__title">{course.name}</div>
-                        <Badge tone={course.status === "completed" ? "success" : "neutral"}>
-                          {titleize(course.status)}
-                        </Badge>
+                    <article className="course-card has-cover" key={courseId}>
+                      <div className="course-card__cover">
+                        <img
+                          src={course.cover_image_url || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225" viewBox="0 0 400 225"><rect width="100%" height="100%" fill="%23f1f5f9"/><g transform="translate(200, 112.5)" text-anchor="middle" fill="%2364748b"><rect x="-60" y="-30" width="120" height="60" rx="6" fill="%23cbd5e1"/><text font-family="system-ui, sans-serif" font-weight="bold" font-size="28" y="10" fill="%23475569">${course.name ? encodeURIComponent(course.name.substring(0, 2).toUpperCase()) : "CO"}</text></g></svg>`}
+                          loading="lazy"
+                          alt={course.name}
+                        />
                       </div>
-                      <div className="bar-score" style={{ marginTop: 12 }}>
-                        <div className="progress-track">
-                          <div
-                            className="progress-fill"
-                            style={{
-                              width: animateProgress ? `${course.completion_pct}%` : "0%",
-                              background: getCompletionColor(course.completion_pct),
-                            }}
-                          />
+                      <div className="course-card__content">
+                        <div>
+                          <div className="course-card__header">
+                            <h3 className="course-card__title">{course.name}</h3>
+                            <Badge tone={course.status === "completed" ? "success" : "neutral"}>
+                              {titleize(course.status)}
+                            </Badge>
+                          </div>
+                          <p className="course-card__category-tier">
+                            {titleize(course.category_slug?.replace("-", " ") || "General")} • {course.tier || "Basic"}
+                          </p>
+                          <div className="course-card__progress-section">
+                            <div className="course-card__progress-bar">
+                              <div className="bar-score">
+                                <div className="progress-track">
+                                  <div
+                                    className="progress-fill"
+                                    style={{
+                                      width: animateProgress ? `${course.completion_pct}%` : "0%",
+                                      background: getCompletionColor(course.completion_pct),
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <span className="course-card__progress-text">{formatPercent(course.completion_pct)}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="course-card__footer">
-                        <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                          {formatPercent(course.completion_pct)} done
-                        </div>
-                        <Button tone={course.status === "completed" ? "ghost" : "primary"} size="small" onClick={() => handleLaunch(courseId)} disabled={launchingCourseId === courseId}>
-                          {launchingCourseId === courseId ? "..." : course.status === "completed" ? "Review" : "Resume"}
+                        <Button 
+                          className="course-card__action"
+                          tone={course.status === "completed" ? "ghost" : "primary"} 
+                          onClick={() => handleLaunch(courseId)} 
+                          disabled={launchingCourseId === courseId}
+                        >
+                          {launchingCourseId === courseId ? "Loading..." : course.status === "completed" ? "Review" : "Continue Learning"}
                         </Button>
                       </div>
                     </article>
@@ -857,28 +919,42 @@ export default function LearnerPage({ session, onLogout }) {
         {activeNav === "section-certificates" && (
           <section id="section-certificates">
             <Panel title="Certificates" subtitle="Earned credentials">
-              <div className="grid-3">
-                {courses.filter(c => c.status === "completed").map(course => {
-                  const courseId = String(course.id || course.course_id);
-                  return (
-                    <div className="soft-card" key={courseId} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div style={{ background: "var(--brand-gradient, linear-gradient(135deg, #0ea5e9, #6366f1))", height: 100, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold" }}>
-                        Certificate
+              {certificatesLoading ? (
+                <LoadingState title="Loading certificates..." body="Fetching your earned certificates." />
+              ) : certificates.length > 0 ? (
+                <div className="grid-3">
+                  {certificates.map(cert => {
+                    const courseId = String(cert.course_id);
+                    const certNumber = cert.certificate_hash ? cert.certificate_hash.substring(0, 8).toUpperCase() : "N/A";
+                    const issueDate = cert.issued_at ? new Date(cert.issued_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "N/A";
+                    return (
+                      <div className="soft-card" key={cert.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <div style={{ background: "var(--brand-gradient, linear-gradient(135deg, #0ea5e9, #6366f1))", height: 100, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold", fontSize: "24px" }}>
+                          🎓
+                        </div>
+                        <div>
+                          <div className="row-title">{cert.course_name || "Course"}</div>
+                          <div className="row-subtitle">{data.profile.full_name || "Learner"}</div>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-muted)" }}>
+                          <span>ID: {certNumber}</span>
+                          <span>{issueDate}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+                          <Button tone="primary" size="small" onClick={() => window.open(`/public/verify/${cert.verification_token}`, "_blank")} style={{ flex: 1 }}>
+                            View
+                          </Button>
+                          <Button tone="ghost" size="small" onClick={() => window.open(`/api/certificates/${courseId}/download`, "_blank")} style={{ flex: 1 }}>
+                            Download
+                          </Button>
+                        </div>
                       </div>
-                      <div>
-                        <div className="row-title">{course.name}</div>
-                        <div className="row-subtitle">Completed {formatPercent(course.completion_pct)}</div>
-                      </div>
-                      <Button tone="primary" onClick={() => handleCertificate(courseId)} disabled={certifyingCourseId === courseId}>
-                        {certifyingCourseId === courseId ? "Preparing..." : "View Certificate"}
-                      </Button>
-                    </div>
-                  );
-                })}
-                {courses.filter(c => c.status === "completed").length === 0 && (
-                  <EmptyState title="No certificates yet" body="Complete your first course to earn a certificate." style={{ gridColumn: "1 / -1" }} />
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState title="No certificates yet" body="Complete your first course to earn a certificate." />
+              )}
             </Panel>
           </section>
         )}

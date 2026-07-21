@@ -5,7 +5,7 @@ import { CourseSidebar } from "./CourseSidebar";
 import { BlockRenderer } from "./BlockRenderer";
 import { api, endLearningSession, heartbeatLearningSession, startLearningSession } from "../../services/client";
 
-export function LearnerPlayer({ courseId, onExit }) {
+export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   const { showToast } = useToast();
   const scrollRef = useRef(null);
   const [courseData, setCourseData] = useState(null);
@@ -18,6 +18,8 @@ export function LearnerPlayer({ courseId, onExit }) {
   const [submittingCourse, setSubmittingCourse] = useState(false);
   const [certificate, setCertificate] = useState(null);
   const [showCompletionSuccess, setShowCompletionSuccess] = useState(false);
+  const [sectionProgressRefreshTrigger, setSectionProgressRefreshTrigger] = useState(0);
+  const [sectionProgress, setSectionProgress] = useState({});
 
   useEffect(() => {
     async function loadCourse() {
@@ -33,6 +35,15 @@ export function LearnerPlayer({ courseId, onExit }) {
         } catch (progressErr) {
           console.error("Failed to load module progress", progressErr);
           setProgressData({});
+        }
+
+        // Load section progress
+        try {
+          const { data: sectionProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/section-progress`);
+          setSectionProgress(sectionProgressData || {});
+        } catch (sectionProgressErr) {
+          console.error("Failed to load section progress", sectionProgressErr);
+          setSectionProgress({});
         }
 
         // Get resume state - backend now returns first incomplete module sequentially
@@ -87,6 +98,8 @@ export function LearnerPlayer({ courseId, onExit }) {
           module_id: activeModule?.id || null,
           active_seconds: seconds,
         });
+        // Trigger section progress refresh to check if minimum time requirement was met
+        setSectionProgressRefreshTrigger(prev => prev + 1);
       } catch {
         accumulatedSeconds += seconds;
       }
@@ -166,8 +179,59 @@ export function LearnerPlayer({ courseId, onExit }) {
     }
   }, [activeModule?.id, courseId]);
 
+  // Refresh section progress periodically to update time spent
+  useEffect(() => {
+    if (!courseId) return undefined;
+    const interval = setInterval(async () => {
+      try {
+        const { data: sectionProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/section-progress`);
+        setSectionProgress(sectionProgressData || {});
+      } catch (err) {
+        console.error("Failed to refresh section progress", err);
+      }
+    }, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, [courseId]);
+
+  // Log certificate state changes
+  useEffect(() => {
+    console.log("Certificate state changed:", certificate);
+  }, [certificate]);
+
+  // Check if current section's minimum time requirement is met
+  const isSectionTimeRequirementMet = () => {
+    if (!activeModule || !courseData?.sections) return true;
+    
+    // Find the section containing the current module
+    const currentSection = courseData.sections.find(section => 
+      section.modules?.some(mod => mod.id === activeModule.id)
+    );
+    
+    if (!currentSection || !currentSection.minimum_time_seconds || currentSection.minimum_time_seconds <= 0) {
+      return true; // No time requirement
+    }
+    
+    // Check if time spent meets requirement
+    const sectionProgressData = sectionProgress[String(currentSection.id)] || sectionProgress[currentSection.id];
+    const timeSpent = sectionProgressData?.time_spent_seconds || 0;
+    
+    return timeSpent >= currentSection.minimum_time_seconds;
+  };
+
   const handleModuleComplete = async () => {
     if (!activeModule) return;
+    
+    // Check if section time requirement is met
+    if (!isSectionTimeRequirementMet()) {
+      const currentSection = courseData.sections.find(section => 
+        section.modules?.some(mod => mod.id === activeModule.id)
+      );
+      const timeSpent = sectionProgress[String(currentSection.id)]?.time_spent_seconds || sectionProgress[currentSection.id]?.time_spent_seconds || 0;
+      const remaining = currentSection.minimum_time_seconds - timeSpent;
+      showToast(`Please spend at least ${Math.ceil(remaining / 60)} more minutes in this section before completing.`, "error");
+      return;
+    }
+    
     try {
       await api.post("/api/v1/learner/progress", {
         course_id: courseId,
@@ -175,6 +239,8 @@ export function LearnerPlayer({ courseId, onExit }) {
       });
       // Update local progress state
       setProgressData(prev => ({ ...prev, [activeModule.id]: "completed" }));
+      // Trigger section progress refresh to check if section should be completed
+      setSectionProgressRefreshTrigger(prev => prev + 1);
       showToast("Module marked complete.", "success");
       
       // Auto-advance to next module using sequential progression
@@ -230,13 +296,31 @@ export function LearnerPlayer({ courseId, onExit }) {
       const submissionData = response.data;
       
       // Certificate is returned in the submission response
+      console.log("Submission response:", submissionData);
       if (submissionData.certificate) {
+        console.log("Certificate found in response:", submissionData.certificate);
+        console.log("Certificate verification_token:", submissionData.certificate.verification_token);
         setCertificate(submissionData.certificate);
       } else if (submissionData.already_submitted) {
         // Already submitted, certificate should be in response
+        console.log("Course already submitted, checking for certificate");
         if (submissionData.certificate) {
+          console.log("Certificate found for already submitted course:", submissionData.certificate);
+          console.log("Certificate verification_token:", submissionData.certificate.verification_token);
           setCertificate(submissionData.certificate);
+        } else {
+          console.warn("No certificate in response for already submitted course");
         }
+      } else {
+        console.warn("No certificate in submission response");
+      }
+      
+      // Update course progress status to trigger section unlocking
+      setCourseProgress(prev => ({ ...prev, status: "submitted" }));
+      
+      // Notify parent component that certificate was issued (to refresh dashboard)
+      if (onCertificateIssued && submissionData.certificate) {
+        onCertificateIssued();
       }
       
       setShowCompletionSuccess(true);
@@ -251,12 +335,17 @@ export function LearnerPlayer({ courseId, onExit }) {
   };
 
   const handleViewCertificate = () => {
+    console.log("handleViewCertificate called, certificate:", certificate);
     if (certificate?.verification_token) {
+      console.log("Opening certificate verification page with token:", certificate.verification_token);
       window.open(`/public/verify/${certificate.verification_token}`, "_blank");
+    } else {
+      console.warn("Certificate or verification_token not available");
     }
   };
 
   const handleDownloadCertificate = async () => {
+    console.log("handleDownloadCertificate called, certificate:", certificate);
     if (certificate?.verification_token) {
       try {
         // Use the new download endpoint
@@ -278,6 +367,8 @@ export function LearnerPlayer({ courseId, onExit }) {
         // Fallback to verification page
         window.open(`/public/verify/${certificate.verification_token}`, "_blank");
       }
+    } else {
+      console.warn("Certificate or verification_token not available");
     }
   };
 
@@ -466,6 +557,8 @@ export function LearnerPlayer({ courseId, onExit }) {
           onSelectModule={handleModuleSelect}
           progressData={progressData}
           onExit={onExit}
+          refreshTrigger={sectionProgressRefreshTrigger}
+          courseProgress={courseProgress}
         />
       </div>
 
@@ -529,7 +622,13 @@ export function LearnerPlayer({ courseId, onExit }) {
               {submittingCourse ? "Submitting..." : "Submit Course"}
             </Button>
           ) : (
-            <Button tone="primary" onClick={handleModuleComplete}>Mark Complete</Button>
+            <Button 
+              tone="primary" 
+              onClick={handleModuleComplete}
+              disabled={!isSectionTimeRequirementMet()}
+            >
+              {!isSectionTimeRequirementMet() ? "Wait for timer..." : "Mark Complete"}
+            </Button>
           )}
         </header>
 
@@ -550,12 +649,21 @@ export function LearnerPlayer({ courseId, onExit }) {
                   You have successfully completed this course.
                 </p>
                 <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
-                  <Button tone="primary" onClick={handleViewCertificate}>
-                    View Certificate
-                  </Button>
-                  <Button tone="neutral" onClick={handleDownloadCertificate}>
-                    Download Certificate
-                  </Button>
+                  {console.log("Rendering completion screen, certificate:", certificate)}
+                  {certificate?.verification_token ? (
+                    <>
+                      <Button tone="primary" onClick={handleViewCertificate}>
+                        View Certificate
+                      </Button>
+                      <Button tone="neutral" onClick={handleDownloadCertificate}>
+                        Download Certificate
+                      </Button>
+                    </>
+                  ) : (
+                    <Button tone="neutral" disabled>
+                      Certificate Loading...
+                    </Button>
+                  )}
                   <Button tone="ghost" onClick={onExit}>
                     Back to Dashboard
                   </Button>

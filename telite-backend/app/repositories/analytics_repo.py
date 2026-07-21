@@ -569,6 +569,8 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
                 "module_count": course.module_count,
                 "hours": course.hours,
                 "last_active": last_active,
+                "cover_image_url": course.cover_image_url,
+                "category_slug": course.category_slug,
             }
 
         course_rows = [course_progress_payload(course) for course in courses]

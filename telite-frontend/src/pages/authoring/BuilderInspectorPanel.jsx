@@ -127,6 +127,24 @@ export function BuilderInspectorPanel({
     }
   };
 
+  const handleSectionTimeChange = async (minutes) => {
+    if (!course?.id || !activeSection || activeSection.id === 0) return;
+    
+    const minutesNum = parseInt(minutes, 10);
+    const seconds = isNaN(minutesNum) || minutesNum < 0 ? 0 : minutesNum * 60;
+    
+    try {
+      const { data } = await api.patch(`/authoring/courses/${course.id}/sections/${activeSection.id}`, {
+        title: activeSection.title,
+        minimum_time_seconds: seconds,
+      });
+      // Update local state - this will be reflected when parent re-fetches
+      showToast("Minimum learning time updated.", "success");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to update minimum time."), "error");
+    }
+  };
+
   return (
     <aside style={{ width: "320px", background: "var(--surface-sunken)", borderLeft: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "16px", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -209,6 +227,34 @@ export function BuilderInspectorPanel({
               <DetailRow label="Title" value={activeSection.title} />
               <DetailRow label="Section ID" value={activeSection.id === 0 ? "Unassigned" : activeSection.id} />
               <DetailRow label="Modules" value={moduleCount} />
+              {activeSection.id !== 0 && (
+                <div style={{ marginTop: "12px" }}>
+                  <label style={{ display: "block", fontSize: "13px", color: "var(--text-primary)", marginBottom: "8px", fontWeight: 500 }}>
+                    Minimum Learning Time (optional)
+                  </label>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Minutes"
+                      value={activeSection.minimum_time_seconds ? Math.floor(activeSection.minimum_time_seconds / 60) : ""}
+                      onChange={(e) => handleSectionTimeChange(e.target.value)}
+                      style={{
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid var(--border-subtle)",
+                        fontSize: "13px",
+                        width: "80px",
+                      }}
+                    />
+                    <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>minutes</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                    Learners must spend this minimum time before completing the section
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>No section selected.</div>

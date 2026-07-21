@@ -23,6 +23,8 @@ import {
   reviewTask,
   updateCourse,
   updateTask,
+  uploadCourseCover,
+  deleteCourseCover,
 } from "../../services/client";
 import { DashboardShell, TabBar, ProfileDropdown } from "../../layouts/DashboardLayout";
 import {
@@ -67,6 +69,7 @@ const COURSE_INITIAL = {
   lessons_count: 8,
   hours: 12,
   modules: [],
+  cover_image_url: "",
 };
 
 const LEARNER_INITIAL = {
@@ -1471,13 +1474,19 @@ function CategoryAdminPageContent({ session, onLogout }) {
           setCourseModal({ open: false, item: null });
           navigate(`/categories/${slug}/builder/${id}`);
         }}
-        onSubmit={async (payload, isEdit) => {
+        onSubmit={async (payload, isEdit, coverFile) => {
           try {
             if (isEdit) {
               await updateCourse(slug, courseModal.item.id, payload);
+              if (coverFile) {
+                await uploadCourseCover(slug, courseModal.item.id, coverFile);
+              }
               showToast("Course updated.", "success");
             } else {
-              await createCourse(slug, payload);
+              const newCourse = await createCourse(slug, payload);
+              if (coverFile && newCourse?.id) {
+                await uploadCourseCover(slug, newCourse.id, coverFile);
+              }
               showToast("Course created.", "success");
             }
             setCourseModal({ open: false, item: null });
@@ -1647,6 +1656,8 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
   const isEdit = Boolean(item);
   const [form, setForm] = useState(COURSE_INITIAL);
   const [errors, setErrors] = useState({});
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     setForm(
@@ -1657,9 +1668,12 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
             description: item.description,
             tier: item.tier,
             status: item.status,
+            cover_image_url: item.cover_image_url || "",
           }
         : COURSE_INITIAL
     );
+    setSelectedFile(null);
+    setUploadError("");
     setErrors({});
   }, [item, open]);
 
@@ -1667,6 +1681,38 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: "" }));
   }
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!["jpg", "jpeg", "png", "webp"].includes(ext)) {
+      setUploadError("Invalid format. Only JPG, JPEG, PNG, and WEBP are supported.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("File is too large. Maximum size is 5 MB.");
+      return;
+    }
+
+    setUploadError("");
+    setSelectedFile(file);
+  };
+
+  const handleRemoveImage = async () => {
+    setSelectedFile(null);
+    setUploadError("");
+    if (isEdit && form.cover_image_url) {
+      try {
+        await deleteCourseCover(item.category_slug || item.slug, item.id);
+        updateField("cover_image_url", "");
+      } catch (err) {
+        setUploadError("Failed to remove cover image.");
+      }
+    }
+  };
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -1688,8 +1734,10 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
         lessons_count: form.lessons_count,
         hours: form.hours,
         modules: form.modules,
+        cover_image_url: form.cover_image_url,
       },
-      isEdit
+      isEdit,
+      selectedFile
     );
   }
 
@@ -1721,6 +1769,44 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
               <input className={`field__input ${errors.description ? "is-invalid" : ""}`} value={form.description} onChange={(event) => updateField("description", event.target.value)} placeholder="Short summary of the course..." />
               {errors.description ? <span className="field__error">{errors.description}</span> : null}
             </label>
+
+            <div className="field">
+              <span className="field__label">Course Cover Image</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px dashed var(--border)', borderRadius: '6px', padding: '12px', background: 'var(--surface-raised)' }}>
+                {(form.cover_image_url || selectedFile) && (
+                  <div style={{ position: 'relative', width: '200px', height: '112.5px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    <img
+                      src={selectedFile ? URL.createObjectURL(selectedFile) : form.cover_image_url}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      alt="Cover Preview"
+                    />
+                  </div>
+                )}
+                
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <label className="button button--small button--secondary" style={{ cursor: 'pointer', display: 'inline-flex', margin: 0 }}>
+                    {form.cover_image_url || selectedFile ? "Replace Image" : "Upload Image"}
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp"
+                      style={{ display: 'none' }}
+                      onChange={handleFileChange}
+                    />
+                  </label>
+                  
+                  {(form.cover_image_url || selectedFile) && (
+                    <Button tone="ghost" size="small" onClick={handleRemoveImage}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Recommended: 1280 × 720 (16:9) • Max: 5 MB • Formats: JPG, JPEG, PNG, WEBP
+                </div>
+                {uploadError && <span className="field__error">{uploadError}</span>}
+              </div>
+            </div>
+
             <div className="field-grid">
               <label className="field">
                 <span className="field__label">Tier</span>

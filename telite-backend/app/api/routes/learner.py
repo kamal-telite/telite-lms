@@ -1,6 +1,7 @@
 """Learner API Endpoints."""
 
 import copy
+import logging
 from typing import List, Optional
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -8,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.api.auth import get_current_user, require_admin, TokenData
 from app.core.storage_paths import media_upload_root
@@ -70,6 +73,9 @@ class CourseListResponse(BaseModel):
     completion_rate: float
     modules_count: int
     tier: str
+    cover_image_url: Optional[str] = None
+    category_slug: Optional[str] = None
+
 
 class ModuleProgressUpdate(BaseModel):
     module_id: int
@@ -130,7 +136,7 @@ def get_learner_courses(
             id=c.id, name=c.name, description=c.description, slug=c.slug,
             status=c.status, enrolled_count=c.enrolled_count, 
             completion_rate=c.completion_rate, modules_count=c.module_count,
-            tier=c.tier
+            tier=c.tier, cover_image_url=c.cover_image_url, category_slug=c.category_slug
         ) for c in courses
     ]
 
@@ -433,7 +439,33 @@ def update_progress(
             CourseModule.deleted_at.is_(None),
         ).all()
         
+        logger.info(
+            f"Processing section {section.id} ('{section.title}') during progress update: "
+            f"has {len(section_modules)} modules, "
+            f"minimum_time_seconds={section.minimum_time_seconds} (type: {type(section.minimum_time_seconds)}), "
+            f"section_id={section.id}, section_id_type={type(section.id)}"
+        )
+        
         if not section_modules:
+            # Section has no modules - mark as completed immediately
+            sp = progress_repo.get_section_progress(current_user.id, section.id, current_user.org_id)
+            if not sp:
+                sp = SectionProgress(
+                    user_id=current_user.id,
+                    section_id=section.id,
+                    org_id=current_user.org_id,
+                    status="completed",
+                    completion_percentage=100.0,
+                    time_spent_seconds=0,
+                    started_at=datetime.utcnow(),
+                    completed_at=datetime.utcnow()
+                )
+            elif sp.status != "completed":
+                sp.status = "completed"
+                sp.completion_percentage = 100.0
+                sp.completed_at = datetime.utcnow()
+            progress_repo.upsert_section_progress(sp)
+            logger.info(f"Section {section.id} has no modules, marked as completed")
             continue
         
         # Count completed modules in this section
@@ -442,6 +474,7 @@ def update_progress(
             mp = progress_repo.get_module_progress(current_user.id, module.id, current_user.org_id)
             if mp and mp.status == "completed":
                 completed_in_section += 1
+            logger.info(f"Module {module.id} in section {section.id}: status={mp.status if mp else 'no progress'}")
         
         # Update section progress
         sp = progress_repo.get_section_progress(current_user.id, section.id, current_user.org_id)
@@ -462,10 +495,33 @@ def update_progress(
                 sp.status = "in_progress"
                 sp.started_at = sp.started_at or datetime.utcnow()
         
-        # Mark section as completed if all modules are completed
-        if completed_in_section == len(section_modules) and sp.status != "completed":
+        # Mark section as completed if all modules are completed AND minimum time requirement is met
+        # NEVER auto-complete sections based on time alone - learner must complete modules
+        time_requirement_met = True
+        if section.minimum_time_seconds and section.minimum_time_seconds > 0:
+            time_requirement_met = (sp.time_spent_seconds or 0) >= section.minimum_time_seconds
+            logger.info(
+                f"Time requirement check: Section '{section.title}' requires {section.minimum_time_seconds}s, "
+                f"spent {sp.time_spent_seconds}s, met: {time_requirement_met}"
+            )
+        
+        logger.info(
+            f"Section completion check during progress update - Section ID: {section.id}, "
+            f"Section title: {section.title}, "
+            f"User: {current_user.id}, "
+            f"Modules completed: {completed_in_section}/{len(section_modules)}, "
+            f"Time spent: {sp.time_spent_seconds}s, "
+            f"Minimum required: {section.minimum_time_seconds}s, "
+            f"Time requirement met: {time_requirement_met}, "
+            f"Current status: {sp.status}"
+        )
+        
+        # Mark section as completed ONLY if all modules are completed AND minimum time requirement is met
+        # This ensures learner must explicitly complete modules, not just wait for timer
+        if completed_in_section == len(section_modules) and time_requirement_met and sp.status != "completed":
             sp.status = "completed"
             sp.completed_at = datetime.utcnow()
+            logger.info(f"Section {section.id} marked as completed during progress update")
             # Emit SECTION_COMPLETED event
             db.add(LearnerEvent(
                 user_id=current_user.id,
@@ -524,6 +580,48 @@ def update_progress(
             created_at=datetime.utcnow(),
             org_id=current_user.org_id
         ))
+        
+        # Automatically generate certificate if eligible
+        eligibility = CompletionPolicyService(db).is_certificate_eligible(
+            user_id=current_user.id,
+            course_id=req.course_id,
+            org_id=current_user.org_id,
+        )
+        if eligibility.eligible:
+            from app.services.certificate_service import CertificateService
+            from app.models.notification import NotificationType
+            from app.repositories.notification_repo import NotificationRepository
+            from app.core.notification_payloads import (
+                certificate_awarded_idempotency_key,
+                certificate_awarded_metadata,
+            )
+            
+            user = db.query(User).filter(User.id == current_user.id).first()
+            course = db.query(Course).filter(Course.id == req.course_id).first()
+            
+            if user and course:
+                cert_service = CertificateService(db)
+                cert, created = cert_service.generate_certificate(user, course, current_user.org_id)
+                if created:
+                    metadata = certificate_awarded_metadata(
+                        course_id=cert.course_id,
+                        certificate_id=cert.id,
+                        verification_token=cert.verification_token,
+                    )
+                    NotificationRepository(db).create_once(
+                        user_id=cert.user_id,
+                        org_id=cert.org_id,
+                        title="Certificate Awarded",
+                        body=f"Your certificate for {course.name} is ready.",
+                        notif_type=NotificationType.CERTIFICATE_AWARDED,
+                        source_type="certificate",
+                        source_id=cert.id,
+                        metadata=metadata,
+                        idempotency_key=certificate_awarded_idempotency_key(
+                            user_id=cert.user_id,
+                            certificate_id=cert.id,
+                        ),
+                    )
 
     progress_repo.upsert_course_progress(course_progress)
     PALScoreService(db).recompute_user(current_user.id, current_user.org_id)
@@ -689,6 +787,61 @@ def _apply_active_seconds(
         bp.time_spent_seconds = (bp.time_spent_seconds or 0) + seconds
         bp.last_viewed_at = now
         progress_repo.upsert_block_progress(bp)
+
+    # Track section-level time
+    section_id = _module_section_id(db, module_id, current_user.org_id)
+    if section_id:
+        sp = progress_repo.get_section_progress(current_user.id, section_id, current_user.org_id)
+        if not sp:
+            sp = SectionProgress(
+                user_id=current_user.id,
+                section_id=section_id,
+                org_id=current_user.org_id,
+                status="in_progress",
+                completion_percentage=0.0,
+                time_spent_seconds=0,
+                started_at=now,
+                last_entered_at=now,
+            )
+        else:
+            sp.time_spent_seconds = (sp.time_spent_seconds or 0) + seconds
+            sp.last_entered_at = sp.last_entered_at or now
+            sp.last_left_at = now
+        
+        # Check if section should be marked as completed based on time requirement
+        # Get section details
+        section = db.query(CourseSection).filter(
+            CourseSection.id == section_id,
+            CourseSection.org_id == current_user.org_id
+        ).first()
+        
+        if section and sp.status != "completed":
+            # Count completed modules in this section
+            section_modules = db.query(CourseModule).filter(
+                CourseModule.section_id == section_id,
+                CourseModule.org_id == current_user.org_id,
+                CourseModule.deleted_at.is_(None)
+            ).all()
+            
+            completed_in_section = 0
+            for mod in section_modules:
+                mp = db.query(ModuleProgress).filter(
+                    ModuleProgress.user_id == current_user.id,
+                    ModuleProgress.module_id == mod.id,
+                    ModuleProgress.org_id == current_user.org_id
+                ).first()
+                if mp and mp.status == "completed":
+                    completed_in_section += 1
+            
+            # Heartbeat ONLY updates time spent - NEVER auto-completes sections
+            # Section completion must be explicitly triggered by learner action
+            # If section has no modules, mark as completed immediately (edge case)
+            if len(section_modules) == 0 and sp.status != "completed":
+                sp.status = "completed"
+                sp.completed_at = now
+                logger.info(f"Section {section_id} has no modules, marked as completed")
+        
+        progress_repo.upsert_section_progress(sp)
 
     db.add(LearnerEvent(
         user_id=current_user.id,
@@ -872,6 +1025,59 @@ def get_module_progress(
             module_progress[str(module_id)] = "not_started"
 
     return module_progress
+
+@learner_router.get("/courses/{course_id}/section-progress")
+def get_section_progress(
+    course_id: str,
+    db: Session = Depends(db_session),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Get all section progress for a course.
+    Returns a mapping of section_id -> {time_spent_seconds, status} for all sections in the course."""
+    enrollment_repo = EnrollmentRepository(db)
+    if not enrollment_repo.has_access(current_user.id, course_id, current_user.org_id):
+        raise HTTPException(status_code=403, detail="Not enrolled or access denied")
+
+    # Get all sections for this course
+    course_sections = db.query(CourseSection).filter(
+        CourseSection.course_id == course_id,
+        CourseSection.org_id == current_user.org_id,
+        CourseSection.deleted_at.is_(None),
+    ).all()
+
+    if not course_sections:
+        return {}
+
+    # Get progress for all these sections
+    section_progress = {}
+    for section in course_sections:
+        sp = db.query(SectionProgress).filter(
+            SectionProgress.user_id == current_user.id,
+            SectionProgress.section_id == section.id,
+            SectionProgress.org_id == current_user.org_id
+        ).first()
+        if sp:
+            section_progress[str(section.id)] = {
+                "time_spent_seconds": sp.time_spent_seconds or 0,
+                "status": sp.status or "not_started",
+                "minimum_time_seconds": section.minimum_time_seconds or 0
+            }
+        else:
+            section_progress[str(section.id)] = {
+                "time_spent_seconds": 0,
+                "status": "not_started",
+                "minimum_time_seconds": section.minimum_time_seconds or 0
+            }
+        
+        # Debug logging
+        logger.info(
+            f"Section progress for section {section.id}: "
+            f"status={section_progress[str(section.id)]['status']}, "
+            f"time_spent={section_progress[str(section.id)]['time_spent_seconds']}s, "
+            f"minimum_time={section.minimum_time_seconds}s"
+        )
+
+    return section_progress
 
 @learner_router.get("/resume/{course_id}")
 def resume_course(
@@ -1064,9 +1270,16 @@ def submit_course(
         user = db.query(User).filter(User.id == current_user.id).first()
         course = db.query(Course).filter(Course.id == course_id, Course.org_id == current_user.org_id).first()
         
+        logger.info(f"Attempting to generate certificate for user {current_user.id}, course {course_id}")
+        logger.info(f"User found: {user is not None}, Course found: {course is not None}")
+        
         if user and course:
             cert_service = CertificateService(db)
             cert, created = cert_service.generate_certificate(user, course, current_user.org_id)
+            
+            logger.info(f"Certificate generation result: created={created}, cert={cert is not None}")
+            if cert:
+                logger.info(f"Certificate ID: {cert.id}, Token: {cert.verification_token}")
             
             if created:
                 # Emit CERTIFICATE_GENERATED event
@@ -1084,7 +1297,7 @@ def submit_course(
         # Log error but don't fail submission if certificate generation fails
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Failed to generate certificate for course {course_id}: {e}")
+        logger.error(f"Failed to generate certificate for course {course_id}: {e}", exc_info=True)
     
     response_data = {
         "status": "success",
