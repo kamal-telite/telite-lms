@@ -16,7 +16,7 @@ COPY package*.json ./
 RUN npm audit --audit-level=moderate || true
 
 # Install dependencies with security audit enabled
-RUN npm ci --audit
+RUN npm install --audit
 
 COPY . .
 RUN npm run build
