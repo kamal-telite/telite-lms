@@ -64,8 +64,6 @@ TENANT_SCOPED_TABLES = [
     "media_assets",
     "memberships",
     "module_progress",
-    "moodle_sync_logs",
-    "moodle_tenants",
     "notifications",
     "org_invitations",
     "organization_branding",

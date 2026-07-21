@@ -20,55 +20,55 @@ STRONG_TOPIC_THRESHOLD = 75.0
 COURSE_CATALOGUE: dict[str, dict[str, list[dict]]] = {
     "CSE": {
         "remedial": [
-            {"name": "Programming Fundamentals",     "moodle_course_id": None, "level": "remedial"},
-            {"name": "Basic Data Structures",        "moodle_course_id": None, "level": "remedial"},
-            {"name": "Mathematics for Computing",    "moodle_course_id": None, "level": "remedial"},
+            {"name": "Programming Fundamentals",     "course_id": None, "level": "remedial"},
+            {"name": "Basic Data Structures",        "course_id": None, "level": "remedial"},
+            {"name": "Mathematics for Computing",    "course_id": None, "level": "remedial"},
         ],
         "normal": [
-            {"name": "Data Structures and Algorithms", "moodle_course_id": 1,    "level": "normal"},
-            {"name": "Operating Systems",              "moodle_course_id": 2,    "level": "normal"},
-            {"name": "Database Management Systems",    "moodle_course_id": None, "level": "normal"},
+            {"name": "Data Structures and Algorithms", "course_id": 1,    "level": "normal"},
+            {"name": "Operating Systems",              "course_id": 2,    "level": "normal"},
+            {"name": "Database Management Systems",    "course_id": None, "level": "normal"},
         ],
         "advanced": [
-            {"name": "Advanced Algorithms",          "moodle_course_id": None, "level": "advanced"},
-            {"name": "System Design",                "moodle_course_id": None, "level": "advanced"},
-            {"name": "Machine Learning Fundamentals","moodle_course_id": None, "level": "advanced"},
+            {"name": "Advanced Algorithms",          "course_id": None, "level": "advanced"},
+            {"name": "System Design",                "course_id": None, "level": "advanced"},
+            {"name": "Machine Learning Fundamentals","course_id": None, "level": "advanced"},
         ],
     },
     "ECE": {
         "remedial": [
-            {"name": "Basic Electronics",            "moodle_course_id": None, "level": "remedial"},
-            {"name": "Mathematics for Engineers",    "moodle_course_id": None, "level": "remedial"},
+            {"name": "Basic Electronics",            "course_id": None, "level": "remedial"},
+            {"name": "Mathematics for Engineers",    "course_id": None, "level": "remedial"},
         ],
         "normal": [
-            {"name": "Signals and Systems",          "moodle_course_id": 3,    "level": "normal"},
-            {"name": "Digital Electronics",          "moodle_course_id": None, "level": "normal"},
+            {"name": "Signals and Systems",          "course_id": 3,    "level": "normal"},
+            {"name": "Digital Electronics",          "course_id": None, "level": "normal"},
         ],
         "advanced": [
-            {"name": "VLSI Design",                  "moodle_course_id": None, "level": "advanced"},
-            {"name": "Embedded Systems",             "moodle_course_id": None, "level": "advanced"},
+            {"name": "VLSI Design",                  "course_id": None, "level": "advanced"},
+            {"name": "Embedded Systems",             "course_id": None, "level": "advanced"},
         ],
     },
     "Maths": {
         "remedial": [
-            {"name": "Foundation Mathematics",       "moodle_course_id": None, "level": "remedial"},
+            {"name": "Foundation Mathematics",       "course_id": None, "level": "remedial"},
         ],
         "normal": [
-            {"name": "Linear Algebra",               "moodle_course_id": None, "level": "normal"},
-            {"name": "Calculus",                     "moodle_course_id": None, "level": "normal"},
+            {"name": "Linear Algebra",               "course_id": None, "level": "normal"},
+            {"name": "Calculus",                     "course_id": None, "level": "normal"},
         ],
         "advanced": [
-            {"name": "Real Analysis",                "moodle_course_id": None, "level": "advanced"},
-            {"name": "Number Theory",                "moodle_course_id": None, "level": "advanced"},
+            {"name": "Real Analysis",                "course_id": None, "level": "advanced"},
+            {"name": "Number Theory",                "course_id": None, "level": "advanced"},
         ],
     },
 }
 
 # Default for unknown branches
 DEFAULT_CATALOGUE = {
-    "remedial":  [{"name": "Foundation Course",  "moodle_course_id": None, "level": "remedial"}],
-    "normal":    [{"name": "Core Course",        "moodle_course_id": None, "level": "normal"}],
-    "advanced":  [{"name": "Advanced Elective",  "moodle_course_id": None, "level": "advanced"}],
+    "remedial":  [{"name": "Foundation Course",  "course_id": None, "level": "remedial"}],
+    "normal":    [{"name": "Core Course",        "course_id": None, "level": "normal"}],
+    "advanced":  [{"name": "Advanced Elective",  "course_id": None, "level": "advanced"}],
 }
 
 # ── Topic resource links ───────────────────────────────────────────────────

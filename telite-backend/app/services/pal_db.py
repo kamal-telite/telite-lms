@@ -37,7 +37,6 @@ def init_db():
                                 (ROUND(score * 100.0 / max_score, 2)) STORED,
             branch            TEXT,
             college           TEXT,
-            synced_from_moodle INTEGER DEFAULT 0,  -- 1 if pulled from Moodle API
             created_at        TEXT    DEFAULT (datetime('now'))
         )
     """)
@@ -80,17 +79,16 @@ def init_db():
 def insert_score(enrollment: str, course_id: int, course_name: str,
                  quiz_id: int, quiz_name: str, topic: str,
                  score: float, max_score: float = 100,
-                 branch: str = "", college: str = "",
-                 synced: bool = False) -> int:
+                 branch: str = "", college: str = "") -> int:
     conn = get_conn()
     c = conn.cursor()
     c.execute("""
         INSERT INTO quiz_scores
             (enrollment_number, course_id, course_name, quiz_id, quiz_name,
-             topic, score, max_score, branch, college, synced_from_moodle)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+             topic, score, max_score, branch, college)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
     """, (enrollment, course_id, course_name, quiz_id, quiz_name,
-          topic, score, max_score, branch, college, int(synced)))
+          topic, score, max_score, branch, college))
 
     # Update topic performance aggregate
     pct = round(score * 100.0 / max_score, 2)

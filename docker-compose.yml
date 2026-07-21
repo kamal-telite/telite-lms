@@ -27,7 +27,6 @@ x-backend-env: &backend-env
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-text}
   TELITE_UPLOAD_ROOT: ${TELITE_UPLOAD_ROOT:-/app/uploads}
-  MOODLE_TOKEN: ${MOODLE_TOKEN:-}
   BACKEND_INTERNAL_PORT: ${BACKEND_INTERNAL_PORT:-8001}
 
 services:
@@ -39,9 +38,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      MOODLE_DB_USER: ${MOODLE_DB_USER}
-      MOODLE_DB_NAME: ${MOODLE_DB_NAME}
-      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD}
       TELITE_POSTGRES_DB: ${TELITE_POSTGRES_DB}
       TELITE_POSTGRES_USER: ${TELITE_POSTGRES_USER}
       TELITE_POSTGRES_PASSWORD: ${TELITE_POSTGRES_PASSWORD}
@@ -83,33 +79,6 @@ services:
           cpus: "1.0"
           memory: 512M
 
-  moodle:
-    image: telite-lms-moodle:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: telite_moodle
-    restart: unless-stopped
-    ports:
-      - "${MOODLE_PORT:-8082}:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      MOODLE_DB_HOST: postgres
-      MOODLE_DB_PORT: 5432
-      MOODLE_DB_NAME: ${MOODLE_DB_NAME}
-      MOODLE_DB_USER: ${MOODLE_DB_USER}
-      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD}
-      MOODLE_WWWROOT: ${MOODLE_WWWROOT:-http://localhost:8082}
-    volumes:
-      - moodledata:/var/www/moodledata
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 2G
-
   backend:
     build:
       context: ./telite-backend
@@ -136,10 +105,6 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_ENABLED: "true"
-      MOODLE_INTERNAL_URL: http://moodle
-      MOODLE_URL: ${MOODLE_URL:-http://localhost:8082}
-      MOODLE_WWWROOT: ${MOODLE_WWWROOT:-http://localhost:8082}
-      MOODLE_MODE: ${MOODLE_MODE:-mock}
     ports:
       - "${BACKEND_PORT:-8001}:${BACKEND_INTERNAL_PORT:-8001}"
     volumes:
@@ -161,8 +126,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      moodle:
-        condition: service_started
     deploy:
       resources:
         limits:
@@ -250,9 +213,6 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_ENABLED: "true"
-      MOODLE_INTERNAL_URL: http://moodle
-      MOODLE_URL: ${MOODLE_URL:-http://localhost:8082}
-      MOODLE_MODE: ${MOODLE_MODE:-mock}
     volumes:
       - ${TELITE_UPLOADS_VOLUME:-telite-lms_uploads}:/app/uploads
     depends_on:
@@ -321,8 +281,6 @@ services:
 volumes:
   pgdata:
     name: telite-lms_pgdata
-  moodledata:
-    name: telite-lms_moodledata
   redisdata:
     name: telite-lms_redisdata
   telite-lms_uploads:

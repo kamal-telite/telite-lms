@@ -20,7 +20,6 @@ class Course(Base, TenantMixin, TimestampMixin):
     __tablename__ = "courses"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
-    moodle_course_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     category_slug: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
@@ -59,7 +58,6 @@ class Course(Base, TenantMixin, TimestampMixin):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "moodle_course_id": self.moodle_course_id,
             "category_slug": self.category_slug,
             "name": self.name,
             "slug": self.slug,

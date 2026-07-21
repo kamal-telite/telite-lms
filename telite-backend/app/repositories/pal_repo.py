@@ -103,7 +103,6 @@ class PalScoreRepository(BaseRepository[PalQuizScore]):
         quiz_id: int | None = None,
         quiz_name: str | None = None,
         user_id: str | None = None,
-        synced_from_moodle: bool = False,
     ) -> PalQuizScore:
         percentage = round((score / max_score) * 100, 2) if max_score > 0 else 0.0
         record = PalQuizScore(
@@ -118,7 +117,6 @@ class PalScoreRepository(BaseRepository[PalQuizScore]):
             score=score,
             max_score=max_score,
             percentage=percentage,
-            synced_from_moodle=synced_from_moodle,
         )
         self.session.add(record)
         self.session.flush()

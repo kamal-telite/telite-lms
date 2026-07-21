@@ -56,8 +56,6 @@ class User(Base, TenantMixin, TimestampMixin):
     program: Mapped[str | None] = mapped_column(String(100), nullable=True)
     branch: Mapped[str | None] = mapped_column(String(100), nullable=True)
     id_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    # DEPRECATED (Phase 6 Moodle Retirement)
-    moodle_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_login: Mapped[str | None] = mapped_column(String(20), nullable=True)
     invited_via: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
@@ -94,7 +92,6 @@ class User(Base, TenantMixin, TimestampMixin):
             "pal_score": self.pal_score,
             "streak_days": self.streak_days,
             "courses_completed": self.courses_completed,
-            "moodle_id": self.moodle_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login,
         }

@@ -22,7 +22,6 @@ class CourseModule(Base, TenantMixin, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     course_id: Mapped[str] = mapped_column(String(50), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
-    moodle_cmid: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True, comment="Moodle Course Module ID")
     
     section: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     section_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("course_sections.id", ondelete="SET NULL"), nullable=True)
@@ -44,7 +43,6 @@ class CourseModule(Base, TenantMixin, TimestampMixin):
         return {
             "id": self.id,
             "course_id": self.course_id,
-            "moodle_cmid": self.moodle_cmid,
             "section": self.section,
             "section_id": self.section_id,
             "status": self.status,

@@ -34,7 +34,6 @@ class PalQuizScore(Base, TenantMixin, TimestampMixin):
     percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
     branch: Mapped[str | None] = mapped_column(String(100), nullable=True)
     college: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    synced_from_moodle: Mapped[bool] = mapped_column(Integer, nullable=False, default=False)
 
     def to_dict(self) -> dict:
         return {

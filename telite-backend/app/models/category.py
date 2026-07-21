@@ -20,7 +20,6 @@ class Category(Base, TenantMixin, TimestampMixin):
     admin_user_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     planned_courses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     avg_pal_target: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    moodle_category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     org_type: Mapped[str] = mapped_column(String(50), nullable=False, default="college")
     archived_at: Mapped[str | None] = mapped_column(String(20), nullable=True)
 

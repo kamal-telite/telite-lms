@@ -116,11 +116,12 @@ def get_certificate(
 @cert_router.get("/{course_id}/download")
 def download_certificate(
     course_id: str,
+    inline: bool = False,
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
     """
-    Download the certificate PDF for a course.
+    Download or view the certificate PDF for a course.
     Returns the PDF file directly.
     """
     cert = db.query(Certificate).filter(
@@ -151,11 +152,13 @@ def download_certificate(
     qr_url = cert.qr_code_url or f"https://telite.io/verify/{cert.verification_token}"
     pdf_bytes = cert_service._generate_pdf(user, course, branding, qr_url, cert.certificate_hash)
     
+    disposition = "inline" if inline else "attachment"
+    
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=certificate_{course_id}_{user.id}.pdf"
+            "Content-Disposition": f"{disposition}; filename=certificate_{course_id}_{user.id}.pdf"
         }
     )
 

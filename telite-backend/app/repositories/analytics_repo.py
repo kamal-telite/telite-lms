@@ -314,7 +314,6 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             module_titles = [module.title for module in modules_by_course.get(course.id, [])]
             course_rows.append({
                 "id": course.id,
-                "moodle_course_id": course.moodle_course_id,
                 "category_slug": course.category_slug,
                 "name": course.name,
                 "slug": course.slug,

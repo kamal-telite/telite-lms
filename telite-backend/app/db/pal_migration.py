@@ -86,7 +86,6 @@ def migrate_pal_to_postgres(
                         percentage=float(row["percentage"]) if row["percentage"] else None,
                         branch=row["branch"],
                         college=row["college"],
-                        synced_from_moodle=bool(row["synced_from_moodle"]),
                     )
                     pg_session.add(score)
                 counts["scores"] += 1

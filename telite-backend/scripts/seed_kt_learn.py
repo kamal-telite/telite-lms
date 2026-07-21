@@ -36,7 +36,7 @@ from app.core.password_utils import hash_password
 def resolve_database_url() -> str:
     url = os.getenv("TELITE_MIGRATION_DATABASE_URL") or os.getenv("TELITE_DATABASE_URL") or os.getenv("DATABASE_URL")
     if url:
-        return url
+        return url.replace("postgresql+psycopg2://", "postgresql+psycopg://").replace("postgresql://", "postgresql+psycopg://")
 
     host = os.getenv("TELITE_POSTGRES_HOST", "localhost")
     port = os.getenv("TELITE_POSTGRES_PORT", os.getenv("POSTGRES_PORT", "5432"))

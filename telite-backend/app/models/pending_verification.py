@@ -29,7 +29,6 @@ class PendingVerification(Base, TimestampMixin):
     rejection_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(String, nullable=True)
     reviewed_at: Mapped[str | None] = mapped_column(String, nullable=True)
-    moodle_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     program: Mapped[str | None] = mapped_column(String, nullable=True)
     branch: Mapped[str | None] = mapped_column(String, nullable=True)
     id_number: Mapped[str | None] = mapped_column(String, nullable=True)

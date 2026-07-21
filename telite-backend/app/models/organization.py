@@ -20,9 +20,6 @@ class Organization(Base, TimestampMixin):
     slug: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     plan: Mapped[str] = mapped_column(String(50), nullable=False, default="free")
-    # DEPRECATED (Phase 6 Moodle Retirement)
-    moodle_category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    moodle_tenant_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Admin linkage
     admin_user_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
