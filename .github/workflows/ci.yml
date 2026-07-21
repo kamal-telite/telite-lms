@@ -188,7 +188,7 @@ jobs:
           cache-dependency-path: telite-frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Lint
         run: npm run lint:ci
