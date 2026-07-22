@@ -30,7 +30,7 @@ jobs:
         env:
           POSTGRES_DB: telite_backend_ci
           POSTGRES_USER: telite_ci
-          POSTGRES_PASSWORD: telite_ci_password
+          POSTGRES_PASSWORD: ${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}
         ports:
           - 5432:5432
         options: >-
@@ -41,10 +41,10 @@ jobs:
     env:
       ENVIRONMENT: development
       PYTHONPATH: .
-      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
-      TELITE_TEST_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_ci
-      TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
-      TELITE_PASSWORD_SALT: ci-test-password-salt
+      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}@localhost:5432/telite_backend_ci
+      TELITE_TEST_DATABASE_URL: postgresql+psycopg://telite_ci:${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}@localhost:5432/telite_backend_ci
+      TELITE_AUTH_SECRET: ${{ format('telite-ci-auth-{0}-{1}-not-for-production-use', github.run_id, github.run_attempt) }}
+      TELITE_PASSWORD_SALT: ${{ format('telite-ci-salt-{0}-{1}', github.run_id, github.run_attempt) }}
       REDIS_ENABLED: "false"
     steps:
       - name: Checkout
@@ -100,7 +100,7 @@ jobs:
         env:
           POSTGRES_DB: telite_backend_regression_ci
           POSTGRES_USER: telite_ci
-          POSTGRES_PASSWORD: telite_ci_password
+          POSTGRES_PASSWORD: ${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}
         ports:
           - 5432:5432
         options: >-
@@ -111,10 +111,10 @@ jobs:
     env:
       ENVIRONMENT: development
       PYTHONPATH: .
-      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_regression_ci
-      TELITE_TEST_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_backend_regression_ci
-      TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
-      TELITE_PASSWORD_SALT: ci-test-password-salt
+      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}@localhost:5432/telite_backend_regression_ci
+      TELITE_TEST_DATABASE_URL: postgresql+psycopg://telite_ci:${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}@localhost:5432/telite_backend_regression_ci
+      TELITE_AUTH_SECRET: ${{ format('telite-ci-auth-{0}-{1}-not-for-production-use', github.run_id, github.run_attempt) }}
+      TELITE_PASSWORD_SALT: ${{ format('telite-ci-salt-{0}-{1}', github.run_id, github.run_attempt) }}
       REDIS_ENABLED: "false"
     steps:
       - name: Checkout
@@ -211,18 +211,17 @@ jobs:
         working-directory: telite-backend
     env:
       ENVIRONMENT: production
-      TELITE_AUTH_SECRET: ci-production-secret-with-more-than-32-characters
-      TELITE_PASSWORD_SALT: ci-production-salt-value
-      POSTGRES_PASSWORD: ci-postgres-password
+      TELITE_AUTH_SECRET: ${{ format('telite-ci-production-auth-{0}-{1}-not-for-production-use', github.run_id, github.run_attempt) }}
+      TELITE_PASSWORD_SALT: ${{ format('telite-ci-production-salt-{0}-{1}', github.run_id, github.run_attempt) }}
+      POSTGRES_PASSWORD: ${{ format('telite-ci-postgres-{0}-{1}', github.run_id, github.run_attempt) }}
       TELITE_POSTGRES_DB: telite_backend
       TELITE_POSTGRES_USER: telite_app
-      TELITE_POSTGRES_PASSWORD: ci-telite-password
-      REDIS_PASSWORD: ci-redis-password
+      TELITE_POSTGRES_PASSWORD: ${{ format('telite-ci-app-postgres-{0}-{1}', github.run_id, github.run_attempt) }}
+      REDIS_PASSWORD: ${{ format('telite-ci-redis-{0}-{1}', github.run_id, github.run_attempt) }}
       TELITE_APP_URL: https://lms.example.com
       TELITE_CORS_ORIGINS: https://lms.example.com
       COOKIE_SECURE: "true"
       COOKIE_SAMESITE: strict
-      MOODLE_MODE: mock
       R2_ENABLED: "false"
     steps:
       - name: Checkout
@@ -249,7 +248,7 @@ jobs:
         env:
           POSTGRES_DB: telite_migration_ci
           POSTGRES_USER: telite_ci
-          POSTGRES_PASSWORD: telite_ci_password
+          POSTGRES_PASSWORD: ${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}
         ports:
           - 5432:5432
         options: >-
@@ -259,9 +258,9 @@ jobs:
           --health-retries 10
     env:
       ENVIRONMENT: development
-      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:telite_ci_password@localhost:5432/telite_migration_ci
-      TELITE_AUTH_SECRET: ci-test-auth-secret-not-for-production-use
-      TELITE_PASSWORD_SALT: ci-test-password-salt
+      TELITE_DATABASE_URL: postgresql+psycopg://telite_ci:${{ format('telite-ci-pg-{0}-{1}', github.run_id, github.run_attempt) }}@localhost:5432/telite_migration_ci
+      TELITE_AUTH_SECRET: ${{ format('telite-ci-auth-{0}-{1}-not-for-production-use', github.run_id, github.run_attempt) }}
+      TELITE_PASSWORD_SALT: ${{ format('telite-ci-salt-{0}-{1}', github.run_id, github.run_attempt) }}
       REDIS_ENABLED: "false"
     steps:
       - name: Checkout
@@ -303,21 +302,19 @@ jobs:
       ENVIRONMENT: production
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ci-postgres-password
+      POSTGRES_PASSWORD: ${{ format('telite-ci-postgres-{0}-{1}', github.run_id, github.run_attempt) }}
       TELITE_POSTGRES_DB: telite_backend
       TELITE_POSTGRES_USER: telite_app
-      TELITE_POSTGRES_PASSWORD: ci-telite-password
-      TELITE_AUTH_SECRET: ci-production-secret-with-more-than-32-characters
-      TELITE_PASSWORD_SALT: ci-production-salt-value
-      REDIS_PASSWORD: ci-redis-password
-      MOODLE_DB_NAME: moodle
-      MOODLE_DB_USER: moodleuser
-      MOODLE_DB_PASSWORD: ci-moodle-password
+      TELITE_POSTGRES_PASSWORD: ${{ format('telite-ci-app-postgres-{0}-{1}', github.run_id, github.run_attempt) }}
+      TELITE_AUTH_SECRET: ${{ format('telite-ci-production-auth-{0}-{1}-not-for-production-use', github.run_id, github.run_attempt) }}
+      TELITE_PASSWORD_SALT: ${{ format('telite-ci-production-salt-{0}-{1}', github.run_id, github.run_attempt) }}
+      REDIS_PASSWORD: ${{ format('telite-ci-redis-{0}-{1}', github.run_id, github.run_attempt) }}
+
       TELITE_APP_URL: https://lms.example.com
       TELITE_CORS_ORIGINS: https://lms.example.com
       COOKIE_SECURE: "true"
       COOKIE_SAMESITE: strict
-      MOODLE_MODE: mock
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

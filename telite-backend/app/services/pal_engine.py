@@ -16,7 +16,7 @@ STRONG_TOPIC_THRESHOLD = 75.0
 
 # ── Course catalogue for recommendations ──────────────────────────────────
 # Maps branch → level → list of course suggestions
-# Extend this as you add real courses to Moodle
+# Extend this as you add real courses to the platform
 COURSE_CATALOGUE: dict[str, dict[str, list[dict]]] = {
     "CSE": {
         "remedial": [

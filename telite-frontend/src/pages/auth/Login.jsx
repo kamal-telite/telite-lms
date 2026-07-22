@@ -115,7 +115,6 @@ export default function Login({ onAuthenticated }) {
             "categories.",
             "learners.",
             "PAL tracking.",
-            "Moodle launch.",
             "your institution.",
           ],
           typeSpeed: 62,

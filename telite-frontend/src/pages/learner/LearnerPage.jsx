@@ -127,10 +127,6 @@ export default function LearnerPage({ session, onLogout }) {
   const [certificatesLoading, setCertificatesLoading] = useState(false);
 
   useEffect(() => {
-    return () => console.log("LearnerPage unmounted");
-  }, []);
-
-  useEffect(() => {
   }, [certificates]);
 
 

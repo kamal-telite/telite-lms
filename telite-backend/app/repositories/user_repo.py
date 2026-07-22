@@ -4,7 +4,7 @@ UserRepository — all user data access operations.
 Replaces the user-related functions in store.py:
 fetch_user_by_id, fetch_user_by_identifier, list_users,
 list_admins, create_or_update_admin, update_user_role,
-set_user_active, soft_delete_user, update_user_moodle_id, etc.
+set_user_active, soft_delete_user, etc.
 """
 
 from __future__ import annotations
@@ -20,6 +20,11 @@ from app.models.membership import Membership
 from app.repositories.base_repo import BaseRepository
 from app.core.utils import slugify, initials
 from app.core.password_utils import hash_password
+from app.core.identifier_masking import mask_identifier
+
+class IdentifierCollisionError(Exception):
+    """Raised when an identifier causes an ambiguity collision across unique fields."""
+    pass
 
 def role_gradients(role: str | None) -> tuple[str, str]:
     if role == "super_admin":
@@ -47,16 +52,70 @@ class UserRepository(BaseRepository[User]):
         stmt = select(User).where(User.username == username.lower().strip())
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def validate_identifier_uniqueness(self, email: str, username: str, exclude_user_id: str | None = None) -> None:
+        """
+        Ensures email and username do not collide with any existing user's email or username.
+        Raises IdentifierCollisionError if a collision is found.
+        """
+        email = email.strip().lower()
+        username = username.strip().lower()
+        from app.db.engine import is_postgres_dsn
+        is_pg = is_postgres_dsn()
+        
+        try:
+            if is_pg:
+                self.session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+                
+            # Check email globally
+            stmt = select(User).where(or_(User.email == email, User.username == email))
+            if exclude_user_id:
+                stmt = stmt.where(User.id != exclude_user_id)
+            if self.session.execute(stmt).first() is not None:
+                raise IdentifierCollisionError(f"Identifier '{email}' is already in use")
+                
+            # Check username globally
+            stmt = select(User).where(or_(User.email == username, User.username == username))
+            if exclude_user_id:
+                stmt = stmt.where(User.id != exclude_user_id)
+            if self.session.execute(stmt).first() is not None:
+                raise IdentifierCollisionError(f"Identifier '{username}' is already in use")
+        except Exception as e:
+            print(f"ERROR in validate_identifier_uniqueness: {e}")
+            raise
+        finally:
+            if is_pg:
+                try:
+                    self.session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+                except Exception:
+                    pass
     def get_by_identifier(self, identifier: str, *, include_hash: bool = False) -> User | None:
-        """Find user by email or username."""
+        """Find user deterministically by email, fallback to username."""
         ident = identifier.strip().lower()
-        stmt = select(User).where(
-            or_(User.email == ident, User.username == ident)
-        )
-        return self.session.execute(stmt).scalar_one_or_none()
+        
+        try:
+            stmt_email = select(User).where(User.email == ident)
+            user = self.session.execute(stmt_email).scalar_one_or_none()
+            if user:
+                return user
+                
+            stmt_username = select(User).where(User.username == ident)
+            return self.session.execute(stmt_username).scalar_one_or_none()
+            
+        except Exception as e:
+            import logging
+            from sqlalchemy.exc import MultipleResultsFound
+            if isinstance(e, MultipleResultsFound):
+                logging.getLogger(__name__).error(
+                    "CRITICAL SECURITY EVENT: MultipleResultsFound triggered for auth identifier '%s'. "
+                    "Cross-column database collision detected.",
+                    mask_identifier(ident),
+                    exc_info=True,
+                )
+                raise IdentifierCollisionError("Ambiguous identifier collision") from e
+            raise
 
     def get_by_identifier_for_auth(self, identifier: str) -> User | None:
-        """Find user by email or username, bypassing RLS for authentication bootstrap."""
+        """Find user deterministically, bypassing RLS for authentication bootstrap."""
         ident = identifier.strip().lower()
 
         from app.db.engine import is_postgres_dsn
@@ -65,11 +124,26 @@ class UserRepository(BaseRepository[User]):
             if is_pg:
                 self.session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
 
-            stmt = select(User).where(
-                or_(User.email == ident, User.username == ident)
-            )
+            stmt_email = select(User).where(User.email == ident)
+            user = self.session.execute(stmt_email).scalar_one_or_none()
+            if user:
+                return user
 
-            return self.session.execute(stmt).scalar_one_or_none()
+            stmt_username = select(User).where(User.username == ident)
+            return self.session.execute(stmt_username).scalar_one_or_none()
+            
+        except Exception as e:
+            import logging
+            from sqlalchemy.exc import MultipleResultsFound
+            if isinstance(e, MultipleResultsFound):
+                logging.getLogger(__name__).error(
+                    "CRITICAL SECURITY EVENT: MultipleResultsFound triggered for auth identifier '%s'. "
+                    "Cross-column database collision detected.",
+                    mask_identifier(ident),
+                    exc_info=True,
+                )
+                raise IdentifierCollisionError("Ambiguous identifier collision") from e
+            raise
         finally:
             if is_pg:
                 self.session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
@@ -147,6 +221,10 @@ class UserRepository(BaseRepository[User]):
         email = email.lower().strip()
         if username is None:
             username = self._build_unique_username(email, full_name)
+        else:
+            username = username.lower().strip()
+            
+        self.validate_identifier_uniqueness(email, username)
 
         grad_start, grad_end = role_gradients(role)
         final_hash = password_hash or (hash_password(password) if password else "")
@@ -171,6 +249,19 @@ class UserRepository(BaseRepository[User]):
         self.session.add(user)
         self.session.flush()
         return user
+
+    def update(self, record: User, **kwargs: Any) -> User:
+        """Override update to validate identifier changes."""
+        new_email = kwargs.get("email")
+        new_username = kwargs.get("username")
+        
+        # If either email or username is being updated, we must validate globally
+        if new_email is not None or new_username is not None:
+            email_to_check = new_email if new_email is not None else record.email
+            username_to_check = new_username if new_username is not None else record.username
+            self.validate_identifier_uniqueness(email_to_check, username_to_check, exclude_user_id=record.id)
+            
+        return super().update(record, **kwargs)
 
     def update_password(self, user: User, new_password: str) -> User:
         user.password_hash = hash_password(new_password)
@@ -256,9 +347,22 @@ class UserRepository(BaseRepository[User]):
         base = slugify(email.split("@")[0]) or slugify(full_name) or "user"
         username = base
         counter = 1
-        while self.get_by_username(username) is not None:
-            username = f"{base}{counter}"
-            counter += 1
+        
+        from app.db.engine import is_postgres_dsn
+        is_pg = is_postgres_dsn()
+        try:
+            if is_pg:
+                self.session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+            while True:
+                stmt = select(User).where(or_(User.email == username, User.username == username))
+                if self.session.execute(stmt).first() is None:
+                    break
+                username = f"{base}{counter}"
+                counter += 1
+        finally:
+            if is_pg:
+                self.session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+                
         return username
 
 def fetch_user_by_id(user_id: str) -> User | None:

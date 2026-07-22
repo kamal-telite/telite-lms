@@ -20,17 +20,16 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
   const validationAbortControllerRef = useRef(null);
   const validatingModuleIdsRef = useRef(new Set());
 
-  if (!course) return null;
-
-  const sections = course.sections || [];
+  const sections = course?.sections || [];
   
   // Memoize modules to prevent infinite re-renders
   // Only recompute when sections or course.modules_json actually change
   const modules = useMemo(() => {
+    if (!course) return [];
     return sections.length > 0 
       ? sections.flatMap(s => s.modules || [])
       : (course.modules_json || []);
-  }, [sections, course.modules_json]);
+  }, [sections, course?.modules_json, course]);
 
   // Calculate section locking based on sequential progression
   // A section is locked if the previous section is not completed (including time requirement)
@@ -38,19 +37,11 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
   const sectionLocking = useMemo(() => {
     const locked = {};
     const isCourseCompleted = courseProgress?.status === "completed" || courseProgress?.status === "submitted";
-    
-    console.log("Section locking calculation:", {
-      courseStatus: courseProgress?.status,
-      isCourseCompleted,
-      courseProgress
-    });
-    
-    // If course is completed, unlock all sections
+// If course is completed, unlock all sections
     if (isCourseCompleted) {
       sections.forEach(section => {
         locked[section.id] = false;
       });
-      console.log("Course completed - all sections unlocked");
       return locked;
     }
     
@@ -74,21 +65,10 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
       // Handle both string and numeric IDs for compatibility
       const previousSectionProgress = sectionProgress[previousSection.id] || sectionProgress[String(previousSection.id)];
       const isPreviousCompleted = previousSectionProgress?.status === "completed";
-      
-      console.log(`Section ${section.id} locking check:`, {
-        previousSectionId: previousSection.id,
-        previousSectionIdType: typeof previousSection.id,
-        previousSectionProgress,
-        isPreviousCompleted,
-        sectionProgressKeys: Object.keys(sectionProgress),
-        sectionProgressValues: sectionProgress
-      });
-      
-      // Section is locked if previous section is not completed
+// Section is locked if previous section is not completed
       // NO FALLBACK - must use section progress with time requirement validation
       locked[section.id] = !isPreviousCompleted;
     });
-    console.log("Final section locks:", locked);
     return locked;
   }, [sections, sectionProgress, progressData, courseProgress]);
 
@@ -170,10 +150,6 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
       if (!course?.id) return;
       try {
         const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
-        console.log("Section progress loaded:", data);
-        Object.keys(data || {}).forEach(sectionId => {
-          console.log(`Section ${sectionId} status:`, data[sectionId].status, "time_spent:", data[sectionId].time_spent_seconds);
-        });
         setSectionProgress(data || {});
       } catch (err) {
         console.error("Failed to load section progress", err);
@@ -189,14 +165,9 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
   // Refresh section progress when refreshTrigger changes (after heartbeat updates time)
   useEffect(() => {
     if (refreshTrigger && course?.id) {
-      console.log("Refresh trigger received, reloading section progress. Trigger value:", refreshTrigger);
       async function loadSectionProgress() {
         try {
-          const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
-          console.log("Section progress refreshed after heartbeat:", data);
-          Object.keys(data || {}).forEach(sectionId => {
-            console.log(`Section ${sectionId} status:`, data[sectionId].status, "time_spent:", data[sectionId].time_spent_seconds, "minimum_time:", data[sectionId].minimum_time_seconds);
-          });
+          const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
           setSectionProgress(data || {});
         } catch (err) {
           console.error("Failed to refresh section progress", err);
@@ -205,13 +176,6 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
       loadSectionProgress();
     }
   }, [refreshTrigger, course?.id]);
-
-  // Force section locking recalculation when section progress changes
-  useEffect(() => {
-    if (Object.keys(sectionProgress).length > 0) {
-      console.log("Section progress changed, recalculating locks");
-    }
-  }, [sectionProgress]);
 
   const toggleSection = (sectionId) => {
     setExpandedSections(prev => ({

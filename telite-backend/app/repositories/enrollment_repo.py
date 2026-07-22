@@ -204,9 +204,6 @@ class EnrollmentRepository(BaseRepository[EnrollmentRequest]):
         if self.session.execute(stmt).scalar_one_or_none():
             return True
 
-        # If learner is in the same org and course is active, allow access
-        # This ensures learners can see content created by category admins
-        if user.role == "learner" and user.org_id == org_id:
-            return True
+
 
         return False

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -10,10 +10,13 @@ from app.models.base import Base, TenantMixin, TimestampMixin
 
 class Category(Base, TenantMixin, TimestampMixin):
     __tablename__ = "categories"
+    __table_args__ = (
+        UniqueConstraint("org_id", "slug", name="uq_categories_org_id_slug"),
+    )
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     accent_color: Mapped[str] = mapped_column(String(20), nullable=False, default="#2563EB")

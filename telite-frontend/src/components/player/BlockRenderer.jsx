@@ -164,7 +164,6 @@ function ScormBlock({ title, src, filename }) {
 }
 
 function H5PBlock({ title, src, filename, courseId, moduleId, blockId, assetId, assetVersion }) {
-  console.log("H5P BLOCK RENDERED", { title, src, filename, courseId, moduleId, blockId, assetId, assetVersion });
   const [completed, setCompleted] = React.useState(false);
 
   React.useEffect(() => {

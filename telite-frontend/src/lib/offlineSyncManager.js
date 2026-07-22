@@ -38,7 +38,6 @@ class OfflineSyncManager {
 
     request.onsuccess = (event) => {
       this.db = event.target.result;
-      console.log('OfflineSyncManager: IndexedDB initialized.');
       // Attempt sync if we booted up online
       if (this.isOnline) {
         this.syncQueue();
@@ -48,13 +47,11 @@ class OfflineSyncManager {
 
   handleOnline() {
     this.isOnline = true;
-    console.log('OfflineSyncManager: Back online. Starting sync...');
     this.syncQueue();
   }
 
   handleOffline() {
     this.isOnline = false;
-    console.log('OfflineSyncManager: Gone offline. Tracking will be queued locally.');
   }
 
   async queueTrackingEvent(cmid, protocol, events, status, score, timeSpent) {
@@ -126,8 +123,6 @@ class OfflineSyncManager {
           this.syncInProgress = false;
           return;
         }
-
-        console.log(`OfflineSyncManager: Syncing ${items.length} items to server...`);
 
         // Send items one by one (or could be batched)
         for (const item of items) {

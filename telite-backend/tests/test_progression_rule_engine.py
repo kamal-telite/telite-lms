@@ -1,18 +1,54 @@
 """Tests for Progression Rule Engine functionality."""
 
 import pytest
+import uuid
 from sqlalchemy.orm import Session
 
 from app.models.progression_rule import ProgressionRule
+from app.models.course import Course
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
 from app.models.module_progress import ModuleProgress
+from app.models.organization import Organization
 from app.repositories.progression_rule_repo import ProgressionRuleRepository
 from app.services.progression_rule_engine import ProgressionRuleEngine
 
 
+def _setup_env(db_session: Session) -> int:
+    from app.models.user import User
+    org = Organization(name=f"Test Org {uuid.uuid4()}", type="company", domain=f"test.org-{uuid.uuid4()}", slug=f"test-org-{uuid.uuid4()}")
+    db_session.add(org)
+    db_session.flush()
+    
+    user = User(
+        id="test_user", 
+        org_id=org.id, 
+        email=f"test{uuid.uuid4()}@example.com", 
+        username=f"testuser{uuid.uuid4().hex[:8]}",
+        full_name="Test User",
+        role="learner",
+        password_hash="dummy_hash",
+        avatar_initials="TU",
+        gradient_start="#000000",
+        gradient_end="#ffffff"
+    )
+    db_session.add(user)
+    db_session.flush()
+    
+    course = Course(id="test_course", name="Test Course", category_slug="test", slug="test-course", org_id=org.id)
+    db_session.add(course)
+    db_session.flush()
+    
+    section = CourseSection(id=1, course_id="test_course", title="Default Section", sort_order=0, org_id=org.id)
+    db_session.add(section)
+    db_session.flush()
+    
+    return org.id
+
+
 def test_create_rule(db_session: Session):
     """Test creating a progression rule."""
+    org_id = _setup_env(db_session)
     repo = ProgressionRuleRepository(db_session)
     
     rule = repo.create_rule(
@@ -20,7 +56,7 @@ def test_create_rule(db_session: Session):
         target_id=1,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
         created_by="test_user",
     )
     
@@ -36,6 +72,7 @@ def test_create_rule(db_session: Session):
 
 def test_get_rules_for_target(db_session: Session):
     """Test retrieving rules for a specific target."""
+    org_id = _setup_env(db_session)
     repo = ProgressionRuleRepository(db_session)
     
     # Create a rule
@@ -44,11 +81,11 @@ def test_get_rules_for_target(db_session: Session):
         target_id=1,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
     )
     
     # Retrieve rules
-    rules = repo.get_rules_for_target("module", 1, 1)
+    rules = repo.get_rules_for_target("module", 1, org_id)
     
     assert len(rules) == 1
     assert rules[0].target_type == "module"
@@ -59,6 +96,7 @@ def test_get_rules_for_target(db_session: Session):
 
 def test_update_rule(db_session: Session):
     """Test updating a progression rule."""
+    org_id = _setup_env(db_session)
     repo = ProgressionRuleRepository(db_session)
     
     # Create a rule
@@ -67,7 +105,7 @@ def test_update_rule(db_session: Session):
         target_id=1,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
     )
     
     # Update the rule
@@ -84,6 +122,7 @@ def test_update_rule(db_session: Session):
 
 def test_delete_rule(db_session: Session):
     """Test soft deleting a progression rule."""
+    org_id = _setup_env(db_session)
     repo = ProgressionRuleRepository(db_session)
     
     # Create a rule
@@ -92,7 +131,7 @@ def test_delete_rule(db_session: Session):
         target_id=1,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
     )
     
     # Delete the rule
@@ -102,7 +141,7 @@ def test_delete_rule(db_session: Session):
     assert rule.deleted_at is not None
     
     # Verify it's not returned in active queries
-    rules = repo.get_rules_for_target("module", 1, 1)
+    rules = repo.get_rules_for_target("module", 1, org_id)
     assert len(rules) == 0
     
     db_session.rollback()
@@ -110,13 +149,14 @@ def test_delete_rule(db_session: Session):
 
 def test_rule_engine_no_rules(db_session: Session):
     """Test rule engine when no rules are configured."""
+    org_id = _setup_env(db_session)
     engine = ProgressionRuleEngine(db_session)
     
     result = engine.validate_access(
         user_id="test_user",
         target_type="module",
         target_id=1,
-        org_id=1,
+        org_id=org_id,
     )
     
     assert result.allowed is True
@@ -125,13 +165,14 @@ def test_rule_engine_no_rules(db_session: Session):
 
 def test_rule_engine_unknown_rule_type(db_session: Session):
     """Test rule engine with unknown rule type (should not block)."""
+    org_id = _setup_env(db_session)
     # Create a rule with unknown type
     rule = ProgressionRule(
         target_type="module",
         target_id=1,
         rule_type="unknown_rule_type",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
         is_active=True,
     )
     db_session.add(rule)
@@ -143,7 +184,7 @@ def test_rule_engine_unknown_rule_type(db_session: Session):
         user_id="test_user",
         target_type="module",
         target_id=1,
-        org_id=1,
+        org_id=org_id,
     )
     
     # Unknown rule types should not block access
@@ -154,6 +195,8 @@ def test_rule_engine_unknown_rule_type(db_session: Session):
 
 def test_previous_module_completed_evaluator_first_module(db_session: Session):
     """Test previous_module_completed evaluator when there's no previous module."""
+    org_id = _setup_env(db_session)
+    
     # Create a module with sort_order 0 (first module)
     module = CourseModule(
         id=1,
@@ -162,7 +205,7 @@ def test_previous_module_completed_evaluator_first_module(db_session: Session):
         title="First Module",
         module_type="lesson",
         sort_order=0,
-        org_id=1,
+        org_id=org_id,
     )
     db_session.add(module)
     db_session.flush()
@@ -173,7 +216,7 @@ def test_previous_module_completed_evaluator_first_module(db_session: Session):
         target_id=1,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
         is_active=True,
     )
     db_session.add(rule)
@@ -185,7 +228,7 @@ def test_previous_module_completed_evaluator_first_module(db_session: Session):
         user_id="test_user",
         target_type="module",
         target_id=1,
-        org_id=1,
+        org_id=org_id,
     )
     
     # First module should be accessible
@@ -196,6 +239,8 @@ def test_previous_module_completed_evaluator_first_module(db_session: Session):
 
 def test_previous_module_completed_evaluator_not_completed(db_session: Session):
     """Test previous_module_completed evaluator when previous module is not completed."""
+    org_id = _setup_env(db_session)
+    
     # Create two modules
     module1 = CourseModule(
         id=1,
@@ -204,7 +249,7 @@ def test_previous_module_completed_evaluator_not_completed(db_session: Session):
         title="First Module",
         module_type="lesson",
         sort_order=0,
-        org_id=1,
+        org_id=org_id,
     )
     module2 = CourseModule(
         id=2,
@@ -213,7 +258,7 @@ def test_previous_module_completed_evaluator_not_completed(db_session: Session):
         title="Second Module",
         module_type="lesson",
         sort_order=1,
-        org_id=1,
+        org_id=org_id,
     )
     db_session.add(module1)
     db_session.add(module2)
@@ -225,7 +270,7 @@ def test_previous_module_completed_evaluator_not_completed(db_session: Session):
         target_id=2,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
         is_active=True,
     )
     db_session.add(rule)
@@ -237,7 +282,7 @@ def test_previous_module_completed_evaluator_not_completed(db_session: Session):
         user_id="test_user",
         target_type="module",
         target_id=2,
-        org_id=1,
+        org_id=org_id,
     )
     
     # Should be denied because first module is not completed
@@ -249,6 +294,8 @@ def test_previous_module_completed_evaluator_not_completed(db_session: Session):
 
 def test_previous_module_completed_evaluator_completed(db_session: Session):
     """Test previous_module_completed evaluator when previous module is completed."""
+    org_id = _setup_env(db_session)
+    
     # Create two modules
     module1 = CourseModule(
         id=1,
@@ -257,7 +304,7 @@ def test_previous_module_completed_evaluator_completed(db_session: Session):
         title="First Module",
         module_type="lesson",
         sort_order=0,
-        org_id=1,
+        org_id=org_id,
     )
     module2 = CourseModule(
         id=2,
@@ -266,7 +313,7 @@ def test_previous_module_completed_evaluator_completed(db_session: Session):
         title="Second Module",
         module_type="lesson",
         sort_order=1,
-        org_id=1,
+        org_id=org_id,
     )
     db_session.add(module1)
     db_session.add(module2)
@@ -276,9 +323,8 @@ def test_previous_module_completed_evaluator_completed(db_session: Session):
     progress = ModuleProgress(
         user_id="test_user",
         module_id=1,
-        org_id=1,
+        org_id=org_id,
         status="completed",
-        completion_pct=100,
     )
     db_session.add(progress)
     db_session.flush()
@@ -289,7 +335,7 @@ def test_previous_module_completed_evaluator_completed(db_session: Session):
         target_id=2,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
         is_active=True,
     )
     db_session.add(rule)
@@ -301,7 +347,7 @@ def test_previous_module_completed_evaluator_completed(db_session: Session):
         user_id="test_user",
         target_type="module",
         target_id=2,
-        org_id=1,
+        org_id=org_id,
     )
     
     # Should be allowed because first module is completed
@@ -312,8 +358,9 @@ def test_previous_module_completed_evaluator_completed(db_session: Session):
 
 def test_get_all_rules_for_course(db_session: Session):
     """Test getting all rules for a course."""
+    org_id = _setup_env(db_session)
     repo = ProgressionRuleRepository(db_session)
-    
+
     # Create modules and sections for a course
     module1 = CourseModule(
         id=1,
@@ -322,17 +369,9 @@ def test_get_all_rules_for_course(db_session: Session):
         title="Module 1",
         module_type="lesson",
         sort_order=0,
-        org_id=1,
-    )
-    section1 = CourseSection(
-        id=1,
-        course_id="test_course",
-        title="Section 1",
-        sort_order=0,
-        org_id=1,
+        org_id=org_id,
     )
     db_session.add(module1)
-    db_session.add(section1)
     db_session.flush()
     
     # Create rules for both
@@ -341,18 +380,18 @@ def test_get_all_rules_for_course(db_session: Session):
         target_id=1,
         rule_type="previous_module_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
     )
     repo.create_rule(
         target_type="section",
         target_id=1,
         rule_type="previous_section_completed",
         rule_value={},
-        org_id=1,
+        org_id=org_id,
     )
     
     # Get all rules for course
-    rules = repo.get_all_rules_for_course("test_course", 1)
+    rules = repo.get_all_rules_for_course("test_course", org_id)
     
     assert len(rules) == 2
     

@@ -189,7 +189,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
 
     def get_category_metrics(self, category_slug: str, org_id: int | None = None) -> dict[str, Any]:
         """Provides metrics for Category Admin Dashboard."""
-        category_stmt = select(Category).where(Category.slug == category_slug, Category.status != "archived")
+        category_stmt = select(Category).where(Category.slug == category_slug, Category.status != "archived", Category.org_id == org_id)
         if org_id:
             category_stmt = category_stmt.where(Category.org_id == org_id)
         category = self.session.execute(category_stmt).scalar_one_or_none()
@@ -975,7 +975,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         """Returns live category grading analytics for Category Admin dashboard."""
         from app.models.gradebook import GradeResult, GradeItem
 
-        category_stmt = select(Category).where(Category.slug == category_slug)
+        category_stmt = select(Category).where(Category.slug == category_slug, Category.org_id == org_id)
         if org_id:
             category_stmt = category_stmt.where(Category.org_id == org_id)
         category = self.session.execute(category_stmt).scalar_one_or_none()
@@ -1247,7 +1247,7 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
         from app.models.gradebook import CourseGrade, GradeResult, GradeItem, GradeCategory
         
         # Get category courses
-        category_stmt = select(Category).where(Category.slug == category_slug)
+        category_stmt = select(Category).where(Category.slug == category_slug, Category.org_id == org_id)
         if org_id:
             category_stmt = category_stmt.where(Category.org_id == org_id)
         category = self.session.execute(category_stmt).scalar_one_or_none()

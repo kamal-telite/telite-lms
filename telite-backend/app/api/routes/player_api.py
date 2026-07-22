@@ -241,8 +241,6 @@ def sync_tracking(
             )
 
     db.commit()
-    
-    # Note: Legacy Moodle sync triggers have been removed
     return {"success": True, "progress_status": progress.status}
 
 @player_router.get("/modules/{module_id}/launch")
@@ -254,7 +252,6 @@ def get_launch_data(
 ):
     """
     Returns native content metadata or S3 signed URLs for SCORM/xAPI/H5P packages.
-    No Moodle iframes.
     """
     module = db.query(CourseModule).filter(
         CourseModule.id == module_id, 

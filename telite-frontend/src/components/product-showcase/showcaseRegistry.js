@@ -21,7 +21,7 @@ export const showcaseRegistry = [
   {
     id: "integrations",
     title: "Ecosystem Mesh",
-    description: "Live Moodle-centered orchestration across APIs, webhooks, and comms.",
+    description: "Live orchestration across APIs, webhooks, and comms.",
     glow: "var(--showcase-glow-integrations)",
     Component: IntegrationPreview,
   },

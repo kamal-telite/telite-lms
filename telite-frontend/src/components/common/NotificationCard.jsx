@@ -1,5 +1,6 @@
 import { Badge } from "./ui";
 import { Icon } from "./icons";
+import PropTypes from "prop-types";
 
 function formatTimestamp(isoString) {
   if (!isoString) return "";
@@ -106,3 +107,16 @@ export default function NotificationCard({ notification, onClick, onMarkRead }) 
     </div>
   );
 }
+
+NotificationCard.propTypes = {
+  notification: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    is_read: PropTypes.bool,
+    title: PropTypes.string.isRequired,
+    body: PropTypes.string,
+    created_at: PropTypes.string,
+    type: PropTypes.string,
+  }).isRequired,
+  onClick: PropTypes.func.isRequired,
+  onMarkRead: PropTypes.func.isRequired,
+};

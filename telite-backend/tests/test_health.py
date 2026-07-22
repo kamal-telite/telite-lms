@@ -13,7 +13,8 @@ def test_liveness(client):
     assert payload["api"] == "running"
 
 
-def test_readiness(client):
+def test_readiness(client, monkeypatch):
+    monkeypatch.setenv("REDIS_ENABLED", "false")
     response = client.get("/health/readiness")
     assert response.status_code == 200
     payload = response.json()

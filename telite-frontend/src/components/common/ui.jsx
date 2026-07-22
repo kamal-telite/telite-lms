@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import PropTypes from "prop-types";
 import { Icon } from "./icons";
 export { Icon };
 
@@ -276,3 +277,119 @@ export function FileUpload({ currentUrl, className = "", ...props }) {
     </div>
   );
 }
+
+ToastProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+};
+
+Button.propTypes = {
+  children: PropTypes.node.isRequired,
+  tone: PropTypes.oneOf(["ghost", "primary", "secondary", "danger", "neutral", "brand", "warn", "success", "info"]),
+  icon: PropTypes.string,
+  size: PropTypes.oneOf(["sm", "md", "lg"]),
+  className: PropTypes.string,
+  type: PropTypes.oneOf(["button", "submit", "reset"]),
+};
+
+IconButton.propTypes = {
+  label: PropTypes.string.isRequired,
+  icon: PropTypes.string.isRequired,
+  className: PropTypes.string,
+};
+
+Badge.propTypes = {
+  children: PropTypes.node.isRequired,
+  tone: PropTypes.oneOf(["neutral", "primary", "success", "warn", "critical", "info", "brand"]),
+  className: PropTypes.string,
+};
+
+Avatar.propTypes = {
+  initials: PropTypes.string.isRequired,
+  gradient: PropTypes.arrayOf(PropTypes.string),
+  size: PropTypes.number,
+};
+
+Panel.propTypes = {
+  title: PropTypes.node,
+  subtitle: PropTypes.node,
+  action: PropTypes.node,
+  children: PropTypes.node.isRequired,
+  footer: PropTypes.node,
+  className: PropTypes.string,
+};
+
+StatCard.propTypes = {
+  accent: PropTypes.string,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  meta: PropTypes.string,
+  pulse: PropTypes.bool,
+  suffix: PropTypes.string,
+  delta: PropTypes.number,
+  tone: PropTypes.oneOf(["critical", "warn", "success", "info", "brand", "neutral"]),
+  icon: PropTypes.string,
+};
+
+Modal.propTypes = {
+  open: PropTypes.bool.isRequired,
+  title: PropTypes.string.isRequired,
+  description: PropTypes.node,
+  children: PropTypes.node.isRequired,
+  footer: PropTypes.node,
+  onClose: PropTypes.func.isRequired,
+  width: PropTypes.number,
+};
+
+EmptyState.propTypes = {
+  title: PropTypes.string.isRequired,
+  body: PropTypes.string,
+  description: PropTypes.string,
+  icon: PropTypes.string,
+  action: PropTypes.node,
+};
+
+LoadingState.propTypes = {
+  title: PropTypes.string,
+  body: PropTypes.string,
+};
+
+ErrorState.propTypes = {
+  title: PropTypes.string,
+  body: PropTypes.string,
+  action: PropTypes.node,
+};
+
+SkeletonLoader.propTypes = {
+  rows: PropTypes.number,
+  showStats: PropTypes.bool,
+};
+
+Field.propTypes = {
+  label: PropTypes.node,
+  id: PropTypes.string,
+  helpText: PropTypes.node,
+  children: PropTypes.node.isRequired,
+};
+
+Input.propTypes = {
+  className: PropTypes.string,
+};
+
+Select.propTypes = {
+  options: PropTypes.arrayOf(
+    PropTypes.shape({
+      value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      label: PropTypes.string.isRequired,
+    })
+  ),
+  className: PropTypes.string,
+};
+
+ColorPicker.propTypes = {
+  className: PropTypes.string,
+};
+
+FileUpload.propTypes = {
+  currentUrl: PropTypes.string,
+  className: PropTypes.string,
+};

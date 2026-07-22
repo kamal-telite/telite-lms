@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.api.auth import TokenData
@@ -16,19 +16,29 @@ def mock_require_admin():
 
 app.dependency_overrides[require_admin] = mock_require_admin
 client = TestClient(app)
+from app.models.organization import Organization
 
 def test_manual_script(db_session):
     # Setup test data
+    org1 = Organization(id=1, name="Org 1", plan="Pro", type="b2b", slug="org1", domain="org1.com")
+    org2 = Organization(id=2, name="Org 2", plan="Pro", type="b2b", slug="org2", domain="org2.com")
+    db_session.add(org1)
+    db_session.add(org2)
+    db_session.flush()
+    
     c_id = str(uuid.uuid4())
-    course = Course(id=c_id, org_id=1, title="Test Course", status="published", category_slug="slug")
+    course = Course(id=c_id, org_id=1, name="Test Course", status="published", category_slug="slug", tier="Basic", slug="test")
     db_session.add(course)
     
     u_id = str(uuid.uuid4())
-    user = User(id=u_id, org_id=1, email="exist@example.com", full_name="Exist", is_active=True, role="learner")
+    user = User(
+        id=u_id, org_id=1, username="exist", email="exist@example.com", full_name="Exist", is_active=True, role="learner",
+        password_hash="hash", avatar_initials="EU", gradient_start="#000", gradient_end="#FFF"
+    )
     db_session.add(user)
     
     cross_id = str(uuid.uuid4())
-    cross_course = Course(id=cross_id, org_id=2, title="Cross Course", status="published", category_slug="slug")
+    cross_course = Course(id=cross_id, org_id=2, name="Cross Course", status="published", category_slug="slug", tier="Basic", slug="cross")
     db_session.add(cross_course)
     
     db_session.commit()

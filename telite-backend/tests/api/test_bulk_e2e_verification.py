@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.api.auth import TokenData
@@ -16,9 +16,26 @@ def mock_require_admin():
 
 app.dependency_overrides[require_admin] = mock_require_admin
 client = TestClient(app)
+from app.models.organization import Organization
+import uuid
+
+@pytest.fixture
+def seed_data(db_session):
+    org = Organization(id=1, name="Test Org", plan="Pro", type="b2b", slug="org1", domain="org1.com")
+    db_session.add(org)
+    db_session.flush()
+    course = Course(id=str(uuid.uuid4()), org_id=1, name="Test Course", status="published", category_slug="general", tier="Basic", slug="test")
+    db_session.add(course)
+    learner = User(
+        id=str(uuid.uuid4()), email=f"exist_{uuid.uuid4().hex[:8]}@example.com", username="exist",
+        full_name="Exist User", role="learner", password_hash="hash", org_id=1,
+        avatar_initials="EU", gradient_start="#000", gradient_end="#FFF"
+    )
+    db_session.add(learner)
+    db_session.commit()
+    return {"org": org, "course": course, "learner": learner}
 
 def test_e2e_bulk_enrollment(db_session, seed_data):
-    # db_session and seed_data are fixtures available in the test suite
     org = seed_data['org']
     course = seed_data['course']
     exist_user = seed_data['learner']
@@ -46,7 +63,10 @@ def test_e2e_bulk_enrollment(db_session, seed_data):
     
     print("\n--- 4. Cross Org Preview ---")
     # Let's create a cross-org course
-    cross_course = Course(id="cross-1", org_id=2, title="Cross", status="published", category_slug="general")
+    org2 = Organization(id=2, name="Cross Org", plan="Pro", type="b2b", slug="org2", domain="org2.com")
+    db_session.add(org2)
+    db_session.flush()
+    cross_course = Course(id="cross-1", org_id=2, name="Cross", status="published", category_slug="general", tier="Basic", slug="cross")
     db_session.add(cross_course)
     db_session.commit()
     csv_data = f"email,full_name,course_id\nvalid@example.com,Valid Name,cross-1"

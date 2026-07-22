@@ -18,13 +18,11 @@ import {
   rejectVerification,
   updateAdmin,
   updateCategory,
-  updateTask,
-  deleteTask,
 } from "../../services/client";
 import { ChartCanvas } from "../../components/common/charts";
 import { DashboardShell, SectionTitle, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
-import BulkEnrollmentPage from "./BulkEnrollmentPage";
+
 import { BrandingSettingsTab } from "../../components/dashboard/BrandingSettingsTab";
 
 import { useSuperAdminStore } from "../../store/dashboardStore";
@@ -91,8 +89,8 @@ export default function SuperAdminPage({ session, onLogout }) {
     loading,
     error,
     fetchData: load,
-    updateTaskState
   } = useSuperAdminStore();
+  const isMoodleSource = false;
   const [exportOpen, setExportOpen] = useState(false);
   const [categoryModal, setCategoryModal] = useState({ open: false, item: null });
   const [adminModal, setAdminModal] = useState({ open: false, item: null });
@@ -111,7 +109,6 @@ export default function SuperAdminPage({ session, onLogout }) {
   const [gradingLoading, setGradingLoading] = useState(false);
 
   const kpiPulse = useKpiPulse(dashboard?.kpis || {});
-  const isMoodleSource = dashboard?.data_source === "moodle" || settings?.data_source === "moodle";
 
   // Derive the active tab from the URL
   const currentPath = location.pathname.replace(/\/$/, ""); // Remove trailing slash
@@ -438,7 +435,7 @@ export default function SuperAdminPage({ session, onLogout }) {
           roleLabel: "super-admin",
         }}
         title="Super Admin Dashboard"
-        subtitle={isMoodleSource ? "Telite Systems · Moodle-backed view" : "Telite Systems · All categories"}
+        subtitle="Telite Systems · All categories"
         topbarBadge={{ tone: "accent", label: "super-admin access" }}
         topbarActions={
           <>
@@ -547,37 +544,32 @@ export default function SuperAdminPage({ session, onLogout }) {
                 accent="#7C3AED"
                 label="Total Categories"
                 value={dashboard.kpis.total_categories}
-                meta={
-                  isMoodleSource
-                    ? `${dashboard.sync_summary?.synced_categories || 0} synced to Moodle`
-                    : "Updated this month"
-                }
+                meta={`${dashboard.kpis?.total_categories || 0} active`}
                 pulse={kpiPulse.total_categories}
               />
               <StatCard
                 accent="#2563EB"
                 label="Total Courses"
                 value={dashboard.kpis.total_courses}
-                meta={isMoodleSource ? "Live Moodle course count" : "Across all categories"}
+                meta="Across all categories"
                 pulse={kpiPulse.total_courses}
               />
               <StatCard
                 accent="#059669"
-                label={isMoodleSource ? "Moodle Users" : "Total Learners"}
-                value={dashboard.kpis.total_learners}
-                meta={isMoodleSource ? "Active Moodle accounts" : "Enrolled this quarter"}
+                label="Total Learners"
+                value={dashboard?.kpis?.total_users || 0}
+                meta="Enrolled this quarter"
                 pulse={kpiPulse.total_learners}
               />
               <StatCard
                 accent="#D97706"
                 label="Pending Approvals"
                 value={dashboard.kpis.pending_approvals}
-                meta={isMoodleSource ? "Not exposed by current Moodle API" : "Requires action"}
+                meta="Requires action"
                 pulse={kpiPulse.pending_approvals}
               />
             </div>
 
-            {!isMoodleSource ? (
               <div className="grid-2" style={{ marginTop: 18 }}>
                 <Panel title="Recent enrollments" subtitle="Latest 10 enrollment requests">
                   <div className="table-wrap">
@@ -664,7 +656,6 @@ export default function SuperAdminPage({ session, onLogout }) {
                   </div>
                 </Panel>
               </div>
-            ) : null}
           </section>
           )}
 
@@ -690,9 +681,7 @@ export default function SuperAdminPage({ session, onLogout }) {
                   <div className="category-card__name">{category.name}</div>
                   <div className="category-card__meta">
                     {category.slug} · {category.total_courses} courses ·{" "}
-                    {isMoodleSource
-                      ? `sync: ${category.is_synced ? "synced to Moodle" : "not synced to Moodle"}`
-                      : `admin: ${category.admin_name}`}
+                    {`${category.courses_count || 0} courses`}
                   </div>
                   <div className="stat-pair">
                     <div className="stat-pair__card">
@@ -700,11 +689,9 @@ export default function SuperAdminPage({ session, onLogout }) {
                       <strong style={{ color: category.accent_color }}>{category.total_learners}</strong>
                     </div>
                     <div className="stat-pair__card">
-                      <span>{isMoodleSource ? "Sync status" : "Avg PAL"}</span>
+                      <span>Avg PAL</span>
                       <strong style={{ color: category.accent_color }}>
-                        {isMoodleSource
-                          ? titleize(category.sync_status || "not_synced")
-                          : formatPercent(category.avg_pal)}
+                        {formatPercent(category.avg_pal)}
                       </strong>
                     </div>
                   </div>
@@ -746,12 +733,6 @@ export default function SuperAdminPage({ session, onLogout }) {
           <section id="section-pal">
             <Panel
               className="panel"
-              title={isMoodleSource ? "Moodle category distribution" : "PAL leaderboard - all categories"}
-              subtitle={
-                isMoodleSource
-                  ? "Live category and course data from Moodle"
-                  : "Top learners across the organization"
-              }
               action={
                 isMoodleSource ? (
                   <Badge tone="neutral">live Moodle</Badge>
@@ -1702,6 +1683,9 @@ export default function SuperAdminPage({ session, onLogout }) {
             setCategoryModal({ open: false, item: null });
             await load();
           } catch (requestError) {
+            if (requestError.response?.status === 409) {
+              throw requestError;
+            }
             showToast(getErrorMessage(requestError, "Unable to save category."), "error");
           }
         }}
@@ -1801,6 +1785,15 @@ function CategoryEditorModal({ open, item, admins, organizations = [], onClose, 
         },
         isEdit
       );
+    } catch (err) {
+      if (err.response?.status === 409 && err.response?.data?.detail) {
+        const d = err.response.data.detail;
+        if (d.field) {
+          setErrors({ [d.field]: d.message });
+        } else {
+          setErrors({ name: d.message || "A conflict occurred." });
+        }
+      }
     } finally {
       setIsSubmitting(false);
     }

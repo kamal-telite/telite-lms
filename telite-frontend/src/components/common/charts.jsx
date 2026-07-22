@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Chart as ChartJS, registerables } from "chart.js";
 import { Chart } from "react-chartjs-2";
+import PropTypes from "prop-types";
 
 ChartJS.register(...registerables);
 
@@ -53,3 +54,16 @@ export function ChartCanvas({
     </div>
   );
 }
+
+ChartCanvas.propTypes = {
+  type: PropTypes.oneOf(["line", "bar", "pie", "doughnut", "radar", "polarArea", "bubble", "scatter"]).isRequired,
+  labels: PropTypes.arrayOf(PropTypes.string).isRequired,
+  datasets: PropTypes.arrayOf(PropTypes.object).isRequired,
+  options: PropTypes.object,
+  height: PropTypes.number,
+  className: PropTypes.string,
+  centerLabel: PropTypes.shape({
+    title: PropTypes.string.isRequired,
+    subtitle: PropTypes.string.isRequired,
+  }),
+};

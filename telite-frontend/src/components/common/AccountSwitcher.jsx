@@ -15,6 +15,7 @@ import {
   removeAccount,
 } from "../../context/session";
 import { Button, useToast } from "./ui";
+import PropTypes from "prop-types";
 
 function initialsFor(account) {
   return (account?.name || account?.email || "U")
@@ -220,3 +221,16 @@ export default function AccountSwitcher({ session, onSessionChange }) {
     </div>
   );
 }
+
+AccountSwitcher.propTypes = {
+  session: PropTypes.shape({
+    user: PropTypes.shape({
+      user_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      name: PropTypes.string,
+      email: PropTypes.string,
+      role: PropTypes.string,
+      is_platform_admin: PropTypes.bool,
+    }),
+  }),
+  onSessionChange: PropTypes.func,
+};

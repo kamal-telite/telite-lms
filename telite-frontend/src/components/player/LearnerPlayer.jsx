@@ -192,12 +192,6 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     }, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, [courseId]);
-
-  // Log certificate state changes
-  useEffect(() => {
-    console.log("Certificate state changed:", certificate);
-  }, [certificate]);
-
   // Check if current section's minimum time requirement is met
   const isSectionTimeRequirementMet = () => {
     if (!activeModule || !courseData?.sections) return true;
@@ -296,17 +290,11 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       const submissionData = response.data;
       
       // Certificate is returned in the submission response
-      console.log("Submission response:", submissionData);
       if (submissionData.certificate) {
-        console.log("Certificate found in response:", submissionData.certificate);
-        console.log("Certificate verification_token:", submissionData.certificate.verification_token);
         setCertificate(submissionData.certificate);
       } else if (submissionData.already_submitted) {
         // Already submitted, certificate should be in response
-        console.log("Course already submitted, checking for certificate");
         if (submissionData.certificate) {
-          console.log("Certificate found for already submitted course:", submissionData.certificate);
-          console.log("Certificate verification_token:", submissionData.certificate.verification_token);
           setCertificate(submissionData.certificate);
         } else {
           console.warn("No certificate in response for already submitted course");
@@ -335,9 +323,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   };
 
   const handleViewCertificate = () => {
-    console.log("handleViewCertificate called, certificate:", certificate);
     if (certificate?.verification_token) {
-      console.log("Opening certificate verification page with token:", certificate.verification_token);
       window.open(`/public/verify/${certificate.verification_token}`, "_blank");
     } else {
       console.warn("Certificate or verification_token not available");
@@ -345,7 +331,6 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   };
 
   const handleDownloadCertificate = async () => {
-    console.log("handleDownloadCertificate called, certificate:", certificate);
     if (certificate?.verification_token) {
       try {
         // Use the new download endpoint
@@ -649,7 +634,6 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
                   You have successfully completed this course.
                 </p>
                 <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
-                  {console.log("Rendering completion screen, certificate:", certificate)}
                   {certificate?.verification_token ? (
                     <>
                       <Button tone="primary" onClick={handleViewCertificate}>

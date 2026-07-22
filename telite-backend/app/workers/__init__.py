@@ -1,1 +1,1 @@
-"""Celery async workers for Moodle sync and background tasks."""
+"""Celery async workers for background tasks."""

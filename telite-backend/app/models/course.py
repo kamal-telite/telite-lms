@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Float, Integer, String, Text
+from sqlalchemy import Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -18,11 +18,14 @@ def _serialize_datetime(value) -> str | None:
 
 class Course(Base, TenantMixin, TimestampMixin):
     __tablename__ = "courses"
+    __table_args__ = (
+        UniqueConstraint("org_id", "slug", name="uq_courses_org_id_slug"),
+    )
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
     category_slug: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tier: Mapped[str] = mapped_column(String(50), nullable=False, default="Basic")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")

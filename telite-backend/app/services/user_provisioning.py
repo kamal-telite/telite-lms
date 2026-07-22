@@ -19,6 +19,7 @@ from app.repositories.invite_repo import InviteRepository
 
 from app.repositories.audit_repo import AuditRepository
 from app.core.password_utils import get_default_learner_password, hash_password
+from app.core.identifier_masking import mask_identifier
 
 
 class ProvisioningError(Exception):
@@ -109,7 +110,7 @@ class UserProvisioningService:
             target_type="invitation",
             target_id=inv.id,
             org_id=org_id,
-            message=f"Invited {email} as {role}",
+            message=f"Invited {mask_identifier(email)} as {role}",
         )
         return inv
 
@@ -294,8 +295,10 @@ class UserProvisioningService:
         email = email.strip().lower()
         full_name = full_name.strip()
 
-        existing_user = self.user_repo.get_by_email(email)
+        existing_user = self.user_repo.get_by_identifier(email)
         if existing_user:
+            if existing_user.email != email:
+                raise ProvisioningError("This email is already in use as another user's username")
             if existing_user.org_id != org_id:
                 raise ProvisioningError("Email already belongs to another organization")
             if existing_user.role != "learner":
@@ -328,7 +331,7 @@ class UserProvisioningService:
             action="learner.manual_provisioned",
             target_type="user",
             target_id=user.id,
-            message=f"Manually provisioned learner {email}",
+            message=f"Manually provisioned learner {mask_identifier(email)}",
         )
         return user, True
 
@@ -365,7 +368,7 @@ class UserProvisioningService:
             target_type="user",
             target_id=user.id,
             action="provisioned",
-            message=f"Provisioned user {email}",
+            message=f"Provisioned user {mask_identifier(email)}",
             metadata={"after": user.to_dict()}
         )
         

@@ -32,7 +32,7 @@ const FEATURES = [
   { id: "rbac", title: "Role-based access control", desc: "Separate dashboards for super admins, category admins, and learners. Every user sees exactly what they need.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#4648d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
   { id: "course", title: "Course and content management", desc: "Create, organise, and publish courses with module-level control. Manage tiers, statuses, and learner access in real time.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 10h16M4 14h10" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/><rect x="4" y="2" width="16" height="20" rx="2" stroke="#4648d4" strokeWidth="2"/></svg> },
   { id: "analytics", title: "Analytics and progress tracking", desc: "Real-time PAL scores, quiz averages, completion rates, and leaderboards. Identify at-risk learners before they fall behind.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/><path d="M18 9l-5 5-3-3-4 4" stroke="#4648d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
-  { id: "moodle", title: "Moodle and API integration", desc: "Sync categories, courses, and users directly with Moodle. Open API support for third-party integrations.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="#4648d4" strokeWidth="2"/><path d="M12 8v4l3 3" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/></svg> },
+  { id: "api", title: "Open API integration", desc: "Sync categories, courses, and users programmatically. Full Open API support for third-party integrations.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="#4648d4" strokeWidth="2"/><path d="M12 8v4l3 3" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/></svg> },
   { id: "enrollment", title: "Enrollment management", desc: "Manual and self-enrollment flows with approval queues, domain-based access control, and built-in CSV verification.", svg: <svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke="#4648d4" strokeWidth="2"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="#4648d4" strokeWidth="2" strokeLinecap="round"/></svg> },
   { id: "scale", title: "Scalable multi-category architecture", desc: "Run ATS, DevOps, Cloud and more as isolated categories - each with its own admin, courses, and learner pool.", svg: <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="#4648d4" strokeWidth="2"/></svg> },
 ];
@@ -40,7 +40,7 @@ const FEATURES = [
 const TESTIMONIALS = [
   { name: "Rohan Kumar", role: "L&D Manager, Infosys", stars: 5, quote: "The role-based dashboards made a huge difference. Our admins now manage their category independently without stepping on each other." },
   { name: "Sunita Arora", role: "Training Lead, NovaTech", stars: 5, quote: "PAL tracking gave us visibility we never had before. We caught at-risk students early and improved completion rates by 22%." },
-  { name: "Vikram Pillai", role: "CTO, EduBridge", stars: 5, quote: "We migrated from bare Moodle in under a week. The enrollment workflows and verification system saved hours of manual admin work." },
+  { name: "Vikram Pillai", role: "CTO, EduBridge", stars: 5, quote: "We migrated to Telite in under a week. The enrollment workflows and verification system saved hours of manual admin work." },
   { name: "Deepa Nair", role: "Academic Dean, MIT Pune", stars: 5, quote: "Finally a platform that understands how colleges actually operate. The multi-category structure maps perfectly to our departments." },
   { name: "Arjun Mehta", role: "HR Director, FinEdge", stars: 5, quote: "Onboarding compliance training used to take weeks to set up. With Telite, our new cohort was live in a day. Genuinely surprised." },
   { name: "Priya Shah", role: "VP Learning, Cybertech", stars: 5, quote: "The analytics dashboard alone is worth the upgrade. Seeing PAL scores and quiz trends in real time changed how our managers coach teams." },
@@ -48,7 +48,7 @@ const TESTIMONIALS = [
 
 const PLANS = [
   { name: "Starter", price: { monthly: "Free", annual: "Free" }, tag: "For small teams and individual instructors getting started", period: "No credit card required", features: ["Up to 25 learners", "1 learning category", "5 courses", "Basic analytics", "Email support"] },
-  { name: "Pro", price: { monthly: "₹2,499", annual: "₹1,999" }, tag: "For growing organisations with multi-category and advanced analytics", period: "per month, billed monthly", highlight: true, features: ["Up to 500 learners", "5 learning categories", "Unlimited courses", "PAL tracking and reports", "Moodle integration", "Bulk verification tools", "Priority support"] },
+  { name: "Pro", price: { monthly: "₹2,499", annual: "₹1,999" }, tag: "For growing organisations with multi-category and advanced analytics", period: "per month, billed monthly", highlight: true, features: ["Up to 500 learners", "5 learning categories", "Unlimited courses", "PAL tracking and reports", "API access", "Bulk verification tools", "Priority support"] },
   { name: "Enterprise", price: { monthly: "Custom", annual: "Custom" }, tag: "For colleges and large enterprises with compliance needs", period: "Talk to us", features: ["Unlimited learners", "Unlimited categories", "Custom domain", "SSO and LDAP", "Dedicated account manager", "SLA guarantee"] },
 ];
 
@@ -134,18 +134,6 @@ const TRUST_LOGOS = [
 ];
 
 const INTEGRATIONS = [
-  {
-    name: "Moodle",
-    category: "LMS",
-    desc: "High-speed bi-directional course category synchronization and user enrollment.",
-    status: "Available",
-    svg: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-        <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-      </svg>
-    )
-  },
   {
     name: "Zoom",
     category: "Communication",
@@ -368,12 +356,12 @@ function CountUp({ target, suffix = "", prefix = "", decimals = 0, useSeparator 
 
 const FAQS = [
   {
-    q: "What exactly is Telite Systems LMS?",
-    a: "Telite Systems LMS is a modern learning operations orchestrator and analytics layer built to sit alongside your Moodle runtime or run stand-alone. It provides premium role-based administrative consoles, custom organizational boundaries, and advanced AI-driven proactive analytics."
+    q: "Is Telite Systems an LMS?",
+    a: "Telite Systems LMS is a modern learning operations orchestrator and analytics layer. It provides premium role-based administrative consoles, custom organizational boundaries, and advanced AI-driven proactive analytics."
   },
   {
-    q: "How does the Moodle integration work?",
-    a: "Telite integrates seamlessly via high-speed Moodle REST Web Services APIs. It manages user accounts, course categories, metadata, and business operations, whilst Moodle reliably serves learning content and SCORM packages. No database customization or plugins are needed."
+    q: "How does the API integration work?",
+    a: "Telite integrates seamlessly via high-speed REST Web Services APIs. It manages user accounts, course categories, metadata, and business operations programmatically. No database customization or plugins are needed."
   },
   {
     q: "Is it compliant with modern security standards?",
@@ -922,7 +910,7 @@ export default function LandingPage({ session }) {
             {/* Floating micro-cards */}
             <div className="hero-float-card hero-float--1">
               <svg viewBox="0 0 18 18" fill="none" stroke="#10b981" strokeWidth="2" width="18" height="18"><path d="M4 9l3 3 7-7"/></svg>
-              <span>Moodle synced</span>
+              <span>Cloud synced</span>
             </div>
             <div className="hero-float-card hero-float--2">
               <svg viewBox="0 0 18 18" fill="none" stroke="#818cf8" strokeWidth="2" width="18" height="18"><circle cx="9" cy="9" r="7"/><path d="M9 5v4l3 2"/></svg>
@@ -1043,7 +1031,7 @@ export default function LandingPage({ session }) {
               <div className={`sol-panel ${activeTab === "college" ? "active" : ""}`}>
                 <h3 className="sol-headline">Academic learning management</h3>
                 <ul className="sol-checklist">
-                  {["Manage students, courses, and departments", "Academic analytics and attendance tracking", "Role-based access per faculty and staff", "Bulk enrollment and verification tools", "Moodle integration for existing systems"].map((item) => <li key={item}><span className="check-icon"><svg viewBox="0 0 16 16" fill="none" stroke="#10b981" strokeWidth="2"><path d="M4 8l3 3 5-6"/></svg></span>{item}</li>)}
+                  {["Manage students, courses, and departments", "Academic analytics and attendance tracking", "Role-based access per faculty and staff", "Bulk enrollment and verification tools", "API integration for existing systems"].map((item) => <li key={item}><span className="check-icon"><svg viewBox="0 0 16 16" fill="none" stroke="#10b981" strokeWidth="2"><path d="M4 8l3 3 5-6"/></svg></span>{item}</li>)}
                 </ul>
               </div>
               <div className={`sol-panel ${activeTab === "company" ? "active" : ""}`}>
@@ -1112,7 +1100,7 @@ export default function LandingPage({ session }) {
                       <div className="sidebar-metric">
                         <span className="label">Completion Index</span>
                         <h4 className="value">84.5%</h4>
-                        <span className="subtext green">+3.2% vs Moodle raw</span>
+                        <span className="subtext green">+3.2% vs baseline</span>
                       </div>
                       <div className="sidebar-metric">
                         <span className="label">Active Study Pacing</span>

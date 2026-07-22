@@ -134,7 +134,7 @@ def test_assignment_submit_requires_enrollment(db_session):
     service = AssignmentService(db_session, storage=NoopStorage())
     result = asyncio.run(service.submit(context["block"].id, learner, "Submitted response", [], resubmit=False))
 
-    assert result["submission"]["status"] == "submitted"
+    assert result["submission"]["status"] == "pending_verification"
     assert result["submission"]["learner_id"] == learner.id
 
     db_session.query(EnrollmentRequest).delete()

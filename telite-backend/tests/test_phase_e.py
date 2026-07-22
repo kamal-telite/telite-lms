@@ -40,7 +40,3 @@ def test_rls_enforcement():
     # Ensure tenant A cannot see tenant B's certificates
     assert True
 
-def test_moodle_proxy_deprecation():
-    """6.5 Deprecate and remove iframe injection logic from moodle_proxy.py."""
-    # Confirms that /player/modules/{id}/launch is used instead of moodle_proxy
-    assert True

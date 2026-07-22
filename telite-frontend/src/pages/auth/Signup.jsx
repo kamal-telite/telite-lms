@@ -651,7 +651,7 @@ export default function Signup() {
                         ref={submitBtnRef}
                         disabled={submitting}
                         onClick={handleSubmit}
-                        onMouseMove={(e) => handleMagneticMove(e, submitBtnRef)}}
+                        onMouseMove={(e) => handleMagneticMove(e, submitBtnRef)}
                       >
                         {submitting ? "Submitting..." : "Submit Registration"}
                       </button>

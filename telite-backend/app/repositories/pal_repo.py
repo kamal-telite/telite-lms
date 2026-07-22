@@ -109,7 +109,7 @@ class PalScoreRepository(BaseRepository[PalQuizScore]):
             enrollment_number=enrollment_number,
             org_id=org_id,
             user_id=user_id,
-            course_id=course_id,
+            external_course_id=course_id,
             course_name=course_name,
             quiz_id=quiz_id,
             quiz_name=quiz_name,

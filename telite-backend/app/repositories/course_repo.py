@@ -13,6 +13,14 @@ from typing import Any, Sequence
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+
+class DuplicateResourceError(Exception):
+    def __init__(self, resource_type: str, field: str, message: str):
+        self.resource_type = resource_type
+        self.field = field
+        self.message = message
+        super().__init__(self.message)
 
 from app.models.category import Category
 from app.models.course import Course
@@ -23,8 +31,8 @@ from app.core.utils import slugify
 class CategoryRepository(BaseRepository[Category]):
     model = Category
 
-    def get_by_slug(self, slug: str) -> Category | None:
-        stmt = select(Category).where(Category.slug == slug.strip())
+    def get_by_slug(self, slug: str, org_id: int) -> Category | None:
+        stmt = select(Category).where(Category.slug == slug.strip(), Category.org_id == org_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
     def list_by_org(
@@ -41,6 +49,14 @@ class CategoryRepository(BaseRepository[Category]):
         stmt = stmt.order_by(Category.name).limit(limit).offset(offset)
         return self.session.execute(stmt).scalars().all()
 
+    def validate_category_creation(self, slug: str, org_id: int) -> None:
+        if self.get_by_slug(slug, org_id):
+            raise DuplicateResourceError(
+                resource_type="category",
+                field="name",
+                message="Category name already exists."
+            )
+
     def create_category(
         self,
         *,
@@ -52,7 +68,14 @@ class CategoryRepository(BaseRepository[Category]):
         admin_user_id: str | None = None,
         **extra: Any,
     ) -> Category:
-        slug = extra.pop("slug", None) or slugify(name)
+        name = name.strip()
+        slug = extra.pop("slug", None)
+        if not slug:
+            slug = slugify(name)
+        slug = slug.strip().lower()
+        
+        self.validate_category_creation(slug, org_id)
+
         cat = Category(
             id=f"cat-{uuid.uuid4().hex[:8]}",
             name=name.strip(),
@@ -67,7 +90,15 @@ class CategoryRepository(BaseRepository[Category]):
             **extra,
         )
         self.session.add(cat)
-        self.session.flush()
+        try:
+            self.session.flush()
+        except IntegrityError:
+            self.session.rollback()
+            raise DuplicateResourceError(
+                resource_type="category",
+                field="name",
+                message="Category name already exists."
+            )
         return cat
 
     def archive_category(self, category: Category, archived_at: str) -> Category:
@@ -80,8 +111,8 @@ class CategoryRepository(BaseRepository[Category]):
 class CourseRepository(BaseRepository[Course]):
     model = Course
 
-    def get_by_slug(self, slug: str) -> Course | None:
-        stmt = select(Course).where(Course.slug == slug.strip())
+    def get_by_slug(self, slug: str, org_id: int) -> Course | None:
+        stmt = select(Course).where(Course.slug == slug.strip(), Course.org_id == org_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
     def list_by_org(
@@ -106,6 +137,14 @@ class CourseRepository(BaseRepository[Course]):
             )
         stmt = stmt.order_by(Course.name).limit(limit).offset(offset)
         return self.session.execute(stmt).scalars().all()
+
+    def validate_course_creation(self, slug: str, org_id: int) -> None:
+        if self.get_by_slug(slug, org_id):
+            raise DuplicateResourceError(
+                resource_type="course",
+                field="name",
+                message="Course name already exists."
+            )
 
     def list_by_ids_for_org(self, course_ids: list[str], org_id: int) -> Sequence[Course]:
         if not course_ids:
@@ -138,7 +177,14 @@ class CourseRepository(BaseRepository[Course]):
         tier: str = "Basic",
         **extra: Any,
     ) -> Course:
-        slug = extra.pop("slug", None) or slugify(name)
+        name = name.strip()
+        slug = extra.pop("slug", None)
+        if not slug:
+            slug = slugify(name)
+        slug = slug.strip().lower()
+        
+        self.validate_course_creation(slug, org_id)
+
         status = extra.pop("status", "draft")
         modules = extra.pop("modules", None)
         modules_json = extra.pop("modules_json", None)
@@ -157,7 +203,15 @@ class CourseRepository(BaseRepository[Course]):
             **extra,
         )
         self.session.add(course)
-        self.session.flush()
+        try:
+            self.session.flush()
+        except IntegrityError:
+            self.session.rollback()
+            raise DuplicateResourceError(
+                resource_type="course",
+                field="name",
+                message="Course name already exists."
+            )
         return course
 
     def update_course(self, course: Course, **fields: Any) -> Course:

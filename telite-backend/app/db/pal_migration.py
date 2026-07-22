@@ -76,7 +76,7 @@ def migrate_pal_to_postgres(
                     score = PalQuizScore(
                         org_id=org_id,
                         enrollment_number=row["enrollment_number"],
-                        course_id=row["course_id"],
+                        external_course_id=row["course_id"],
                         course_name=row["course_name"],
                         quiz_id=row["quiz_id"],
                         quiz_name=row["quiz_name"],

@@ -33,7 +33,6 @@ class TeliteQuizEngineTests(unittest.TestCase):
         db_path = os.path.join(self.tempdir.name, "test_quiz_engine.db")
         os.environ["TELITE_DB_PATH"] = db_path
         os.environ["TELITE_DATABASE_URL"] = f"sqlite:///{db_path}"
-        os.environ["MOODLE_MODE"] = "mock"
         os.environ["TELITE_SEED_ADMIN_PASSWORD"] = TEST_ADMIN_PASSWORD
         os.environ["TELITE_SEED_LEARNER_PASSWORD"] = TEST_LEARNER_PASSWORD
         os.environ["REDIS_ENABLED"] = "false"

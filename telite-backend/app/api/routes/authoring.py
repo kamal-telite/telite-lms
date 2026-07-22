@@ -98,8 +98,6 @@ def publish_course(
     draft.published_by = current_user.id
     draft.published_at = func.now()
     
-    # In a real system, we would enqueue a Celery task here to sync the course structure to Moodle shell
-    
     # [N4B] Dispatch Course Published Notification
     from app.core.notification_payloads import (
         course_authoring_metadata,
@@ -567,9 +565,7 @@ def update_learning_path_courses(
     db.commit()
     return {"success": True}
 
-# -----------------------------------------------------------------------------
-# Legacy Moodle Proxied Endpoints
-# -----------------------------------------------------------------------------
+
 
 class CreateModuleRequest(BaseModel):
     course_id: str
@@ -595,8 +591,6 @@ def create_module(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     # Create native interactive module record
-    # Note: Moodle proxy sync has been retired.
-    
     section = None
     if request.section_id:
         section = db.query(CourseSection).filter(
@@ -674,8 +668,6 @@ def update_module(
     if not module:
         raise HTTPException(status_code=404, detail="Module not found")
     # Update module in the database
-    # Note: Moodle module update sync is retired.
-
     module.title = request.title
     if request.content_url is not None:
         module.content_url = request.content_url
@@ -765,22 +757,4 @@ def duplicate_module(
     
     return {"success": True, "module": new_module.to_dict()}
 
-class QuizQuestionRequest(BaseModel):
-    module_id: int
-    question_text: str
-    question_type: str
-    options: list[str] = []
-    correct_option: int = 0
 
-@authoring_router.post("/modules/quiz/questions", dependencies=[Depends(require_admin)])
-def add_quiz_question(
-    request: QuizQuestionRequest,
-    db: Session = Depends(db_session),
-    current_user: TokenData = Depends(get_current_user)
-):
-    _apply_authoring_tenant_context(db, current_user)
-    module = db.query(CourseModule).filter(CourseModule.id == request.module_id, CourseModule.org_id == current_user.org_id).first()
-    if not module or module.module_type != "quiz":
-        raise HTTPException(status_code=404, detail="Quiz module not found")
-        
-    return {"success": True, "detail": "Question added to Moodle execution engine successfully"}

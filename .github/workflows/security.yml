@@ -67,7 +67,7 @@ jobs:
           # Secret scanning with TruffleHog. Configured to:
           # 1. Only FAIL on verified secrets (real credentials), not unverified false positives
           # 2. Still report unverified findings for review
-          # 3. moodledata.tar.gz is already in .gitignore to prevent commits
+          # 3. node_modules should be ignored
           docker run --rm \
             -v "$PWD:/repo" \
             "$TRUFFLEHOG_IMAGE" git \
@@ -114,12 +114,12 @@ jobs:
             --ignore-unfixed \
             --db-repository ghcr.io/aquasecurity/trivy-db:2 \
             --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
-            --skip-dirs /repo/moodle \
+
             --skip-dirs /repo/telite-frontend/node_modules \
             --skip-dirs /repo/telite-frontend/dist \
             --skip-dirs /repo/.git \
             --skip-dirs /repo/.jetro \
-            --skip-files /repo/moodledata.tar.gz \
+
             --no-progress \
             /repo
 
@@ -130,21 +130,19 @@ jobs:
       ENVIRONMENT: production
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ci-postgres-password
+      POSTGRES_PASSWORD: ${{ format('telite-ci-postgres-{0}-{1}', github.run_id, github.run_attempt) }}
       TELITE_POSTGRES_DB: telite_backend
       TELITE_POSTGRES_USER: telite_app
-      TELITE_POSTGRES_PASSWORD: ci-telite-password
-      TELITE_AUTH_SECRET: ci-production-secret-with-more-than-32-characters
-      TELITE_PASSWORD_SALT: ci-production-salt-value
-      REDIS_PASSWORD: ci-redis-password
-      MOODLE_DB_NAME: moodle
-      MOODLE_DB_USER: moodleuser
-      MOODLE_DB_PASSWORD: ci-moodle-password
+      TELITE_POSTGRES_PASSWORD: ${{ format('telite-ci-app-postgres-{0}-{1}', github.run_id, github.run_attempt) }}
+      TELITE_AUTH_SECRET: ${{ format('telite-ci-production-auth-{0}-{1}-not-for-production-use', github.run_id, github.run_attempt) }}
+      TELITE_PASSWORD_SALT: ${{ format('telite-ci-production-salt-{0}-{1}', github.run_id, github.run_attempt) }}
+      REDIS_PASSWORD: ${{ format('telite-ci-redis-{0}-{1}', github.run_id, github.run_attempt) }}
+
       TELITE_APP_URL: https://lms.example.com
       TELITE_CORS_ORIGINS: https://lms.example.com
       COOKIE_SECURE: "true"
       COOKIE_SAMESITE: strict
-      MOODLE_MODE: mock
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -25,10 +25,7 @@
         frameJs: 'https://cdn.jsdelivr.net/npm/h5p-standalone@3.5.1/dist/frame.bundle.js',
         frameCss: 'https://cdn.jsdelivr.net/npm/h5p-standalone@3.5.1/dist/styles/h5p.css',
       };
-      
-      console.log("H5PStandalone object:", H5PStandalone);
       const H5PConstructor = typeof H5PStandalone === 'function' ? H5PStandalone : (H5PStandalone.H5P || H5PStandalone.default || window.H5P);
-      console.log("Resolved Constructor:", H5PConstructor);
       
       new H5PConstructor(el, options).then(() => {
         // Forward xAPI events to the parent window (the React app)

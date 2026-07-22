@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PropTypes from "prop-types";
 import { Badge, Avatar } from "../components/common/ui";
 import { Icon } from "../components/common/icons";
 import AccountSwitcher from "../components/common/AccountSwitcher";
@@ -222,3 +223,78 @@ export function ProfileDropdown({ profile, onLogout, onNavigate }) {
     </div>
   );
 }
+
+DashboardShell.propTypes = {
+  theme: PropTypes.string,
+  variant: PropTypes.string,
+  brandMark: PropTypes.shape({
+    background: PropTypes.string,
+    label: PropTypes.node,
+  }).isRequired,
+  brandTitle: PropTypes.node.isRequired,
+  brandSubtitle: PropTypes.node,
+  navGroups: PropTypes.arrayOf(
+    PropTypes.shape({
+      label: PropTypes.string,
+      items: PropTypes.arrayOf(
+        PropTypes.shape({
+          id: PropTypes.string.isRequired,
+          icon: PropTypes.string.isRequired,
+          label: PropTypes.node.isRequired,
+          badge: PropTypes.node,
+          badgeTone: PropTypes.string,
+        })
+      ).isRequired,
+    })
+  ).isRequired,
+  activeNav: PropTypes.string,
+  onNavClick: PropTypes.func.isRequired,
+  profile: PropTypes.shape({
+    initials: PropTypes.string.isRequired,
+    gradient: PropTypes.arrayOf(PropTypes.string),
+    name: PropTypes.string.isRequired,
+    roleLabel: PropTypes.string,
+  }).isRequired,
+  title: PropTypes.node.isRequired,
+  subtitle: PropTypes.node,
+  topbarBadge: PropTypes.shape({
+    tone: PropTypes.string,
+    label: PropTypes.node.isRequired,
+  }),
+  topbarActions: PropTypes.node,
+  tabBar: PropTypes.node,
+  scrollRef: PropTypes.oneOfType([
+    PropTypes.func, 
+    PropTypes.shape({ current: PropTypes.instanceOf(Element) })
+  ]),
+  children: PropTypes.node.isRequired,
+  session: PropTypes.object,
+  onSessionChange: PropTypes.func,
+};
+
+TabBar.propTypes = {
+  tabs: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      label: PropTypes.node.isRequired,
+    })
+  ).isRequired,
+  activeTab: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
+};
+
+SectionTitle.propTypes = {
+  label: PropTypes.node.isRequired,
+  actions: PropTypes.node,
+};
+
+ProfileDropdown.propTypes = {
+  profile: PropTypes.shape({
+    initials: PropTypes.string,
+    gradient: PropTypes.arrayOf(PropTypes.string),
+    name: PropTypes.string,
+    roleLabel: PropTypes.string,
+  }),
+  onLogout: PropTypes.func.isRequired,
+  onNavigate: PropTypes.func,
+};

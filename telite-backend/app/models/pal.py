@@ -24,7 +24,7 @@ class PalQuizScore(Base, TenantMixin, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     enrollment_number: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     user_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
-    course_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    external_course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     course_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     quiz_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     quiz_name: Mapped[str | None] = mapped_column(String(255), nullable=True)

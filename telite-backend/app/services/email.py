@@ -581,3 +581,51 @@ def send_signup_rejection_email(to_email: str, name: str, role: str, reason: str
     except Exception as exc:
         print(f"[EMAIL ERROR] Rejection email failed: {exc}")
         return False
+
+
+def _dispatch_notification_email(
+    to_email: str,
+    name: str,
+    title: str,
+    body: str,
+    notif_type: str,
+) -> bool:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        print(f"[EMAIL NOT SENT - SMTP not configured] To: {to_email} | Title: {title}")
+        return False
+
+    try:
+        message = MIMEMultipart("alternative")
+        message["Subject"] = title
+        message["From"] = f"{FROM_NAME} <{SMTP_USER}>"
+        message["To"] = to_email
+
+        plain_text = f"Hello {name},\n\n{body}\n\n--\nTelite LMS"
+        
+        # Simple HTML
+        html_text = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color: #333;">
+            <p>Hello <strong>{name}</strong>,</p>
+            <p>{body.replace(chr(10), '<br>')}</p>
+            <hr>
+            <p style="color: #666; font-size: 12px;">This is an automated notification from Telite LMS.</p>
+        </body>
+        </html>
+        """
+
+        message.attach(MIMEText(plain_text, "plain"))
+        message.attach(MIMEText(html_text, "html"))
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, to_email, message.as_string())
+
+        print(f"[EMAIL SENT] Notification '{title}' sent to {to_email}")
+        return True
+    except Exception as exc:
+        print(f"[EMAIL ERROR] Failed to dispatch notification: {exc}")
+        return False
+

@@ -127,12 +127,7 @@ export default function PlatformAdminPage({ session, onLogout }) {
         e.preventDefault();
         toggleSidebar();
       }
-      // ⌘⇧S - Moodle global sync
-      if (mod && shift && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        navigate('/platform-admin/moodle-sync');
-        triggerGlobalSync();
-      }
+
       // ⌘S - Save settings (if on Settings tab)
       if (mod && !shift && e.key.toLowerCase() === 's') {
         if (pathname.endsWith('/settings')) {
@@ -280,22 +275,7 @@ export default function PlatformAdminPage({ session, onLogout }) {
                         ))}
                       </div>
                     )}
-                    {searchResults.sync?.length > 0 && (
-                      <div>
-                        <div style={{padding: '0 14px', fontSize: '11px', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: '4px'}}>Moodle Sync Categories</div>
-                        {searchResults.sync.map(t => (
-                          <div key={t.catId} className="notif-item" style={{padding: '6px 14px', gap: '8px', alignItems: 'center'}} onClick={() => { setSearchQuery(''); navigate('/platform-admin/moodle-sync'); }}>
-                            <div className="notif-icon-wrap" style={{width: '24px', height: '24px', background: 'var(--primary-lt)'}}>
-                              <span className="material-symbols-outlined" style={{color: 'var(--primary)', fontSize: '14px'}}>sync</span>
-                            </div>
-                            <div>
-                              <div className="notif-title" style={{fontSize: '12px'}}>{t.catId} - {t.catName}</div>
-                              <div className="notif-sub" style={{fontSize: '10px'}}>{t.tenant}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+
                   </div>
                 </div>
               )}
@@ -405,11 +385,6 @@ export default function PlatformAdminPage({ session, onLogout }) {
               <span className="material-symbols-outlined" style={{fontSize: '15px'}}>person_add</span> Send Invitation
             </div>
           </div>
-          <div className="fab-action">
-            <div className="fab-action-btn" onClick={() => { navigate('/platform-admin/moodle-sync'); triggerGlobalSync(); setFabOpen(false); }}>
-              <span className="material-symbols-outlined" style={{fontSize: '15px'}}>sync</span> Sync Moodle
-            </div>
-          </div>
         </div>
         <button className="fab-main" onClick={() => setFabOpen(!fabOpen)}>
           <span className="material-symbols-outlined" style={{fontSize: '22px'}}>add</span>
@@ -462,7 +437,7 @@ function OverviewTab({ searchQuery }) {
 
   const handleSync = async () => {
     await triggerSync();
-    showToast('Moodle sync completed — 99.8% success rate', 'success');
+    showToast('Global sync completed — 99.8% success rate', 'success');
   };
 
   useEffect(() => {
@@ -490,7 +465,7 @@ function OverviewTab({ searchQuery }) {
       <div className="status-bar">
         <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px'}}>
           <div className="status-pill green"><span className="pulse"></span> All Systems Operational</div>
-          <div className="status-info"><span className="material-symbols-outlined" style={{fontSize: '15px', color: 'var(--tx3)'}}>hub</span> Moodle Gateway: <strong>API Connected · 142ms</strong></div>
+          <div className="status-info"><span className="material-symbols-outlined" style={{fontSize: '15px', color: 'var(--tx3)'}}>hub</span> System Gateway: <strong>API Connected · 142ms</strong></div>
           <div className="status-info"><span className="material-symbols-outlined" style={{fontSize: '15px', color: 'var(--tx3)'}}>people</span> <strong>2.4k</strong>&nbsp;Active Sessions</div>
         </div>
         <div className="status-info" style={{fontSize: '11px'}}><span className="material-symbols-outlined" style={{fontSize: '14px'}}>update</span> Last check: 1m ago</div>
@@ -575,7 +550,7 @@ function OverviewTab({ searchQuery }) {
               </div>
               <div className="act-item">
                 <div className="act-icon" style={{background: 'var(--amber-bg)'}}><span className="material-symbols-outlined" style={{color: 'var(--amber)', fontSize: '16px'}}>sync</span></div>
-                <div><div className="act-title">Moodle Sync Started</div><div className="act-sub">Auto-sync for Oxford Academy</div><div className="act-time">15 minutes ago</div></div>
+                <div><div className="act-title">System Sync Started</div><div className="act-sub">Auto-sync for Oxford Academy</div><div className="act-time">15 minutes ago</div></div>
               </div>
               <div className="act-item">
                 <div className="act-icon" style={{background: 'var(--red-bg)'}}><span className="material-symbols-outlined" style={{color: 'var(--red)', fontSize: '16px'}}>lock</span></div>
@@ -589,7 +564,7 @@ function OverviewTab({ searchQuery }) {
       <div className="sync-strip">
         <div className="sync-icon"><span className="material-symbols-outlined" style={{color: '#fff', fontSize: '20px'}}>sync_alt</span></div>
         <div className="sync-info">
-          <div className="sync-title">Moodle Global Sync Status</div>
+          <div className="sync-title">Global Sync Status</div>
           <div className="sync-sub" id="syncSubText">Last complete sync: {lastSync} (99.8% Success Rate)</div>
         </div>
         <div className="sync-progress">
@@ -2055,13 +2030,12 @@ export function FeatureFlagsTab() {
     { key: 'ats', label: 'ATS Integration', icon: 'manage_history' },
     { key: 'cloud', label: 'Cloud Modules', icon: 'cloud' },
     { key: 'devops', label: 'Devops Courses', icon: 'terminal' },
-    { key: 'moodle', label: 'Moodle Access', icon: 'school' },
     { key: 'pal', label: 'PAL Tracking', icon: 'track_changes' },
   ];
 
   const [featureFlags, setFeatureFlags] = useState({
-    'Telite University': { analytics: true, ats: false, cloud: false, devops: false, moodle: true, pal: true },
-    'Telite Systems': { analytics: true, ats: false, cloud: false, devops: false, moodle: true, pal: true },
+    'Telite University': { analytics: true, ats: false, cloud: false, devops: false, pal: true },
+    'Telite Systems': { analytics: true, ats: false, cloud: false, devops: false, pal: true },
   });
 
   const handleFlagClick = (orgName, key) => {
@@ -2353,8 +2327,7 @@ export function HelpTab({ onOpenOrgModal, onOpenInviteModal, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState("");
   
   const [guides, setGuides] = useState([
-    { title: "Organization Creation & Onboarding", open: true, content: ["Navigate to the Organizations panel and select \"New Organization\".", "Define the organizational domain, type (College / Company), and metadata.", "Assign the primary Administrator and send an invite email.", "Configure feature flags per organization tier in the Feature Flags Matrix.", "Verify Moodle sync mapping in Sync Control > Tenant Mapping."] },
-    { title: "Moodle Sync Resolution Workflows", open: false, content: ["FAILED status → check endpoint URL in gateway settings → click Retry.", "PENDING status → verify Moodle API token has not expired.", "Timeout errors → increase request timeout in Settings > General.", "If CAT mapping is missing, re-map from Sync Control > Tenant Mapping."] },
+    { title: "Organization Creation & Onboarding", open: true, content: ["Navigate to the Organizations panel and select \"New Organization\".", "Define the organizational domain, type (College / Company), and metadata.", "Assign the primary Administrator and send an invite email.", "Configure feature flags per organization tier in the Feature Flags Matrix."] },
     { title: "Audit Log Export for Compliance", open: false, content: ["Navigate to Audit Logs from the System Section.", "Set Date Range, Organization, and Severity filters as needed.", "Use the Search Target field to isolate specific actor IDs or IP addresses.", "Click \"Export CSV\" to download the filtered results."] },
   ]);
 
@@ -2364,7 +2337,7 @@ export function HelpTab({ onOpenOrgModal, onOpenInviteModal, onNavigate }) {
     { action: "Send Invitation", shortcut: "⌥ I", scope: "Admin Control" },
     { action: "Export Audit Log", shortcut: "⇧ E", scope: "Audit Logs" },
     { action: "Toggle Sidebar", shortcut: "⌘ \\", scope: "Global" },
-    { action: "Trigger Moodle Sync", shortcut: "⌘ ⇧ S", scope: "Moodle Sync" },
+
     { action: "Save Settings", shortcut: "⌘ S", scope: "Settings" },
   ];
 

@@ -24,6 +24,7 @@ from app.repositories.invite_repo import InviteRepository
 from app.repositories.audit_repo import AuditRepository
 from app.repositories.analytics_repo import AnalyticsRepository
 from app.services.user_provisioning import UserProvisioningService, ProvisioningError
+from app.core.identifier_masking import mask_identifier
 
 logger = logging.getLogger("telite.platform")
 
@@ -404,7 +405,7 @@ def api_invite_admin(
         actor_name=admin.full_name,
         target_type="user",
         target_id=payload.email,
-        message=f"Invited {payload.email} as {payload.role} to {org.name}",
+        message=f"Invited {mask_identifier(payload.email)} as {payload.role} to {org.name}",
         ip_address=_client_ip(request),
         metadata={"delivery_status": "delivered" if delivered else "failed"},
     )
@@ -448,7 +449,7 @@ def api_resend_admin_invitation(
         actor_name=admin.full_name,
         target_type="invitation",
         target_id=str(invitation_id),
-        message=f"Resent invitation to {invitation.email}",
+        message=f"Resent invitation to {mask_identifier(invitation.email)}",
         ip_address=_client_ip(request),
         metadata={"delivery_status": "delivered" if delivered else "failed"},
     )

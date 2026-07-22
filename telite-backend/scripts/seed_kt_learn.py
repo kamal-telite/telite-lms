@@ -16,6 +16,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -31,6 +32,48 @@ from sqlalchemy.orm import Session
 from scripts.seed_permissions import seed_permissions
 
 from app.core.password_utils import hash_password
+
+SAFE_ENVIRONMENTS = {"development", "dev", "local", "test", "testing"}
+PRODUCTION_LIKE_ENVIRONMENTS = {"production", "prod", "staging"}
+PROTECTED_DATABASE_TOKENS = ("prod", "production", "live")
+SEED_OVERRIDE_ENV = "TELITE_ALLOW_KT_LEARN_SEED"
+
+
+def _env_flag_enabled(name: str) -> bool:
+    return os.getenv(name, "").lower().strip() in {"1", "true", "yes", "on"}
+
+
+def validate_seed_target(db_url: str) -> None:
+    environment = os.getenv("ENVIRONMENT", "development").lower().strip()
+    if environment in PRODUCTION_LIKE_ENVIRONMENTS:
+        raise RuntimeError(
+            "Refusing to run KT Learn destructive seed in production-like "
+            f"ENVIRONMENT={environment!r}."
+        )
+
+    if environment not in SAFE_ENVIRONMENTS and not _env_flag_enabled(SEED_OVERRIDE_ENV):
+        raise RuntimeError(
+            "Refusing to run KT Learn destructive seed because ENVIRONMENT is "
+            f"{environment!r}. Set {SEED_OVERRIDE_ENV}=true only for an approved "
+            "non-production reset target."
+        )
+
+    parsed = urlparse(db_url)
+    target_parts = [
+        (parsed.hostname or "").lower(),
+        parsed.path.lstrip("/").lower(),
+    ]
+    for target in target_parts:
+        if any(token in target for token in PROTECTED_DATABASE_TOKENS):
+            raise RuntimeError(
+                "Refusing to run KT Learn destructive seed against protected "
+                f"database target {target!r}."
+            )
+
+
+def create_seed_engine(db_url: str):
+    validate_seed_target(db_url)
+    return create_engine(db_url)
 
 
 def resolve_database_url() -> str:
@@ -53,7 +96,6 @@ if not DB_URL:
     print("ERROR: Set TELITE_MIGRATION_DATABASE_URL or TELITE_DATABASE_URL in .env")
     sys.exit(1)
 
-engine = create_engine(DB_URL)
 NOW = datetime.now(timezone.utc)
 
 EXPECTED = {
@@ -242,6 +284,16 @@ def delete_all(session: Session) -> None:
 
 
 def seed_kt_learn(session: Session) -> None:
+    print("Validating seed data for identifier collisions...")
+    from app.repositories.user_repo import UserRepository
+    repo = UserRepository(session)
+    for user in USERS:
+        try:
+            repo.validate_identifier_uniqueness(user["email"], user["username"])
+        except Exception as e:
+            print(f"Data validation failed for {user['email']}: {e}")
+            raise
+
     print("Seeding KT Learn data...\n")
 
     print("   Organization...")
@@ -484,6 +536,7 @@ def print_credentials() -> None:
 
 
 def main() -> int:
+    engine = create_seed_engine(DB_URL)
     print(f"Connected to: {engine.url}")
     with Session(engine) as session:
         delete_all(session)

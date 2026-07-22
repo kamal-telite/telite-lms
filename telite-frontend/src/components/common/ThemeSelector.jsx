@@ -1,4 +1,5 @@
 import { useTheme } from "../../providers/ThemeProvider";
+import PropTypes from "prop-types";
 
 const THEME_OPTIONS = [
   { value: "light", label: "Light" },
@@ -46,3 +47,7 @@ export default function ThemeSelector({ compact = false }) {
     </label>
   );
 }
+
+ThemeSelector.propTypes = {
+  compact: PropTypes.bool,
+};

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import TokenData, ensure_org_access, get_current_user, require_admin, require_super_admin, resolve_org_scope
 from app.db.engine import db_session
-from app.repositories.course_repo import CategoryRepository, CourseRepository
+from app.repositories.course_repo import CategoryRepository, CourseRepository, DuplicateResourceError
 from app.repositories.user_repo import UserRepository
 from app.repositories.org_repo import OrgRepository
 from app.repositories.invite_repo import InviteRepository
@@ -126,16 +126,11 @@ def post_category(
     payload = body.model_dump()
     scoped_org_id = payload.get("organization_id") or resolve_org_scope(current_user, org_id)
     
-    repo = CategoryRepository(db)
-    existing = repo.get_by_slug(payload["slug"])
-    if existing and existing.org_id == scoped_org_id:
-        raise HTTPException(status_code=400, detail="Category slug already exists.")
-
     try:
         created = repo.create_category(
             name=payload["name"],
             org_id=scoped_org_id,
-            slug=payload["slug"],
+            slug=payload.get("slug"),
             description=payload.get("description"),
             admin_user_id=payload.get("admin_user_id"),
             accent_color=payload.get("accent_color", "#2563EB"),
@@ -144,6 +139,13 @@ def post_category(
         )
         db.commit()
         return created.to_dict()
+    except DuplicateResourceError as dre:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={
+            "code": "CATEGORY_NAME_EXISTS",
+            "field": dre.field,
+            "message": dre.message
+        })
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
@@ -236,12 +238,18 @@ def post_admin(
         existing = user_repo.get_by_email(body.email)
         if existing:
             # Update existing
-            existing.role = body.role
-            existing.full_name = body.full_name
+            update_kwargs = {
+                "role": body.role,
+                "full_name": body.full_name,
+            }
             if body.category_scope:
-                existing.category_scope = body.category_scope
+                update_kwargs["category_scope"] = body.category_scope
+                
+            user_repo.update(existing, **update_kwargs)
+            
             if body.password:
                 user_repo.update_password(existing, body.password)
+                
             db.commit()
             return existing.to_dict()
         else:
@@ -287,15 +295,22 @@ def patch_admin(
         
     ensure_org_access(current_user, existing.org_id)
     try:
-        existing.full_name = body.full_name
-        existing.email = body.email
-        existing.role = body.role
+        # Build update kwargs
+        update_kwargs = {
+            "full_name": body.full_name,
+            "email": body.email,
+            "role": body.role,
+        }
         if body.category_scope is not None:
-            existing.category_scope = body.category_scope
+            update_kwargs["category_scope"] = body.category_scope
         if body.username:
-            existing.username = body.username
+            update_kwargs["username"] = body.username
+            
+        user_repo.update(existing, **update_kwargs)
+        
         if body.password:
             user_repo.update_password(existing, body.password)
+            
         db.commit()
         return existing.to_dict()
     except Exception as exc:
@@ -452,11 +467,13 @@ def delete_admin(
 @management_router.get("/categories/{category_slug}/courses")
 def get_category_courses(
     category_slug: str,
+    org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(db_session),
 ):
+    scoped_org_id = resolve_org_scope(current_user, org_id)
     cat_repo = CategoryRepository(db)
-    category = cat_repo.get_by_slug(category_slug)
+    category = cat_repo.get_by_slug(category_slug, scoped_org_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
         
@@ -480,11 +497,13 @@ def get_category_courses(
 def post_course(
     category_slug: str,
     body: CoursePayload,
+    org_id: int | None = Query(default=None, alias="orgId"),
     current_user: TokenData = Depends(require_admin),
     db: Session = Depends(db_session),
 ):
+    scoped_org_id = resolve_org_scope(current_user, org_id)
     cat_repo = CategoryRepository(db)
-    category = cat_repo.get_by_slug(category_slug)
+    category = cat_repo.get_by_slug(category_slug, scoped_org_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
         
@@ -498,6 +517,13 @@ def post_course(
         course = course_repo.create_course(**payload)
         db.commit()
         return course.to_dict()
+    except DuplicateResourceError as dre:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={
+            "code": "COURSE_NAME_EXISTS",
+            "field": dre.field,
+            "message": dre.message
+        })
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
@@ -627,7 +653,6 @@ def launch_course(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(db_session),
 ):
-    # Native player replaces moodle. Just return a native launch URL.
     return {"launch_url": f"/course/player/{course_id}", "status": "success"}
 
 @management_router.get("/users")

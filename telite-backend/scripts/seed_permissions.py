@@ -56,21 +56,16 @@ def seed_permissions():
             for org in orgs:
                 for role, caps in ROLE_CAPABILITIES.items():
                     for cap in caps:
-                        # Check if exists
-                        existing = db.query(RolePermission).filter(
-                            RolePermission.org_id == org.id,
-                            RolePermission.role == role,
-                            RolePermission.permission_key == cap
-                        ).first()
-                        
-                        if not existing:
-                            rp = RolePermission(
-                                org_id=org.id,
-                                role=role,
-                                permission_key=cap,
-                                enabled=True
-                            )
-                            db.add(rp)
+                        from sqlalchemy.dialects.postgresql import insert
+                        stmt = insert(RolePermission).values(
+                            org_id=org.id,
+                            role=role,
+                            permission_key=cap,
+                            enabled=True
+                        ).on_conflict_do_nothing(
+                            index_elements=['org_id', 'role', 'permission_key']
+                        )
+                        db.execute(stmt)
             
             db.commit()
             print("Permissions seeded successfully.")

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import PropTypes from "prop-types";
 import { IconButton } from "./ui";
 import { Icon } from "./icons";
 import NotificationCard from "./NotificationCard";
@@ -164,4 +165,17 @@ const loadingStyle = {
   alignItems: "center",
   gap: "var(--space-16)",
   color: "var(--text-secondary)"
+};
+
+NotificationDrawer.propTypes = {
+  open: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  notifications: PropTypes.shape({
+    items: PropTypes.arrayOf(PropTypes.object).isRequired,
+    total: PropTypes.number.isRequired,
+  }).isRequired,
+  isLoading: PropTypes.bool.isRequired,
+  onMarkRead: PropTypes.func.isRequired,
+  onMarkAllRead: PropTypes.func.isRequired,
+  onNotificationClick: PropTypes.func.isRequired,
 };

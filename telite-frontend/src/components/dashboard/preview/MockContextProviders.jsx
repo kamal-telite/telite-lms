@@ -35,7 +35,7 @@ export function MockContextProviders({ children, role }) {
     return {
       session,
       isAuthenticated: !!session,
-      logout: () => console.log("Mock logout clicked"),
+      logout: () => {},
       // Add other mock functions/data required by LearnerLayout, CategoryAdminPage, etc.
       stats: {
         enrolled: 12,

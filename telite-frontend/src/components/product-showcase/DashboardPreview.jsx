@@ -94,7 +94,7 @@ export default function DashboardPreview() {
                 <span className="alert-time">10:42 AM</span>
                 <span className="severity">CRITICAL</span>
               </div>
-              <span className="alert-txt">Moodle sync timeout detected for Cluster-B</span>
+              <span className="alert-txt">System sync timeout detected for Cluster-B</span>
             </div>
             <div className="alert-item med">
               <div className="alert-meta">

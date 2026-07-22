@@ -1,14 +1,14 @@
 import "./IntegrationPreview.css";
 
 const integrations = [
-  { name: "Moodle", status: "Synced", type: "LMS", pulse: true, latency: "12ms", load: 24, tone: "success" },
+  { name: "HRIS", status: "Synced", type: "HR", pulse: true, latency: "12ms", load: 24, tone: "success" },
   { name: "WhatsApp", status: "Active", type: "Comm", pulse: true, latency: "84ms", load: 12, tone: "success" },
   { name: "Zoom", status: "Active", type: "Comm", pulse: false, latency: "42ms", load: 5, tone: "info" },
   { name: "G-Classroom", status: "Active", type: "LMS", pulse: true, latency: "61ms", load: 8, tone: "warning" },
 ];
 
 const streamLogs = [
-  { kind: "sync", time: "[10:45:02]", action: "SYNC:", body: "Moodle -> GradeBook Updated", meta: "(24.2kb)" },
+  { kind: "sync", time: "[10:45:02]", action: "SYNC:", body: "HRIS -> Roster Updated", meta: "(24.2kb)" },
   { kind: "webhook", time: "[10:45:15]", action: "WEBHOOK:", body: "WhatsApp -> Delivery Confirmed", meta: "ID: 9422" },
   { kind: "event", time: "[10:46:01]", action: "EVENT:", body: "Zoom -> Session Sync Initiated", meta: "Latency 42ms" },
 ];

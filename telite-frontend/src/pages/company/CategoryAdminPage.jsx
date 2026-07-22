@@ -1492,6 +1492,9 @@ function CategoryAdminPageContent({ session, onLogout }) {
             setCourseModal({ open: false, item: null });
             await load();
           } catch (requestError) {
+            if (requestError.response?.status === 409) {
+              throw requestError;
+            }
             showToast(getErrorMessage(requestError, "Unable to save course."), "error");
           }
         }}
@@ -1723,22 +1726,33 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
       setErrors(nextErrors);
       return;
     }
-    await onSubmit(
-      {
-        name: form.name,
-        slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        description: form.description,
-        tier: form.tier,
-        status: form.status,
-        module_count: form.module_count,
-        lessons_count: form.lessons_count,
-        hours: form.hours,
-        modules: form.modules,
-        cover_image_url: form.cover_image_url,
-      },
-      isEdit,
-      selectedFile
-    );
+    try {
+      await onSubmit(
+        {
+          name: form.name,
+          slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          description: form.description,
+          tier: form.tier,
+          status: form.status,
+          module_count: form.module_count,
+          lessons_count: form.lessons_count,
+          hours: form.hours,
+          modules: form.modules,
+          cover_image_url: form.cover_image_url,
+        },
+        isEdit,
+        selectedFile
+      );
+    } catch (err) {
+      if (err.response?.status === 409 && err.response?.data?.detail) {
+        const d = err.response.data.detail;
+        if (d.field) {
+          setErrors({ [d.field]: d.message });
+        } else {
+          setErrors({ name: d.message || "A conflict occurred." });
+        }
+      }
+    }
   }
 
   return (

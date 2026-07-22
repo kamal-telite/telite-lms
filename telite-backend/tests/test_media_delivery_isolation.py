@@ -20,7 +20,8 @@ def _client_as(user: TokenData | None) -> TestClient:
 
 
 def test_local_media_requires_same_tenant_or_platform_admin():
-    uploads_root = Path(__file__).resolve().parents[1] / "uploads" / "media"
+    from app.core.storage_paths import media_upload_root
+    uploads_root = media_upload_root()
     asset_dir = uploads_root / "9001"
     asset_dir.mkdir(parents=True, exist_ok=True)
     asset_path = asset_dir / "phase-a5-media.txt"
@@ -40,7 +41,7 @@ def test_local_media_requires_same_tenant_or_platform_admin():
         assert _client_as(None).get("/uploads/media/9001/phase-a5-media.txt").status_code == 401
 
         same_tenant_response = _client_as(tenant_user).get("/uploads/media/9001/phase-a5-media.txt")
-        assert same_tenant_response.status_code == 200
+        assert same_tenant_response.status_code == 200, f"Expected 200, got 404. Body: {same_tenant_response.text}"
         assert same_tenant_response.text == "tenant media"
 
         cross_tenant_response = _client_as(other_tenant_user).get("/uploads/media/9001/phase-a5-media.txt")

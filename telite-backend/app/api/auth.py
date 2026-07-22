@@ -236,8 +236,17 @@ class ThemePreferenceRequest(BaseModel):
 # ── Core auth functions ───────────────────────────────────────────────────────
 
 def authenticate_user(db: Session, identifier: str, password: str):
+    from app.repositories.user_repo import UserRepository, IdentifierCollisionError
     repo = UserRepository(db)
-    user = repo.get_by_identifier_for_auth(identifier)
+    try:
+        user = repo.get_by_identifier_for_auth(identifier)
+    except IdentifierCollisionError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

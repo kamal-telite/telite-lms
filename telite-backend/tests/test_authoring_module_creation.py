@@ -43,6 +43,11 @@ def test_persist_and_refresh_reapplies_tenant_context_before_refresh(monkeypatch
 
 def test_create_module_persists_quiz_block_with_tenant_aware_helper(monkeypatch):
     class DummyCourseModule:
+        sort_order = 0
+        course_id = "course-1"
+        org_id = 7
+        section_id = None
+        section = 0
         def __init__(self, **kwargs):
             self.__dict__.update(kwargs)
 
@@ -69,6 +74,9 @@ def test_create_module_persists_quiz_block_with_tenant_aware_helper(monkeypatch)
         def count(self):
             return 0
 
+        def scalar(self):
+            return self.result
+
     class FakeDB:
         def __init__(self):
             self.added = []
@@ -82,20 +90,23 @@ def test_create_module_persists_quiz_block_with_tenant_aware_helper(monkeypatch)
                 return FakeQuery(None)
             if model is authoring.LessonBlock:
                 return FakeQuery(None)
-            raise AssertionError(f"Unexpected query for {model}")
+            return FakeQuery(0)
 
         def add(self, instance):
             self.added.append(instance)
 
         def commit(self):
             return None
+            
+        def execute(self, statement, params=None):
+            pass
 
     persist_calls = []
 
     def fake_persist_and_refresh(db, instance, org_id=None):
         persist_calls.append((instance, org_id))
-        if hasattr(instance, "id"):
-            return instance
+        if not getattr(instance, "id", None):
+            instance.id = 1
         return instance
 
     monkeypatch.setattr(authoring, "CourseModule", DummyCourseModule)

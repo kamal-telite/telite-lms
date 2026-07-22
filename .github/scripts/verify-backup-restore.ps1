@@ -8,6 +8,7 @@ $suffix = [Guid]::NewGuid().ToString("N").Substring(0, 10)
 $source = "telite_restore_source_$suffix"
 $target = "telite_restore_target_$suffix"
 $dump = "restore-drill-$suffix.dump"
+$postgresPassword = "restore-drill-password-$suffix"
 
 function Wait-Postgres {
     param([string]$Container)
@@ -24,8 +25,8 @@ function Wait-Postgres {
 }
 
 try {
-    docker run -d --name $source -e POSTGRES_PASSWORD=postgres $PostgresImage | Out-Null
-    docker run -d --name $target -e POSTGRES_PASSWORD=postgres $PostgresImage | Out-Null
+    docker run -d --name $source -e POSTGRES_PASSWORD=$postgresPassword $PostgresImage | Out-Null
+    docker run -d --name $target -e POSTGRES_PASSWORD=$postgresPassword $PostgresImage | Out-Null
 
     Wait-Postgres -Container $source
     Wait-Postgres -Container $target

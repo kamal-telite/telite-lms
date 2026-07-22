@@ -76,7 +76,7 @@ def _approve_request(db: Session, request_id: str, actor):
     if user:
         if user.org_id is not None and user.org_id != req_org_id:
             raise ValueError("This user belongs to another organization.")
-        user = user_repo.update_user(
+        user = user_repo.update(
             user,
             category_scope=req.category_slug,
             role='learner',

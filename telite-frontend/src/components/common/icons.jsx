@@ -1,3 +1,5 @@
+import PropTypes from "prop-types";
+
 export function Icon({ name, size = 16, stroke = 1.9, className = "" }) {
   const Glyph = iconMap[name] || iconMap.circle;
 
@@ -183,12 +185,7 @@ const iconMap = {
       <path d="M16 21v-7" />
     </>
   ),
-  moodle: () => (
-    <>
-      <path d="M4 16V8l4 4 4-4 4 4 4-4v8" />
-      <path d="M4 16h16" />
-    </>
-  ),
+
   certificate: () => (
     <>
       <rect x="4" y="3" width="16" height="12" rx="2" />
@@ -235,4 +232,11 @@ const iconMap = {
       <path d="M10 19h4" />
     </>
   ),
+};
+
+Icon.propTypes = {
+  name: PropTypes.string.isRequired,
+  size: PropTypes.number,
+  stroke: PropTypes.number,
+  className: PropTypes.string,
 };

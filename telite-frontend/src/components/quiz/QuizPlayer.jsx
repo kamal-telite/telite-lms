@@ -14,13 +14,9 @@ const QuizPlayer = ({ quizId, attemptId, onComplete }) => {
 
   const handleAutosave = (questionId, answer) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
-    // API mock: PUT /quiz-execution/attempts/{attemptId}/answers
-    console.log(`Autosaved answer for ${questionId}:`, answer);
   };
 
   const handleSubmit = async () => {
-    // API mock: POST /quiz-execution/attempts/{attemptId}/submit
-    console.log('Quiz submitted', answers);
     onComplete();
   };
 

@@ -221,7 +221,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     deploy:
       resources:
         limits:
@@ -248,7 +252,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     deploy:
       resources:
         limits:
