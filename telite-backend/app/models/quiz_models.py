@@ -28,7 +28,7 @@ class QuizDefinition(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    module_id = Column(Integer, nullable=True, index=True)
+    module_id = Column(Integer, ForeignKey("course_modules.id", name="quiz_definitions_module_id_fkey"), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     passing_score = Column(Integer, nullable=True)

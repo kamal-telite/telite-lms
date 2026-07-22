@@ -114,12 +114,10 @@ jobs:
             --ignore-unfixed \
             --db-repository ghcr.io/aquasecurity/trivy-db:2 \
             --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
-
             --skip-dirs /repo/telite-frontend/node_modules \
             --skip-dirs /repo/telite-frontend/dist \
             --skip-dirs /repo/.git \
             --skip-dirs /repo/.jetro \
-
             --no-progress \
             /repo
 

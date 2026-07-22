@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, ForeignKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -13,6 +13,15 @@ class ProgressionRule(Base, TenantMixin, TimestampMixin):
     """Rules controlling learner progression through modules and sections."""
 
     __tablename__ = "progression_rules"
+    
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["target_id"], 
+            ["course_modules.id"], 
+            ondelete="CASCADE", 
+            name="fk_progression_rules_module"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     target_type: Mapped[str] = mapped_column(

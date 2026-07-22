@@ -20,6 +20,12 @@ class FakeSession:
 
     def flush(self):
         self.flush_count += 1
+        
+    def execute(self, stmt):
+        class FakeResult:
+            def scalar_one_or_none(self):
+                return None
+        return FakeResult()
 
 
 def test_create_course_accepts_explicit_status_values_once():
