@@ -12,738 +12,15 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-  useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Button, IconButton, Badge, LoadingState, Modal, useToast } from "../../components/common/ui";
 import { api, getErrorMessage } from "../../services/client";
 import { useAutosave } from "../../hooks/useAutosave";
 import { validateBlocks } from "../../services/validationEngine";
 import { MediaLibrary } from "./MediaLibrary";
-import QuestionBankPicker from "../../components/authoring/QuestionBankPicker";
 import { useParams } from "react-router-dom";
-import { checkStaleQuestions } from "../../services/client";
-import RichTextEditor from "../../components/authoring/RichTextEditor";
-import ImagePreview from "../../components/authoring/ImagePreview";
-
-function blockKey(block) {
-  return block.id || block._tempId;
-}
-
-function createNativeQuizQuestion() {
-  const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const questionId = `q_${suffix}`;
-  const optionA = `opt_${suffix}_1`;
-  const optionB = `opt_${suffix}_2`;
-  return {
-    id: questionId,
-    text: "",
-    points: 10,
-    options: [
-      { id: optionA, text: "" },
-      { id: optionB, text: "" },
-    ],
-    correct_option_id: optionA,
-  };
-}
-
-// Sortable Block Component
-function SortableBlock({
-  block,
-  isSelected,
-  isHighlighted,
-  onSelect,
-  onChange,
-  onDelete,
-  onDuplicate,
-  onOpenMedia,
-  onOpenInspector,
-  quizOptions = [],
-  quizLoading = false,
-  quizError = null,
-  slug,
-}) {
-  const [bankPickerOpen, setBankPickerOpen] = useState(false);
-  const [staleQuestions, setStaleQuestions] = useState({});
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `block-${blockKey(block)}` });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    ...(isDragging ? { zIndex: 1 } : {}),
-  };
-
-  const settings = block.settings || {};
-  const isLocked = Boolean(block.settings?.locked);
-
-  // Stale questions check
-  useEffect(() => {
-    if (block.block_type === "quiz" && block.settings?.questions?.length > 0) {
-      const bankRefs = block.settings.questions
-        .filter(q => q.type === "bank_reference" && q.question_id && q.version_id)
-        .map(q => ({ question_id: q.question_id, version_id: q.version_id }));
-        
-      if (bankRefs.length > 0) {
-        checkStaleQuestions(bankRefs).then(data => {
-          setStaleQuestions(data);
-        }).catch(err => console.error("Failed to check stale questions", err));
-      }
-    }
-  }, [block.block_type, block.settings?.questions]);
-
-  const className = `builder-block ${isSelected ? "builder-block--selected" : ""} ${isDragging ? "builder-block--dragging" : ""} ${isHighlighted ? "builder-block--highlight" : ""}`;
-
-  const handleContentChange = (e) => {
-    onChange(blockKey(block), { content: e.target.value });
-  };
-
-  const handleSettingsChange = (key, value) => {
-    onChange(blockKey(block), { settings: { ...settings, [key]: value } });
-  };
-
-  const handleQuizChange = (event) => {
-    const selectedQuiz = quizOptions.find((quiz) => String(quiz.id) === event.target.value);
-    onChange(blockKey(block), {
-      settings: {
-        ...settings,
-        quiz_id: event.target.value ? Number(event.target.value) : "",
-        quiz_title: selectedQuiz?.title || "",
-        quiz_module_id: selectedQuiz?.module_id || null,
-      },
-    });
-  };
-
-  const updateQuizQuestion = (questionIndex, updates) => {
-    const questions = [...(settings.questions || [])];
-    questions[questionIndex] = { ...questions[questionIndex], ...updates };
-    handleSettingsChange("questions", questions);
-  };
-
-  const updateQuizOption = (questionIndex, optionIndex, text) => {
-    const questions = [...(settings.questions || [])];
-    const question = { ...questions[questionIndex] };
-    const options = [...(question.options || [])];
-    options[optionIndex] = { ...options[optionIndex], text };
-    question.options = options;
-    questions[questionIndex] = question;
-    handleSettingsChange("questions", questions);
-  };
-
-  const addQuizOption = (questionIndex) => {
-    const questions = [...(settings.questions || [])];
-    const question = { ...questions[questionIndex] };
-    const optionId = `opt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    question.options = [...(question.options || []), { id: optionId, text: "" }];
-    questions[questionIndex] = question;
-    handleSettingsChange("questions", questions);
-  };
-
-  const removeQuizOption = (questionIndex, optionIndex) => {
-    const questions = [...(settings.questions || [])];
-    const question = { ...questions[questionIndex] };
-    const removedOption = question.options?.[optionIndex];
-    const options = (question.options || []).filter((_, idx) => idx !== optionIndex);
-    question.options = options;
-    if (removedOption?.id === question.correct_option_id) {
-      question.correct_option_id = options[0]?.id || "";
-    }
-    questions[questionIndex] = question;
-    handleSettingsChange("questions", questions);
-  };
-
-  const inputRef = React.useRef(null);
-
-  const handleContainerClick = (e) => {
-    onSelect(block);
-    const targetTag = e.target.tagName.toLowerCase();
-    if (targetTag !== 'input' && targetTag !== 'textarea' && targetTag !== 'button' && targetTag !== 'svg' && targetTag !== 'path') {
-      inputRef.current?.focus();
-    }
-  };
-
-  return (
-    <div 
-      id={`editor-block-${blockKey(block)}`} 
-      ref={setNodeRef} 
-      style={style} 
-      className={className} 
-      onClick={handleContainerClick}
-      onDoubleClick={() => {
-        onSelect(block);
-        if (onOpenInspector) onOpenInspector();
-      }}
-    >
-      <div className="builder-block__header">
-        <div 
-          {...attributes} 
-          {...listeners} 
-          className="builder-block__drag"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="9" cy="5" r="1" />
-            <circle cx="9" cy="12" r="1" />
-            <circle cx="9" cy="19" r="1" />
-            <circle cx="15" cy="5" r="1" />
-            <circle cx="15" cy="12" r="1" />
-            <circle cx="15" cy="19" r="1" />
-          </svg>
-          <Badge tone="neutral">{block.block_type.toUpperCase()}</Badge>
-          {settings.hidden ? <Badge tone="warning">Hidden</Badge> : null}
-          {isLocked ? <Badge tone="danger">Locked</Badge> : null}
-        </div>
-        <div className="builder-block__actions">
-          <IconButton
-            icon="settings"
-            size="small"
-            label="Block Settings"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelect(block);
-              if (onOpenInspector) onOpenInspector();
-            }}
-          />
-          <IconButton
-            icon="copy"
-            size="small"
-            label="Duplicate block"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDuplicate(blockKey(block));
-            }}
-          />
-          <IconButton
-            icon="trash"
-            size="small"
-            label="Delete block"
-            disabled={isLocked}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(blockKey(block));
-            }}
-          />
-        </div>
-      </div>
-
-      <div style={{ paddingLeft: "24px" }}>
-        {block.block_type === "heading" && (
-          <input
-            ref={inputRef}
-            className="field__input"
-            style={{ fontSize: "20px", fontWeight: 600, padding: "12px", border: "none", borderBottom: "2px solid var(--border-subtle)", borderRadius: 0 }}
-            placeholder="Heading Title..."
-            value={block.content || ""}
-            onChange={handleContentChange}
-            disabled={isLocked}
-          />
-        )}
-
-        {(block.block_type === "text" || block.block_type === "paragraph") && (
-          <RichTextEditor
-            value={block.content || ""}
-            onChange={handleContentChange}
-            disabled={isLocked}
-          />
-        )}
-
-        {(block.block_type === "image" || block.block_type === "video" || block.block_type === "audio" || block.block_type === "pdf" || block.block_type === "scorm" || block.block_type === "h5p") && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ background: "var(--surface-sunken)", padding: "32px", textAlign: "center", borderRadius: "6px", border: "1px dashed var(--border-subtle)" }}>
-              {block.media_asset_id || block.settings?.asset_id ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}>
-                  <div style={{ color: "var(--success)", fontWeight: 500 }}>Media Attached</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-secondary)", wordBreak: "break-all" }}>
-                    {block.settings?.filename || `Asset #${block.media_asset_id || block.settings?.asset_id}`}
-                  </div>
-                  <Button tone="neutral" size="small" disabled={isLocked} onClick={() => onOpenMedia(blockKey(block), block.block_type.split("/")[0])}>Replace Media</Button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center" }}>
-                  <div style={{ color: "var(--text-secondary)" }}>No media selected</div>
-                  <Button tone="primary" disabled={isLocked} onClick={() => onOpenMedia(blockKey(block), block.block_type.split("/")[0])}>Browse Library</Button>
-                </div>
-              )}
-            </div>
-
-            {/* Image Preview with Formatting */}
-            {block.block_type === "image" && (block.settings?.url || block.media_asset_id) && (
-              <div style={{ padding: "16px", background: "var(--surface-base)", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
-                <div style={{ fontWeight: 600, fontSize: "13px", marginBottom: "12px", color: "var(--text-primary)" }}>Preview</div>
-                <ImagePreview settings={block.settings || {}} />
-              </div>
-            )}
-
-            {block.block_type === "scorm" ? (
-              <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
-                Attach a SCORM ZIP package from the Media Library.
-              </div>
-            ) : block.block_type === "h5p" ? (
-              <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
-                Attach an H5P file (.h5p) from the Media Library.
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        {block.block_type === "embed" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ background: "var(--primary-bg)", padding: "16px", borderRadius: "6px", border: "1px solid var(--border-strong)" }}>
-              <strong>Embedded Content</strong>
-              <div style={{ marginTop: "4px", color: "var(--primary)", fontSize: "13px" }}>
-                Add a URL for an external page, tool, or video embed.
-              </div>
-            </div>
-            <input
-              ref={inputRef}
-              className="field__input"
-              placeholder="Embed title..."
-              value={block.content || ""}
-              onChange={handleContentChange}
-              disabled={isLocked}
-            />
-            <input
-              className="field__input"
-              placeholder="https://..."
-              value={block.settings?.url || ""}
-              onChange={(e) => handleSettingsChange("url", e.target.value)}
-              disabled={isLocked}
-            />
-          </div>
-        )}
-
-        {block.block_type === "assignment" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ background: "var(--warning-bg)", padding: "16px", borderRadius: "6px", border: "1px solid var(--warning)" }}>
-              <strong>Assignment</strong>
-              <div style={{ marginTop: "4px", color: "var(--warning)", fontSize: "13px" }}>
-                Add instructions, due date, and point value for learner submission work.
-              </div>
-            </div>
-            <input
-              ref={inputRef}
-              className="field__input"
-              placeholder="Assignment title..."
-              value={block.content || ""}
-              onChange={handleContentChange}
-              disabled={isLocked}
-            />
-            <textarea
-              className="field__input"
-              style={{ minHeight: "100px", resize: "vertical" }}
-              placeholder="Assignment instructions..."
-              value={block.settings?.instructions || ""}
-              onChange={(e) => handleSettingsChange("instructions", e.target.value)}
-              disabled={isLocked}
-            />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <input
-                className="field__input"
-                type="date"
-                value={block.settings?.due_date || ""}
-                onChange={(e) => handleSettingsChange("due_date", e.target.value)}
-                disabled={isLocked}
-              />
-              <input
-                className="field__input"
-                type="number"
-                min="0"
-                placeholder="Points"
-                value={block.settings?.points || ""}
-                onChange={(e) => handleSettingsChange("points", e.target.value)}
-                disabled={isLocked}
-              />
-            </div>
-          </div>
-        )}
-
-        {block.block_type === "poll" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ background: "var(--surface-sunken)", padding: "16px", borderRadius: "6px", border: "1px solid var(--border-strong)" }}>
-              <strong>Poll</strong>
-              <div style={{ marginTop: "4px", color: "var(--text-secondary)", fontSize: "13px" }}>
-                Ask a question and gather feedback.
-              </div>
-            </div>
-            <textarea
-              ref={inputRef}
-              className="field__input"
-              style={{ minHeight: "80px", resize: "vertical" }}
-              placeholder="What would you like to ask?"
-              value={block.settings?.question || ""}
-              onChange={(e) => handleSettingsChange("question", e.target.value)}
-              disabled={isLocked}
-            />
-            
-            <div style={{ padding: "12px", border: "1px solid var(--border-subtle)", borderRadius: "6px" }}>
-              <div style={{ fontWeight: 500, marginBottom: "8px", fontSize: "14px" }}>Options</div>
-              {(block.settings?.options || []).map((opt, idx) => (
-                <div key={opt.id} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-                  <input
-                    className="field__input"
-                    placeholder={`Option ${idx + 1}`}
-                    value={opt.text}
-                    onChange={(e) => {
-                      const newOpts = [...(block.settings.options || [])];
-                      newOpts[idx].text = e.target.value;
-                      handleSettingsChange("options", newOpts);
-                    }}
-                    disabled={isLocked}
-                  />
-                  <Button 
-                    tone="destructive" 
-                    size="small"
-                    onClick={() => {
-                      const newOpts = block.settings.options.filter((_, i) => i !== idx);
-                      handleSettingsChange("options", newOpts);
-                    }}
-                    disabled={isLocked || (block.settings.options || []).length <= 1}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              <Button 
-                tone="neutral" 
-                size="small" 
-                onClick={() => {
-                  const newOpts = [...(block.settings?.options || []), { id: `opt_${Date.now()}`, text: "" }];
-                  handleSettingsChange("options", newOpts);
-                }}
-                disabled={isLocked}
-              >
-                + Add Option
-              </Button>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <label className="field" style={{ display: "flex", alignItems: "center", gap: "8px", flexDirection: "row", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={block.settings?.allow_multiple || false}
-                  onChange={(e) => handleSettingsChange("allow_multiple", e.target.checked)}
-                  disabled={isLocked}
-                  style={{ width: "auto", margin: 0 }}
-                />
-                <span className="field__label" style={{ margin: 0 }}>Allow multiple selections</span>
-              </label>
-
-              <label className="field" style={{ display: "flex", alignItems: "center", gap: "8px", flexDirection: "row", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={block.settings?.anonymous_voting || false}
-                  onChange={(e) => handleSettingsChange("anonymous_voting", e.target.checked)}
-                  disabled={isLocked}
-                  style={{ width: "auto", margin: 0 }}
-                />
-                <span className="field__label" style={{ margin: 0 }}>Anonymous voting</span>
-              </label>
-
-              <label className="field" style={{ display: "flex", alignItems: "center", gap: "8px", flexDirection: "row", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={block.settings?.allow_vote_change || false}
-                  onChange={(e) => handleSettingsChange("allow_vote_change", e.target.checked)}
-                  disabled={isLocked}
-                  style={{ width: "auto", margin: 0 }}
-                />
-                <span className="field__label" style={{ margin: 0 }}>Allow vote change</span>
-              </label>
-
-              <label className="field" style={{ margin: 0 }}>
-                <span className="field__label">Result Visibility</span>
-                <select
-                  className="field__input"
-                  value={block.settings?.show_results || "after_vote"}
-                  onChange={(e) => handleSettingsChange("show_results", e.target.value)}
-                  disabled={isLocked}
-                >
-                  <option value="always">Always show</option>
-                  <option value="after_vote">After voting</option>
-                  <option value="never">Never show</option>
-                </select>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {block.block_type === "flashcard" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ background: "var(--primary-bg)", padding: "16px", borderRadius: "6px", border: "1px solid var(--border-strong)" }}>
-              <strong>Flashcards</strong>
-              <div style={{ marginTop: "4px", color: "var(--primary)", fontSize: "13px" }}>
-                Create interactive two-sided cards for learning and memorization.
-              </div>
-            </div>
-            
-            <div style={{ padding: "12px", border: "1px solid var(--border-subtle)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ fontWeight: 500, fontSize: "14px" }}>Cards</div>
-              {(block.settings?.cards || []).map((card, idx) => (
-                <div key={card.id} style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "12px", background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)", borderRadius: "6px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 600, fontSize: "13px", color: "var(--text-secondary)" }}>
-                    Card {idx + 1}
-                    <Button 
-                      tone="destructive" 
-                      size="small"
-                      onClick={() => {
-                        const newCards = block.settings.cards.filter((_, i) => i !== idx);
-                        handleSettingsChange("cards", newCards);
-                      }}
-                      disabled={isLocked || (block.settings.cards || []).length <= 1}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <textarea
-                      className="field__input"
-                      style={{ minHeight: "90px", resize: "vertical" }}
-                      placeholder="Front of card"
-                      value={card.front_text || ""}
-                      onChange={(e) => {
-                        const newCards = [...(block.settings?.cards || [])];
-                        newCards[idx] = { ...newCards[idx], front_text: e.target.value };
-                        handleSettingsChange("cards", newCards);
-                      }}
-                      disabled={isLocked}
-                    />
-                    <textarea
-                      className="field__input"
-                      style={{ minHeight: "90px", resize: "vertical" }}
-                      placeholder="Back of card"
-                      value={card.back_text || ""}
-                      onChange={(e) => {
-                        const newCards = [...(block.settings?.cards || [])];
-                        newCards[idx] = { ...newCards[idx], back_text: e.target.value };
-                        handleSettingsChange("cards", newCards);
-                      }}
-                      disabled={isLocked}
-                    />
-                  </div>
-                </div>
-              ))}
-              <div>
-                <Button 
-                  tone="neutral" 
-                  size="small" 
-                  onClick={() => {
-                    const newCards = [
-                      ...(block.settings?.cards || []),
-                      { id: `card_${Date.now()}`, front_text: "", back_text: "" },
-                    ];
-                    handleSettingsChange("cards", newCards);
-                  }}
-                  disabled={isLocked}
-                >
-                  + Add Card
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {block.block_type === "quiz_reference" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ background: "var(--success-bg)", padding: "16px", borderRadius: "6px", border: "1px solid var(--success)" }}>
-              <strong>Quiz Reference</strong>
-              <div style={{ marginTop: "4px", color: "var(--success)", fontSize: "13px" }}>
-                Link this lesson block to a quiz module in this course.
-              </div>
-            </div>
-            <select
-              className="field__input"
-              value={block.settings?.quiz_id || ""}
-              onChange={handleQuizChange}
-              disabled={isLocked || quizLoading || quizOptions.length === 0}
-            >
-              <option value="">
-                {quizLoading ? "Loading quizzes..." : quizOptions.length ? "Select a quiz..." : "No quiz modules available"}
-              </option>
-              {quizOptions.map((quiz) => (
-                <option key={quiz.id} value={quiz.id}>
-                  {quiz.title} ({quiz.module_title})
-                </option>
-              ))}
-            </select>
-            {quizError ? (
-              <div style={{ color: "var(--error)", fontSize: "13px" }}>{quizError}</div>
-            ) : null}
-            {!quizLoading && !quizError && quizOptions.length === 0 ? (
-              <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
-                Create a module with type &quot;Quiz&quot; first, then return here to attach it.
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        {block.block_type === "quiz" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ background: "var(--primary-bg)", padding: "16px", borderRadius: "6px", border: "1px solid var(--border-strong)" }}>
-              <strong>Native Quiz</strong>
-              <div style={{ marginTop: "4px", color: "var(--primary)", fontSize: "13px" }}>
-                Questions, scoring, and attempts are stored directly on this quiz block.
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <label className="field">
-                <span className="field__label">Passing Score (%)</span>
-                <input
-                  className="field__input"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={settings.passing_score ?? 80}
-                  onChange={(e) => handleSettingsChange("passing_score", Number(e.target.value))}
-                  disabled={isLocked}
-                />
-              </label>
-              <label className="field">
-                <span className="field__label">Maximum Attempts</span>
-                <select
-                  className="field__input"
-                  value={Number(settings.max_attempts || 0) === 0 ? "unlimited" : String(settings.max_attempts)}
-                  onChange={(e) => handleSettingsChange("max_attempts", e.target.value === "unlimited" ? 0 : Number(e.target.value))}
-                  disabled={isLocked}
-                >
-                  <option value="unlimited">Unlimited</option>
-                  {[1, 2, 3, 5].map((value) => <option key={value} value={value}>{value}</option>)}
-                  {Number(settings.max_attempts || 0) > 0 && ![1, 2, 3, 5].includes(Number(settings.max_attempts)) ? (
-                    <option value={settings.max_attempts}>{settings.max_attempts}</option>
-                  ) : null}
-                </select>
-              </label>
-            </div>
-
-            {(settings.questions || []).map((question, qIndex) => (
-              <div key={question.id} style={{ padding: "14px", border: "1px solid var(--border-subtle)", borderRadius: "8px", background: "var(--surface-sunken)", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
-                  <strong style={{ color: "var(--text-primary)" }}>Question {qIndex + 1}</strong>
-                  <Button
-                    tone="destructive"
-                    size="small"
-                    disabled={isLocked || (settings.questions || []).length <= 1}
-                    onClick={() => handleSettingsChange("questions", (settings.questions || []).filter((_, idx) => idx !== qIndex))}
-                  >
-                    Remove
-                  </Button>
-                </div>
-
-                {question.type === "bank_reference" ? (
-                  <div style={{ padding: 12, background: "var(--surface-base)", border: "1px solid var(--border-subtle)", borderRadius: 4 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div style={{ flex: 1, paddingRight: 16 }}>
-                        <div style={{ fontWeight: 500, marginBottom: 8 }}>
-                          {question.snapshot?.question_text || `Question Bank Reference #${question.question_id}`}
-                        </div>
-                        <div style={{ display: "flex", gap: 12, fontSize: 13, color: "var(--text-secondary)" }}>
-                          {question.snapshot?.question_type ? <span>Type: {question.snapshot.question_type}</span> : null}
-                          {question.snapshot?.points ? <span>Points: {question.snapshot.points}</span> : null}
-                        </div>
-                        {staleQuestions[question.question_id]?.is_stale && (
-                          <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--color-warn)", fontSize: 13 }}>
-                            <span className="icon">⚠️</span>
-                            Newer version available (v{staleQuestions[question.question_id].latest_version_id})
-                          </div>
-                        )}
-                      </div>
-                      <Badge tone="accent">Bank Ref v{question.version_id}</Badge>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <textarea
-                      className="field__input"
-                      style={{ minHeight: "70px", resize: "vertical" }}
-                      placeholder="Question text..."
-                      value={question.text || ""}
-                      onChange={(e) => updateQuizQuestion(qIndex, { text: e.target.value })}
-                      disabled={isLocked}
-                    />
-                    <label className="field">
-                      <span className="field__label">Points</span>
-                      <input
-                        className="field__input"
-                        type="number"
-                        min="1"
-                        value={question.points ?? 10}
-                        onChange={(e) => updateQuizQuestion(qIndex, { points: Number(e.target.value) })}
-                        disabled={isLocked}
-                      />
-                    </label>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {(question.options || []).map((option, optionIndex) => (
-                        <div key={option.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "8px", alignItems: "center" }}>
-                          <input
-                            type="radio"
-                            name={`correct-${question.id}`}
-                            checked={question.correct_option_id === option.id}
-                            onChange={() => updateQuizQuestion(qIndex, { correct_option_id: option.id })}
-                            disabled={isLocked}
-                            aria-label={`Mark option ${optionIndex + 1} correct`}
-                          />
-                          <input
-                            className="field__input"
-                            placeholder={`Option ${optionIndex + 1}`}
-                            value={option.text || ""}
-                            onChange={(e) => updateQuizOption(qIndex, optionIndex, e.target.value)}
-                            disabled={isLocked}
-                          />
-                          <Button
-                            tone="destructive"
-                            size="small"
-                            disabled={isLocked || (question.options || []).length <= 2}
-                            onClick={() => removeQuizOption(qIndex, optionIndex)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
-                      <Button tone="neutral" size="small" disabled={isLocked} onClick={() => addQuizOption(qIndex)}>
-                        + Add Option
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-
-            <div className="split-actions" style={{ justifyContent: "flex-start" }}>
-              <Button
-                tone="neutral"
-                disabled={isLocked}
-                onClick={() => handleSettingsChange("questions", [...(settings.questions || []), createNativeQuizQuestion()])}
-              >
-                + Add Native Question
-              </Button>
-              <Button
-                tone="primary"
-                disabled={isLocked}
-                onClick={() => setBankPickerOpen(true)}
-              >
-                + Import from Bank
-              </Button>
-            </div>
-            <QuestionBankPicker 
-              open={bankPickerOpen} 
-              onClose={() => setBankPickerOpen(false)} 
-              slug={slug}
-              onImport={(references) => {
-                handleSettingsChange("questions", [...(settings.questions || []), ...references]);
-              }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
+import { SortableBlock } from "../../components/authoring/SortableBlock";
+import { blockKey, createNativeQuizQuestion, getDefaultBlockSettings } from "../../components/authoring/utils/blockEditorUtils";
 
 export function LessonBlockEditor({
   courseId,
@@ -929,34 +206,7 @@ export function LessonBlockEditor({
   };
 
   const addBlock = (type) => {
-    let defaultSettings = {};
-    if (type === "poll") {
-      defaultSettings = {
-        question: "",
-        allow_multiple: false,
-        anonymous_voting: false,
-        show_results: "after_vote",
-        allow_vote_change: false,
-        options: [{ id: `opt_${Date.now()}`, text: "" }]
-      };
-    } else if (type === "flashcard") {
-      defaultSettings = {
-        completion_mode: "all_cards",
-        randomize_order: false,
-        cards: [{ id: `card_${Date.now()}`, front_text: "", back_text: "" }]
-      };
-    } else if (type === "resource_collection") {
-      defaultSettings = {
-        completion_mode: "view",
-        resources: []
-      };
-    } else if (type === "quiz") {
-      defaultSettings = {
-        passing_score: 80,
-        max_attempts: 3,
-        questions: [createNativeQuizQuestion()]
-      };
-    }
+    const defaultSettings = getDefaultBlockSettings(type);
     const newBlock = {
       _tempId: Date.now(),
       module_id: moduleId,
@@ -1051,55 +301,182 @@ export function LessonBlockEditor({
   }
 
   if (loading) return <LoadingState message="Loading module content..." />;
-  if (error) return <div style={{ color: "red" }}>{error}</div>;
+  if (error) return <div className="text-red-600">{error}</div>;
 
   const visibleBlocks = blocks.filter(b => !b.is_deleted);
 
+  const blockPickerItems = [
+    {
+      type: "heading",
+      label: "Heading",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 4v16" /><path d="M18 4v16" /><path d="M6 12h12" />
+        </svg>
+      ),
+    },
+    {
+      type: "text",
+      label: "Text",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 7V5h16v2" /><path d="M9 19h6" /><path d="M12 5v14" />
+        </svg>
+      ),
+    },
+    {
+      type: "image",
+      label: "Image",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />
+        </svg>
+      ),
+    },
+    {
+      type: "video",
+      label: "Video",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="2" y="6" width="14" height="12" rx="2" /><path d="m22 8-6 4 6 4V8Z" />
+        </svg>
+      ),
+    },
+    {
+      type: "audio",
+      label: "Audio",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+        </svg>
+      ),
+    },
+    {
+      type: "pdf",
+      label: "PDF",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6" /><path d="M10 13h4" /><path d="M10 17h4" />
+        </svg>
+      ),
+    },
+    {
+      type: "scorm",
+      label: "SCORM",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+        </svg>
+      ),
+    },
+    {
+      type: "h5p",
+      label: "H5P",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2" /><path d="M12 22V12" /><path d="m22 8.5-10 6.5L2 8.5" />
+        </svg>
+      ),
+    },
+    {
+      type: "assignment",
+      label: "Assignment",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </svg>
+      ),
+    },
+    {
+      type: "poll",
+      label: "Poll",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20v-6" />
+        </svg>
+      ),
+    },
+    {
+      type: "flashcard",
+      label: "Flashcard",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="2" y="6" width="14" height="12" rx="2" /><path d="M22 8v10a2 2 0 0 1-2 2H8" />
+        </svg>
+      ),
+    },
+    {
+      type: "resource_collection",
+      label: "Resources",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" />
+        </svg>
+      ),
+    },
+    {
+      type: "embed",
+      label: "Embed",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m16 18 6-6-6-6" /><path d="m8 6-6 6 6 6" />
+        </svg>
+      ),
+    },
+    {
+      type: "quiz",
+      label: "Quiz",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: "100px" }}>
+    <div className="builder-editor-canvas">
       {pendingDraft ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", marginBottom: "16px", padding: "14px 16px", background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: "8px" }}>
+        <div className="mb-4 flex items-center justify-between gap-4 rounded-xl border border-(--warning) bg-(--warning-bg) px-4 py-3">
           <div>
-            <div style={{ fontWeight: 700, color: "var(--warning)" }}>Unsaved local draft found</div>
-            <div style={{ fontSize: "13px", color: "var(--warning)", marginTop: "2px" }}>
+            <div className="font-semibold text-(--warning)">Unsaved local draft found</div>
+            <div className="mt-1 text-sm text-(--warning)">
               Last cached {pendingDraft.updatedAt ? new Date(pendingDraft.updatedAt).toLocaleString() : "recently"}.
             </div>
           </div>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="flex gap-2">
             <Button tone="neutral" onClick={discardDraft}>Discard</Button>
             <Button tone="primary" onClick={restoreDraft}>Restore Draft</Button>
           </div>
         </div>
       ) : null}
 
-      {/* Validation & Save Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", padding: "16px", background: "var(--surface-raised)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+      <div className="builder-lesson-header">
         <div>
-          <div style={{ fontWeight: 600, fontSize: "16px" }}>Lesson Editor</div>
-          <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "4px" }}>
-            {saveState === "saving" && "Saving..."}
+          <div className="builder-lesson-header__title">Lesson Editor</div>
+          <div className="builder-lesson-header__meta">
+            {saveState === "saving" && "Saving…"}
             {saveState === "idle" && lastSaved && `Last saved at ${lastSaved.toLocaleTimeString()}`}
-            {saveState === "offline" && <span style={{ color: "var(--warning)" }}>Offline (Saved locally)</span>}
-            {saveState === "conflict" && <span style={{ color: "var(--error)" }}>Conflict!</span>}
+            {saveState === "offline" && <span className="text-(--warning)">Offline (Saved locally)</span>}
+            {saveState === "conflict" && <span className="text-(--error)">Conflict!</span>}
             {!lastSaved && saveState === "idle" && "All changes saved"}
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "12px", flexDirection: "column", alignItems: "flex-end" }}>
+        <div className="flex flex-col items-end gap-1">
           {!validation.isValid && (
-            <div style={{ color: "var(--error)", fontSize: "12px", fontWeight: 500 }}>
+            <div className="text-(--error) text-xs font-semibold">
               {validation.errors.length} validation error(s)
             </div>
           )}
           {validation.warnings.length > 0 && (
-            <div style={{ color: "var(--warning)", fontSize: "12px" }}>
+            <div className="text-(--warning) text-xs">
               {validation.warnings.length} warning(s)
             </div>
           )}
         </div>
       </div>
 
-      {/* Editor Canvas */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={visibleBlocks.map(b => `block-${b.id || b._tempId}`)} strategy={verticalListSortingStrategy}>
           {visibleBlocks.map(block => (
@@ -1123,19 +500,19 @@ export function LessonBlockEditor({
       </DndContext>
 
       {visibleBlocks.length === 0 && (
-        <div style={{ padding: "60px 20px", textAlign: "center", background: "var(--surface-sunken)", border: "2px dashed var(--border-subtle)", borderRadius: "8px", color: "var(--text-secondary)", marginBottom: "24px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}>
-          <div style={{ fontWeight: 600, fontSize: "16px", color: "var(--text-primary)" }}>
-            {moduleType === "quiz" 
-              ? "Your Quiz Module is empty" 
+        <div className="builder-empty-blocks">
+          <div className="builder-empty-blocks__title">
+            {moduleType === "quiz"
+              ? "Your Quiz Module is empty"
               : moduleType === "assignment"
               ? "Your Assignment Shell is empty"
               : moduleType === "resource"
               ? "Your Resource Module is empty"
               : "No content blocks yet"}
           </div>
-          <div>
-            {moduleType === "quiz" 
-              ? "Add a Native Quiz block to begin building your assessment." 
+          <div className="builder-empty-blocks__text">
+            {moduleType === "quiz"
+              ? "Add a Native Quiz block to begin building your assessment."
               : moduleType === "assignment"
               ? "Add an Assignment block along with any instructional text or files."
               : moduleType === "resource"
@@ -1145,22 +522,24 @@ export function LessonBlockEditor({
         </div>
       )}
 
-      {/* Block Toolbar */}
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-start", padding: "16px", background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", borderRadius: "8px" }}>
-        <Button tone="neutral" onClick={() => addBlock("heading")}>+ Heading</Button>
-        <Button tone="neutral" onClick={() => addBlock("text")}>+ Text</Button>
-        <Button tone="neutral" onClick={() => addBlock("image")}>+ Image</Button>
-        <Button tone="neutral" onClick={() => addBlock("video")}>+ Video</Button>
-        <Button tone="neutral" onClick={() => addBlock("audio")}>+ Audio</Button>
-        <Button tone="neutral" onClick={() => addBlock("pdf")}>+ PDF</Button>
-        <Button tone="neutral" onClick={() => addBlock("scorm")}>+ SCORM</Button>
-        <Button tone="neutral" onClick={() => addBlock("h5p")}>+ H5P</Button>
-        <Button tone="neutral" onClick={() => addBlock("assignment")}>+ Assignment</Button>
-        <Button tone="neutral" onClick={() => addBlock("poll")}>+ Poll</Button>
-        <Button tone="neutral" onClick={() => addBlock("flashcard")}>+ Flashcard</Button>
-        <Button tone="neutral" onClick={() => addBlock("resource_collection")}>+ Resources</Button>
-        <Button tone="neutral" onClick={() => addBlock("embed")}>+ Embed</Button>
-        <Button tone="neutral" onClick={() => addBlock("quiz")}>+ Quiz</Button>
+      <div className="block-picker">
+        <div className="block-picker__header">
+          <div className="block-picker__title">Add content</div>
+          <div className="block-picker__subtitle">Choose a block type</div>
+        </div>
+        <div className="block-picker__grid">
+          {blockPickerItems.map((item) => (
+            <button
+              key={item.type}
+              type="button"
+              className="block-picker__item"
+              onClick={() => addBlock(item.type)}
+            >
+              <span className="block-picker__icon">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Media Library Modal */}
@@ -1186,17 +565,17 @@ export function LessonBlockEditor({
           </>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          <p style={{ margin: 0 }}>
+        <div className="flex flex-col gap-3 text-(--text-secondary) leading-6">
+          <p className="m-0">
             {conflictInfo?.detail}
           </p>
-          <div style={{ background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)", borderRadius: "8px", padding: "12px" }}>
-            <div style={{ fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>Local draft</div>
-            <div style={{ fontSize: "13px" }}>
+          <div className="rounded-xl border border-(--border-subtle) bg-(--surface-sunken) p-3">
+            <div className="mb-1 font-semibold text-(--text-primary)">Local draft</div>
+            <div className="text-sm">
               {conflictInfo?.attemptedBlocks?.filter((block) => !block.is_deleted).length || 0} active block(s) were kept in local cache.
             </div>
             {conflictInfo?.happenedAt ? (
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+              <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                 Conflict detected at {conflictInfo.happenedAt.toLocaleTimeString()}.
               </div>
             ) : null}

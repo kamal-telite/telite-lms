@@ -19,104 +19,94 @@ export function ActivityFeedTab({ events = [] }) {
   })) : [];
   const filteredEvents = displayEvents.filter(e => filter === "all" || e.type === filter);
 
-  return (
-    <div className="panel">
-      <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 className="panel-title">Activity Feed</h2>
-          <p className="panel-subtitle">Real-time chronological event log across the category.</p>
-        </div>
-      </div>
-      <div className="panel-body">
-        <div className="toolbar" style={{ marginBottom: 24 }}>
-          {["all", "enrollment", "verification", "task", "pal", "course"].map(f => (
-            <label className="chip" key={f}>
-              <input 
-                type="radio" 
-                name="activity_filter" 
-                checked={filter === f} 
-                onChange={() => setFilter(f)} 
-              /> {titleize(f)}
-            </label>
-          ))}
-        </div>
+  const statusDotClass = (status) => {
+    if (status === "success") return "activity-dot activity-dot--success";
+    if (status === "error") return "activity-dot activity-dot--error";
+    if (status === "warning") return "activity-dot activity-dot--warning";
+    return "activity-dot activity-dot--info";
+  };
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 180 }}>Timestamp</th>
-                <th>Event Details</th>
-                <th style={{ width: 120 }}>Category</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredEvents.map(evt => (
-                <tr key={evt.id}>
-                  <td className="mono muted">{formatDateTime(evt.timestamp.toISOString ? evt.timestamp.toISOString() : evt.timestamp)}</td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ 
-                        width: 8, 
-                        height: 8, 
-                        borderRadius: "50%", 
-                        backgroundColor: evt.status === "success" ? "var(--success)" : 
-                                         evt.status === "error" ? "var(--danger)" : 
-                                         evt.status === "warning" ? "var(--warning)" : "var(--primary)" 
-                      }} />
-                      <span>{evt.title}</span>
-                    </div>
-                  </td>
-                  <td><Badge tone="neutral">{titleize(evt.type)}</Badge></td>
-                </tr>
-              ))}
-              {filteredEvents.length === 0 && (
-                <tr>
-                  <td colSpan="3" style={{ textAlign: "center", padding: "32px 0" }}>
-                    <div className="muted">No activity matching the filter.</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+  return (
+    <Panel
+      title="Activity Feed"
+      subtitle="Real-time chronological event log across the category."
+    >
+      <div className="admin-tab-toolbar">
+        {["all", "enrollment", "verification", "task", "pal", "course"].map(f => (
+          <label className="chip" key={f}>
+            <input
+              type="radio"
+              name="activity_filter"
+              checked={filter === f}
+              onChange={() => setFilter(f)}
+            /> {titleize(f)}
+          </label>
+        ))}
       </div>
-    </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: 180 }}>Timestamp</th>
+              <th>Event Details</th>
+              <th style={{ width: 120 }}>Category</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredEvents.map(evt => (
+              <tr key={evt.id}>
+                <td className="mono muted">{formatDateTime(evt.timestamp.toISOString ? evt.timestamp.toISOString() : evt.timestamp)}</td>
+                <td>
+                  <div className="activity-event-row">
+                    <span className={statusDotClass(evt.status)} aria-hidden="true" />
+                    <span>{evt.title}</span>
+                  </div>
+                </td>
+                <td><Badge tone="neutral">{titleize(evt.type)}</Badge></td>
+              </tr>
+            ))}
+            {filteredEvents.length === 0 && (
+              <tr>
+                <td colSpan="3" className="table-empty-cell">
+                  <div className="muted">No activity matching the filter.</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   );
 }
 
 export function SettingsTab({ dashboard }) {
-  const { showToast } = useToast();
-
   return (
-    <div className="grid-2">
-      <div className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">Category Settings</h2>
-          <p className="panel-subtitle">Manage category configuration.</p>
-        </div>
-        <div className="panel-body">
-          <label className="field" style={{ marginBottom: 16 }}>
+    <div className="settings-layout">
+      <Panel
+        title="Category Settings"
+        subtitle="Manage category configuration."
+        footer={<Button tone="primary">Save Changes</Button>}
+      >
+        <div className="settings-form">
+          <label className="field">
             <span className="field__label">Category Display Name</span>
             <input className="field__input" defaultValue={dashboard?.category?.name || "Category Name"} />
           </label>
-          <label className="field" style={{ marginBottom: 16 }}>
+          <label className="field">
             <span className="field__label">Category Description</span>
-            <textarea className="field__input" rows={3} defaultValue={dashboard?.category?.description || ""} />
+            <textarea className="field__textarea" rows={4} defaultValue={dashboard?.category?.description || ""} />
           </label>
 
-          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginTop: 16 }}>
-            <div className="row-title">Enrollment Approval</div>
-            <div className="toolbar" style={{ marginTop: 8 }}>
+          <div className="settings-form__section">
+            <h4 className="settings-form__section-title">Enrollment Approval</h4>
+            <div className="settings-form__options">
               <label className="chip"><input type="radio" name="enrollment_flow" defaultChecked /> Auto-approve</label>
               <label className="chip"><input type="radio" name="enrollment_flow" /> Manual Review</label>
             </div>
           </div>
         </div>
-        <div className="panel-footer" style={{ borderTop: "1px solid var(--border)", padding: 16, textAlign: "right" }}>
-          <Button tone="primary">Save Changes</Button>
-        </div>
-      </div>
+      </Panel>
     </div>
   );
 }
@@ -195,135 +185,137 @@ export function ReportsTab({ dashboard, learners }) {
   };
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2 className="panel-title">Reports Center</h2>
-        <p className="panel-subtitle">Generate and export analytics data.</p>
-      </div>
-      <div className="panel-body">
-        <div className="toolbar" style={{ marginBottom: 24, paddingBottom: 24, borderBottom: "1px solid var(--border)" }}>
+    <Panel
+      title="Reports Center"
+      subtitle="Generate and export analytics data."
+    >
+      <div className="reports-toolbar">
+        <div className="reports-toolbar__filters">
           {["course_completion", "user_performance", "enrollment_summary"].map(rt => (
             <label className="chip" key={rt}>
               <input type="radio" name="report_type" checked={reportType === rt} onChange={() => setReportType(rt)} />
               {titleize(rt.replace("_", " "))}
             </label>
           ))}
-          <div style={{ flex: 1 }} />
+        </div>
+        <div className="reports-toolbar__actions">
           <Button tone="ghost" icon="download" onClick={handleExportCSV}>Export CSV</Button>
           <Button tone="ghost" icon="download" onClick={handleExportPDF}>Export PDF</Button>
         </div>
-
-        {reportType === "course_completion" && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Course</th>
-                  <th>Enrolled</th>
-                  <th>Completed</th>
-                  <th>Completion %</th>
-                  <th>Avg PAL Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(dashboard?.courses || []).length > 0 ? (dashboard?.courses || []).map(course => (
-                  <tr key={course.id}>
-                    <td><div className="row-title">{course.name}</div></td>
-                    <td>{course.enrolled_count}</td>
-                    <td>{Math.round((course.completion_rate / 100) * course.enrolled_count)}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, background: "var(--border)", height: 6, borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ width: `${course.completion_rate}%`, background: "var(--success)", height: "100%" }} />
-                        </div>
-                        <span className="mono muted">{course.completion_rate}%</span>
-                      </div>
-                    </td>
-                    <td>{course.avg_pal_score || "N/A"}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan="5" style={{ textAlign: "center", padding: "24px 0" }}>
-                      <span className="muted">No course data available.</span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {reportType === "user_performance" && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Courses Enrolled</th>
-                  <th>Completed</th>
-                  <th>PAL Score</th>
-                  <th>Last Active</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(learners || []).length > 0 ? (learners || []).map(learner => (
-                  <tr key={learner.id}>
-                    <td>
-                      <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
-                        <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={26} />
-                        <div>
-                          <div className="row-title">{learner.full_name}</div>
-                          <div className="row-subtitle">{learner.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{learner.total_courses}</td>
-                    <td>{learner.courses_completed}</td>
-                    <td className="mono" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</td>
-                    <td>{learner.last_active || "N/A"}</td>
-                    <td><Badge tone={learner.is_active ? "success" : "neutral"}>{learner.is_active ? "Active" : "Inactive"}</Badge></td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan="6" style={{ textAlign: "center", padding: "24px 0" }}>
-                      <span className="muted">No user data available.</span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {reportType === "enrollment_summary" && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Period</th>
-                  <th>New Enrollments</th>
-                  <th>Approved</th>
-                  <th>Denied</th>
-                  <th>Manual</th>
-                  <th>Self</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><div className="row-title">This Month</div></td>
-                  <td>{dashboard?.kpis?.pending_verifications || 0}</td>
-                  <td>{dashboard?.kpis?.active_learners || 0}</td>
-                  <td>0</td>
-                  <td>0</td>
-                  <td>0</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
-    </div>
+
+      {reportType === "course_completion" && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Course</th>
+                <th>Enrolled</th>
+                <th>Completed</th>
+                <th>Completion %</th>
+                <th>Avg PAL Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(dashboard?.courses || []).length > 0 ? (dashboard?.courses || []).map(course => (
+                <tr key={course.id}>
+                  <td><div className="row-title">{course.name}</div></td>
+                  <td>{course.enrolled_count}</td>
+                  <td>{Math.round((course.completion_rate / 100) * course.enrolled_count)}</td>
+                  <td>
+                    <div className="progress-cell">
+                      <div className="progress-cell__track">
+                        <div className="progress-track">
+                          <div className="progress-fill" style={{ width: `${course.completion_rate}%`, background: "var(--success)" }} />
+                        </div>
+                      </div>
+                      <span className="mono muted progress-cell__value">{course.completion_rate}%</span>
+                    </div>
+                  </td>
+                  <td>{course.avg_pal_score || "N/A"}</td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan="5" className="table-empty-cell">
+                    <span className="muted">No course data available.</span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {reportType === "user_performance" && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Courses Enrolled</th>
+                <th>Completed</th>
+                <th>PAL Score</th>
+                <th>Last Active</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(learners || []).length > 0 ? (learners || []).map(learner => (
+                <tr key={learner.id}>
+                  <td>
+                    <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
+                      <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={26} />
+                      <div>
+                        <div className="row-title">{learner.full_name}</div>
+                        <div className="row-subtitle">{learner.email}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{learner.total_courses}</td>
+                  <td>{learner.courses_completed}</td>
+                  <td className="mono" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</td>
+                  <td>{learner.last_active || "N/A"}</td>
+                  <td><Badge tone={learner.is_active ? "success" : "neutral"}>{learner.is_active ? "Active" : "Inactive"}</Badge></td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan="6" className="table-empty-cell">
+                    <span className="muted">No user data available.</span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {reportType === "enrollment_summary" && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th>New Enrollments</th>
+                <th>Approved</th>
+                <th>Denied</th>
+                <th>Manual</th>
+                <th>Self</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div className="row-title">This Month</div></td>
+                <td>{dashboard?.kpis?.pending_verifications || 0}</td>
+                <td>{dashboard?.kpis?.active_learners || 0}</td>
+                <td>0</td>
+                <td>0</td>
+                <td>0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -514,102 +506,87 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
   const inProgressTasks = pendingTasks.filter(t => t.status === "in_progress");
   const submittedTasks = pendingTasks.filter(t => t.status === "submitted");
 
+  const renderTaskList = (tasks, showReviewActions = false) => (
+    <div className="task-status-card__body">
+      {tasks.length > 0 ? tasks.map((task) => (
+        <label className="task-row" key={task.id}>
+          <input type="checkbox" checked={false} onChange={() => toggleTask(task)} />
+          <div className="task-row__content">
+            <div className="row-title">{task.title}</div>
+            {showReviewActions ? (
+              <div className="split-actions task-row__actions">
+                <Button size="sm" tone="success" onClick={() => onReviewTask?.(task, "approve")}>Approve</Button>
+                <Button size="sm" tone="ghost" onClick={() => onReviewTask?.(task, "request_revision")}>Request Revision</Button>
+              </div>
+            ) : null}
+            <div className="row-subtitle">{task.assigned_label} · {task.status === "overdue" ? "Overdue!" : `due ${task.due_at || 'soon'}`}</div>
+          </div>
+        </label>
+      )) : (
+        <div className="task-status-card__empty">No tasks in this column.</div>
+      )}
+    </div>
+  );
+
+  const renderCompletedList = () => (
+    <div className="task-status-card__body">
+      {completedTasks.length > 0 ? completedTasks.map((task) => (
+        <label className="task-row" key={task.id}>
+          <input type="checkbox" checked onChange={() => toggleTask(task)} />
+          <div className="task-row__content">
+            <div className="row-title">{task.title}</div>
+            <div className="row-subtitle">{task.assigned_label} · {task.due_at}</div>
+          </div>
+        </label>
+      )) : (
+        <div className="task-status-card__empty">No completed tasks yet.</div>
+      )}
+    </div>
+  );
+
+  const statusColumns = [
+    { title: "Assigned", count: assignedTasks.length, content: renderTaskList(assignedTasks) },
+    { title: "Submitted", count: submittedTasks.length, content: renderTaskList(submittedTasks, true) },
+    { title: "In Progress", count: inProgressTasks.length, content: renderTaskList(inProgressTasks) },
+    { title: "Completed", count: completedTasks.length, content: renderCompletedList() },
+  ];
+
   return (
-    <div className="panel">
-      <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 className="panel-title">Task Board</h2>
-          <p className="panel-subtitle">Manage assignments across your category.</p>
-        </div>
+    <Panel
+      title="Task Board"
+      subtitle="Manage assignments across your category."
+      action={
         <div className="split-actions">
           <div className="toolbar">
-            <label className="chip"><input type="radio" checked={view === "list"} onChange={() => setView("list")} /> ☰ List</label>
-            <label className="chip"><input type="radio" checked={view === "kanban"} onChange={() => setView("kanban")} /> ⊞ Kanban</label>
+            <label className="chip"><input type="radio" checked={view === "list"} onChange={() => setView("list")} /> List</label>
+            <label className="chip"><input type="radio" checked={view === "kanban"} onChange={() => setView("kanban")} /> Kanban</label>
           </div>
           <Button tone="primary" onClick={() => setTaskModal({ open: true, item: null })}>+ Assign task</Button>
         </div>
-      </div>
-      <div className="panel-body">
-        {view === "list" ? (
-          <div className="grid-2">
-            <div className="soft-card">
-              <div className="row-title" style={{ marginBottom: 12 }}>Assigned</div>
-              <div className="activity-list">
-                {assignedTasks.map((task) => (
-                  <label className="task-row" key={task.id}>
-                    <input type="checkbox" checked={false} onChange={() => toggleTask(task)} />
-                    <div style={{ flex: 1 }}>
-                      <div className="row-title">{task.title}</div>
-                      {task.status === "submitted" ? (
-                        <div className="split-actions" style={{ marginTop: 8 }}>
-                          <Button size="small" tone="success" onClick={() => onReviewTask?.(task, "approve")}>Approve</Button>
-                          <Button size="small" tone="ghost" onClick={() => onReviewTask?.(task, "request_revision")}>Request Revision</Button>
-                        </div>
-                      ) : null}
-                      <div className="row-subtitle">{task.assigned_label} · {task.status === "overdue" ? "Overdue!" : `due ${task.due_at || 'soon'}`}</div>
-                    </div>
-                  </label>
-                ))}
+      }
+    >
+      {view === "list" ? (
+        <div className="task-board-grid">
+          {statusColumns.map((column) => (
+            <div className="task-status-card" key={column.title}>
+              <div className="task-status-card__header">
+                <span className="task-status-card__title">{column.title}</span>
+                <span className="task-status-card__count">{column.count}</span>
               </div>
+              {column.content}
             </div>
-            <div className="soft-card">
-              <div className="row-title" style={{ marginBottom: 12 }}>Submitted</div>
-              <div className="activity-list">
-                {submittedTasks.map((task) => (
-                  <label className="task-row" key={task.id}>
-                    <input type="checkbox" checked={false} onChange={() => toggleTask(task)} />
-                    <div style={{ flex: 1 }}>
-                      <div className="row-title">{task.title}</div>
-                      <div className="split-actions" style={{ marginTop: 8 }}>
-                        <Button size="small" tone="success" onClick={() => onReviewTask?.(task, "approve")}>Approve</Button>
-                        <Button size="small" tone="ghost" onClick={() => onReviewTask?.(task, "request_revision")}>Request Revision</Button>
-                      </div>
-                      <div className="row-subtitle">{task.assigned_label} · due {task.due_at || "soon"}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="soft-card">
-              <div className="row-title" style={{ marginBottom: 12 }}>In Progress</div>
-              <div className="activity-list">
-                {inProgressTasks.map((task) => (
-                  <label className="task-row" key={task.id}>
-                    <input type="checkbox" checked={false} onChange={() => toggleTask(task)} />
-                    <div style={{ flex: 1 }}>
-                      <div className="row-title">{task.title}</div>
-                      <div className="row-subtitle">{task.assigned_label} · due {task.due_at || "soon"}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="soft-card">
-              <div className="row-title" style={{ marginBottom: 12 }}>Completed</div>
-              <div className="activity-list">
-                {completedTasks.map((task) => (
-                  <label className="task-row" key={task.id}>
-                    <input type="checkbox" checked onChange={() => toggleTask(task)} />
-                    <div style={{ flex: 1 }}>
-                      <div className="row-title">{task.title}</div>
-                      <div className="row-subtitle">{task.assigned_label} · {task.due_at}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <TaskBoardKanban 
-            allTasks={[...pendingTasks, ...completedTasks]} 
-            onTaskStatusChange={(taskId, newStatus) => {
-              const task = [...pendingTasks, ...completedTasks].find(t => t.id === taskId);
-              if (task) toggleTask(task, newStatus);
-            }}
-          />
-        )}
-      </div>
-    </div>
+          ))}
+        </div>
+      ) : (
+        <TaskBoardKanban
+          allTasks={[...pendingTasks, ...completedTasks]}
+          onTaskStatusChange={(taskId, newStatus) => {
+            const task = [...pendingTasks, ...completedTasks].find(t => t.id === taskId);
+            if (task) toggleTask(task, newStatus);
+          }}
+        />
+      )}
+    </Panel>
   );
 }
 

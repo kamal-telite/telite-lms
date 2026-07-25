@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Float
+from sqlalchemy import Column, Float, ForeignKey, Integer, String
+
 from app.models.base import Base
+
 
 class GradingRubric(Base):
     __tablename__ = "grading_rubrics"

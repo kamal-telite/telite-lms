@@ -1,6 +1,9 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, BigInteger, Text
+from datetime import UTC, datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+
 from app.models.base import Base
+
 
 class MediaAsset(Base):
     __tablename__ = "media_assets"
@@ -17,7 +20,7 @@ class MediaAsset(Base):
     tags_json = Column(Text, nullable=True)
     metadata_json = Column(Text, nullable=True)
     uploaded_by = Column(String(50), ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True)
 

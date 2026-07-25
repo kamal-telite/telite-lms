@@ -1,0 +1,443 @@
+/* Panel and Card Components */
+
+.panel,
+.stat-card,
+.soft-card,
+.heatmap-card,
+.hero-banner,
+.course-card,
+.task-card,
+.summary-chip,
+.state-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.panel__header,
+.panel__footer {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .panel__header,
+  .panel__footer,
+  .panel__body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+.panel__header {
+  border-bottom: 1px solid var(--border);
+}
+
+.panel__footer {
+  border-top: 1px solid var(--border);
+}
+
+.panel__footer:has(> :only-child) {
+  justify-content: flex-end;
+}
+
+.panel__header h3,
+.panel__header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel__header p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.panel__body {
+  padding: 16px 18px;
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
+  min-height: 140px;
+}
+
+.stat-card--bottom .stat-card__accent {
+  inset: auto 0 0;
+  border-radius: 0 0 14px 14px;
+}
+
+.stat-card__accent {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+}
+
+.stat-card__label {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-card__value {
+  margin-top: 8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: clamp(1.1rem, 1.6vw, 1.75rem);
+  font-family: "Geist Mono", monospace;
+  font-weight: 700;
+  line-height: 1.1;
+  flex-wrap: wrap;
+}
+
+.stat-card__value small {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.stat-card__meta {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.stat-card.is-pulse {
+  animation: kpiPulse 0.3s ease;
+}
+
+.soft-card {
+  padding: 16px;
+}
+
+@media (max-width: 640px) {
+  .stat-card,
+  .soft-card {
+    padding: 14px;
+  }
+}
+
+.soft-card--tinted {
+  background: var(--surface-2);
+}
+
+/* Tasks section responsive tweaks */
+.learner-tasks-section {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 3vw, 24px);
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
+
+.learner-tasks__filter-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.learner-tasks__filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+  background: transparent;
+  color: var(--text-secondary, rgba(255,255,255,0.7));
+  transition: all 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.learner-tasks__filter-chip.is-active {
+  border-color: var(--primary, #4648d4);
+  background: var(--primary-bg, rgba(70,72,212,0.15));
+  color: var(--primary, #4648d4);
+  box-shadow: 0 2px 6px rgba(70,72,212,0.12);
+}
+
+.learner-tasks__grid {
+  width: 100%;
+  min-width: 0;
+}
+
+.learner-tasks__card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: clamp(16px, 3vw, 20px);
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+  background: var(--surface-raised, rgba(255,255,255,0.02));
+  box-shadow: var(--shadow-card, 0 4px 20px rgba(0,0,0,0.08));
+  overflow: hidden;
+}
+
+.learner-tasks__card-header {
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.learner-tasks__card-header .badge {
+  flex-shrink: 0;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+.learner-tasks__card-actions {
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.learner-tasks__card-copy {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.learner-tasks__card-title {
+  font-size: clamp(0.95rem, 2.5vw, 1rem);
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  margin-bottom: 4px;
+}
+
+.learner-tasks__card-meta {
+  font-size: clamp(11px, 2vw, 12px);
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.learner-tasks__card-instructions {
+  margin: 0;
+  font-size: clamp(12px, 2.2vw, 13.5px);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  padding-top: 4px;
+}
+
+.learner-tasks__form-stack {
+  margin-top: 8px;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.learner-tasks__field {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 12px 14px;
+  font-size: clamp(13px, 2.2vw, 14px);
+  line-height: 1.5;
+}
+
+.learner-tasks__status-text {
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.learner-tasks__status-text--approved {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.learner-tasks__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(40px, 10vw, 64px) clamp(18px, 4vw, 24px);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  #section-tasks .grid-2 {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  #section-tasks .panel__body {
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  .learner-tasks__card {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  #section-tasks .split-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #section-tasks .split-actions > * {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  #section-tasks .field__input,
+  #section-tasks textarea.field__input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  #section-tasks .panel {
+    margin: 0;
+    max-width: none;
+  }
+
+  #section-tasks .panel__body {
+    padding: 14px;
+    overflow-x: hidden;
+  }
+
+  .learner-tasks__filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .learner-tasks__filter-chip {
+    font-size: clamp(11px, 2.5vw, 12px);
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+
+  .learner-tasks__card {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .learner-tasks__card-title {
+    font-size: clamp(0.9rem, 2.8vw, 0.95rem);
+  }
+
+  .learner-tasks__card-meta {
+    font-size: clamp(10.5px, 2.2vw, 11.5px);
+  }
+
+  .learner-tasks__card-instructions {
+    font-size: clamp(11.5px, 2.3vw, 12.5px);
+  }
+
+  .learner-tasks__form-stack {
+    gap: 12px;
+  }
+
+  .learner-tasks__field {
+    padding: 12px;
+    font-size: clamp(12px, 2.5vw, 13px);
+  }
+
+  .learner-tasks__card-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .learner-tasks__card-actions > * {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 360px) {
+  #section-tasks .panel {
+    margin: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  #section-tasks .panel__body {
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  .learner-tasks__filter-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .learner-tasks__filter-chip {
+    font-size: 11px;
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+
+  .learner-tasks__card {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .learner-tasks__card-title {
+    font-size: 0.9rem;
+  }
+
+  .learner-tasks__card-meta {
+    font-size: 10.5px;
+  }
+
+  .learner-tasks__card-instructions {
+    font-size: 11.5px;
+  }
+
+  .learner-tasks__field {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .learner-tasks__card-actions {
+    gap: 8px;
+  }
+}

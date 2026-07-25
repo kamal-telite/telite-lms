@@ -51,7 +51,7 @@ class Course(Base, TenantMixin, TimestampMixin):
                                               comment="Price in paise (INR × 100). 0 = free.")
 
     # Relationships
-    category: Mapped["Category"] = relationship(  # type: ignore[name-defined]
+    category: Mapped[Category] = relationship(  # type: ignore[name-defined]
         "Category",
         back_populates="courses",
         foreign_keys=[category_slug],

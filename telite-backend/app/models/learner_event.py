@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Integer, String, ForeignKey, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.models.base import Base, TenantMixin
@@ -27,7 +28,7 @@ class LearnerEvent(Base, TenantMixin):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     # Relationships
-    user: Mapped["User"] = relationship("User")
+    user: Mapped[User] = relationship("User")
 
     def to_dict(self) -> dict:
         return {

@@ -237,6 +237,13 @@ def post_admin(
     try:
         existing = user_repo.get_by_email(body.email)
         if existing:
+            if existing.org_id != scoped_org_id:
+                raise HTTPException(status_code=403, detail="Email belongs to another organization")
+            if existing.is_platform_admin or existing.role == "platform_admin":
+                raise HTTPException(status_code=403, detail="Cannot modify platform administrator")
+            if not existing.is_active or existing.status == "disabled":
+                raise HTTPException(status_code=403, detail="Cannot modify an archived or inactive user")
+            
             # Update existing
             update_kwargs = {
                 "role": body.role,
@@ -272,6 +279,9 @@ def post_admin(
             except ProvisioningError as pe:
                 db.rollback()
                 raise HTTPException(status_code=409, detail=str(pe))
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
@@ -457,7 +467,8 @@ def delete_admin(
         
     ensure_org_access(current_user, existing.org_id)
     try:
-        db.delete(existing)
+        existing.is_active = False
+        existing.status = "disabled"
         db.commit()
         return {"status": "success"}
     except Exception as exc:
@@ -794,7 +805,8 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     ensure_org_access(current_user, target.org_id)
     try:
-        db.delete(target)
+        target.is_active = False
+        target.status = "disabled"
         db.commit()
         return {"status": "success"}
     except Exception as exc:

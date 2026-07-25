@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { DashboardShell } from "../../layouts/DashboardLayout";
 import { useToast, Button, Panel, Badge, IconButton, EmptyState, Modal } from "../../components/common/ui";
 import { getInitials, formatShortDate } from "../../utils/formatters";
+import { useDebounce } from "../../hooks/useDebounce";
 import { useDashboardStore } from "../../store/dashboardStore";
 import {
   QUESTION_BANK_SORT_FIELDS,
@@ -165,22 +166,20 @@ export default function QuestionBankManagerPage({ session, onLogout }) {
     fetchTaxonomy();
   }, []);
 
+  const debouncedSearchInput = useDebounce(searchInput, 400);
+
   useEffect(() => {
     if (skipSearchDebounceRef.current) {
       skipSearchDebounceRef.current = false;
       return undefined;
     }
 
-    const timer = window.setTimeout(() => {
-      setQuery((current) => ({
-        ...current,
-        search: searchInput,
-        page: 1,
-      }));
-    }, 400);
-
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
+    setQuery((current) => ({
+      ...current,
+      search: debouncedSearchInput,
+      page: 1,
+    }));
+  }, [debouncedSearchInput]);
 
   useEffect(() => {
     if (syncingFromUrlRef.current) {

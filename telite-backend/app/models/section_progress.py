@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Integer, String, Float, ForeignKey, DateTime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -26,8 +27,8 @@ class SectionProgress(Base, TenantMixin, TimestampMixin):
     last_left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="Last time learner left the section")
 
     # Relationships
-    user: Mapped["User"] = relationship("User")
-    section: Mapped["CourseSection"] = relationship("CourseSection")
+    user: Mapped[User] = relationship("User")
+    section: Mapped[CourseSection] = relationship("CourseSection")
 
     def to_dict(self) -> dict:
         return {

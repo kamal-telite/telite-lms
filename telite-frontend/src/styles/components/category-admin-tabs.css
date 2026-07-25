@@ -1,0 +1,324 @@
+/* Category Admin tab pages — Tasks, Reports, Settings, Activity feed */
+
+.tab-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+/* Shared toolbar spacing below panel header content */
+.admin-tab-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-bottom: var(--space-24);
+}
+
+.admin-tab-toolbar--bordered {
+  padding-bottom: var(--space-24);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-tab-toolbar__spacer {
+  flex: 1;
+  min-width: var(--space-12);
+}
+
+/* Reports filter + export row */
+.reports-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+  margin-bottom: var(--space-24);
+  padding-bottom: var(--space-24);
+  border-bottom: 1px solid var(--border);
+}
+
+.reports-toolbar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.reports-toolbar__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+/* Settings layout */
+.settings-layout {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.settings-form__section {
+  padding-top: var(--space-20);
+  border-top: 1px solid var(--border);
+}
+
+.settings-form__section-title {
+  margin: 0 0 var(--space-12);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-form__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+/* Task board — list view */
+.task-board-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-16);
+}
+
+@media (max-width: 900px) {
+  .task-board-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.task-status-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+  padding: var(--space-20);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-status-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--border);
+}
+
+.task-status-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.task-status-card__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-8);
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: "Geist Mono", monospace;
+  font-weight: 600;
+}
+
+.task-status-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.task-row__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-row__actions {
+  margin-top: var(--space-8);
+}
+
+.task-status-card__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 120px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: var(--space-16);
+}
+
+/* Task board — kanban view */
+.task-kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-16);
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .task-kanban-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.task-kanban-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  padding: var(--space-20);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-kanban-column__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--border);
+}
+
+.task-kanban-column__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.task-kanban-column__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  flex: 1;
+}
+
+.task-kanban-card {
+  padding: var(--space-12);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+}
+
+.task-kanban-card.is-dragging {
+  opacity: 0.5;
+  box-shadow: var(--shadow-md);
+}
+
+.task-kanban-card__actions {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.task-kanban-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+/* Table helpers */
+.table-empty-cell {
+  text-align: center;
+  padding: var(--space-32) var(--space-16) !important;
+}
+
+.progress-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 140px;
+}
+
+.progress-cell__track {
+  flex: 1;
+  min-width: 72px;
+}
+
+.progress-cell__value {
+  flex-shrink: 0;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Activity feed */
+.activity-event-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.activity-event-row .activity-dot {
+  flex-shrink: 0;
+}
+
+.activity-dot--success {
+  background: var(--success);
+}
+
+.activity-dot--error {
+  background: var(--danger);
+}
+
+.activity-dot--warning {
+  background: var(--warning);
+}
+
+.activity-dot--info {
+  background: var(--primary);
+}
+
+/* Panel header actions — list/kanban + CTA alignment */
+.panel__action .split-actions {
+  align-items: center;
+  gap: var(--space-12);
+}
+
+@media (max-width: 640px) {
+  .reports-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reports-toolbar__actions {
+    justify-content: flex-start;
+  }
+
+  .panel__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .panel__action {
+    width: 100%;
+  }
+
+  .panel__action .split-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

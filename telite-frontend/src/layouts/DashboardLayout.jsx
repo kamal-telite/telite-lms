@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { Badge, Avatar } from "../components/common/ui";
 import { Icon } from "../components/common/icons";
@@ -27,16 +27,37 @@ export function DashboardShell({
   onSessionChange,
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isCompact, setIsCompact] = useState(() => typeof window !== "undefined" ? window.innerWidth < 1024 : false);
   const dashboardVariant = variant || theme;
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleResize = () => {
+      const compact = window.innerWidth < 1024;
+      setIsCompact(compact);
+      if (compact) {
+        setCollapsed(true);
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const sidebarCollapsed = isCompact ? false : collapsed;
+
   return (
-    <div className={`dashboard-shell ${collapsed ? 'is-collapsed' : ''}`} data-dashboard-variant={dashboardVariant}>
-      <aside className={`dashboard-sidebar ${collapsed ? 'dashboard-sidebar--collapsed' : ''}`}>
+    <div className={`dashboard-shell ${sidebarCollapsed ? 'is-collapsed' : ''}`} data-dashboard-variant={dashboardVariant}>
+      <div className={`dashboard-sidebar__overlay ${mobileOpen ? 'is-visible' : ''}`} onClick={() => setMobileOpen(false)} />
+      <aside data-lenis-prevent className={`dashboard-sidebar ${sidebarCollapsed ? 'dashboard-sidebar--collapsed' : ''} ${isCompact ? 'dashboard-sidebar--mobile' : ''} ${mobileOpen ? 'is-open' : ''}`}>
         <div className="sidebar-brand">
           <div className="sidebar-brand__mark" style={{ background: brandMark.background }}>
             {brandMark.label}
           </div>
-          {!collapsed && (
+          {!sidebarCollapsed && (
             <div>
               <div className="sidebar-brand__title">{brandTitle}</div>
               <div className="sidebar-brand__subtitle">{brandSubtitle}</div>
@@ -47,21 +68,26 @@ export function DashboardShell({
         <div className="sidebar-nav">
           {navGroups.map((group) => (
             <div className="sidebar-nav__group" key={group.label}>
-              {!collapsed && <div className="sidebar-nav__label">{group.label}</div>}
+              {!sidebarCollapsed && <div className="sidebar-nav__label">{group.label}</div>}
               <div className="sidebar-nav__items">
                 {group.items.map((item) => (
                   <button
                     key={`${group.label}-${item.id}`}
                     type="button"
                     className={`nav-item ${activeNav === item.id ? "is-active" : ""}`}
-                    onClick={() => onNavClick(item)}
-                    title={collapsed ? item.label : undefined}
+                    onClick={() => {
+                      onNavClick(item);
+                      if (isCompact) {
+                        setMobileOpen(false);
+                      }
+                    }}
+                    title={sidebarCollapsed ? item.label : undefined}
                   >
                     <span className="nav-item__left">
                       <Icon name={item.icon} size={18} />
-                      {!collapsed && <span>{item.label}</span>}
+                      {!sidebarCollapsed && <span>{item.label}</span>}
                     </span>
-                    {!collapsed && item.badge ? <Badge tone={item.badgeTone}>{item.badge}</Badge> : null}
+                    {!sidebarCollapsed && item.badge ? <Badge tone={item.badgeTone}>{item.badge}</Badge> : null}
                   </button>
                 ))}
               </div>
@@ -70,9 +96,9 @@ export function DashboardShell({
         </div>
 
         <div className="sidebar-bottom">
-          <div className="sidebar-profile" style={{ justifyContent: collapsed ? 'center' : 'flex-start' }}>
+          <div className="sidebar-profile" style={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
             <Avatar initials={profile.initials} gradient={profile.gradient} size={30} />
-            {!collapsed && (
+            {!sidebarCollapsed && (
               <div>
                 <div className="sidebar-profile__name">{profile.name}</div>
                 <div className="sidebar-profile__role">{profile.roleLabel}</div>
@@ -82,22 +108,35 @@ export function DashboardShell({
           <button 
             type="button" 
             className="sidebar-collapse-btn"
-            onClick={() => setCollapsed(!collapsed)}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => {
+              if (isCompact) {
+                setMobileOpen(false);
+                return;
+              }
+              setCollapsed(!collapsed);
+            }}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={16} />
-            {!collapsed && <span>Collapse</span>}
+            <Icon name={sidebarCollapsed ? "chevron-right" : "chevron-left"} size={16} />
+            {!sidebarCollapsed && <span>Collapse</span>}
           </button>
         </div>
       </aside>
 
       <div className="dashboard-main">
         <header className="topbar">
-          <div>
-            <h1>{title}</h1>
-            <p>{subtitle}</p>
+          <div className="topbar__leading">
+            {isCompact ? (
+              <button type="button" className="topbar__menu-btn" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
+                <Icon name="list" size={18} />
+              </button>
+            ) : null}
+            <div>
+              <h1>{title}</h1>
+              {subtitle && <p>{subtitle}</p>}
+            </div>
           </div>
-          <div className="topbar__actions" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-8)' }}>
+          <div className="topbar__actions">
             {topbarBadge ? <Badge tone={topbarBadge.tone}>{topbarBadge.label}</Badge> : null}
             {topbarActions}
             {session ? (

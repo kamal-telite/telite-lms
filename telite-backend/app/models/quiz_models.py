@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, JSON, Boolean
-from sqlalchemy.orm import relationship
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.models.base import Base
 
@@ -37,21 +36,9 @@ class QuizDefinition(Base):
     review_mode = Column(String(50), nullable=True)
     settings_json = Column(JSON, nullable=True)
     status = Column(String(50), nullable=False, default="draft")
+    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=True)
 
-    quiz_questions = relationship("QuizDefinitionQuestion", back_populates="quiz")
 
 
-class QuizDefinitionQuestion(Base):
-    __tablename__ = "quiz_definition_questions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    quiz_id = Column(Integer, ForeignKey("quiz_definitions.id"), nullable=False, index=True)
-    question_id = Column(Integer, nullable=False, index=True)
-    question_version_id = Column(Integer, nullable=False, index=True)
-    order_index = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime(timezone=True), nullable=True)
-    updated_at = Column(DateTime(timezone=True), nullable=True)
-
-    quiz = relationship("QuizDefinition", back_populates="quiz_questions")

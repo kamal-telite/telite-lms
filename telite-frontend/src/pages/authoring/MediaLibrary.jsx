@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, IconButton, Badge, LoadingState, ErrorState, useToast } from "../../components/common/ui";
+import { useDebounce } from "../../hooks/useDebounce";
 import { api, getErrorMessage } from "../../services/client";
 import { MediaUsageDrawer } from "./MediaUsageDrawer";
 
@@ -32,12 +33,12 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
   const [usageLoading, setUsageLoading] = useState(false);
   const [replaceWarningTarget, setReplaceWarningTarget] = useState(null);
 
-  const fetchAssets = useCallback(async () => {
+  const fetchAssets = useCallback(async (searchTerm) => {
     setLoading(true);
     try {
       const params = {
         limit: 100,
-        search: search.trim() || undefined,
+        search: searchTerm.trim() || undefined,
       };
       if (typeFilter !== "all") {
         params.type = typeFilter;
@@ -59,16 +60,24 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = null }) {
     } finally {
       setLoading(false);
     }
-  }, [folderFilter, search, tagFilter, typeFilter]);
+  }, [folderFilter, tagFilter, typeFilter]);
+
+  const debouncedSearch = useDebounce(search, 250);
 
   useEffect(() => {
-    if (open) {
-      if (normalizedFilterType) setTypeFilter(normalizedFilterType);
-      const timer = window.setTimeout(fetchAssets, search ? 250 : 0);
-      return () => window.clearTimeout(timer);
+    if (open && normalizedFilterType) {
+      setTypeFilter(normalizedFilterType);
     }
+  }, [open, normalizedFilterType]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    fetchAssets(debouncedSearch);
     return undefined;
-  }, [open, fetchAssets, search, normalizedFilterType]);
+  }, [open, debouncedSearch, fetchAssets]);
 
   const fetchUsage = async (assetId) => {
     setUsageLoading(true);

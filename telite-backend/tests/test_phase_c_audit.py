@@ -211,10 +211,11 @@ def _create_native_quiz_course(
             }
         ]
     }
-    _create_version(db, course_id, org_id=org_id, version_number=1, snapshot=snapshot)
+    admin_user = _create_admin_user(db, org_id=org_id)
+    _create_version(db, course_id, org_id=org_id, version_number=1, snapshot=snapshot, created_by=admin_user.id)
     return course, module, block
 
-def _create_version(db: Session, course_id: str, org_id: int, version_number: int, snapshot: dict):
+def _create_version(db: Session, course_id: str, org_id: int, version_number: int, snapshot: dict, created_by: str):
     v = CourseVersion(
         id=str(uuid.uuid4()),
         course_id=course_id,
@@ -222,7 +223,8 @@ def _create_version(db: Session, course_id: str, org_id: int, version_number: in
         version_number=version_number,
         status="published",
         snapshot_json=snapshot,
-        published_by=None
+        published_by=None,
+        created_by=created_by
     )
     db.add(v)
     db.flush()
@@ -331,10 +333,11 @@ def test_version_freeze_pinning(client: TestClient, db_session: Session):
     progress.enrolled_version = 1
     
     # Create V1
+    admin_user = _create_admin_user(db_session, org_id=1)
     v1_snapshot = {
         "sections": [{"modules": [{"id": 1, "title": "Module 1", "module_type": "page", "blocks": [{"id": 100, "block_type": "poll", "settings": {"question": "V1"}}]}]}]
     }
-    _create_version(db_session, course_id, org_id=1, version_number=1, snapshot=v1_snapshot)
+    _create_version(db_session, course_id, org_id=1, version_number=1, snapshot=v1_snapshot, created_by=admin_user.id)
     db_session.commit()
     
     token = create_access_token(payload={"sub": user.id, "org_id": 1})
@@ -349,7 +352,7 @@ def test_version_freeze_pinning(client: TestClient, db_session: Session):
     v2_snapshot = {
         "sections": [{"modules": [{"id": 1, "title": "Module 1", "module_type": "page", "blocks": [{"id": 100, "block_type": "poll", "settings": {"question": "V2"}}]}]}]
     }
-    _create_version(db_session, course_id, org_id=1, version_number=2, snapshot=v2_snapshot)
+    _create_version(db_session, course_id, org_id=1, version_number=2, snapshot=v2_snapshot, created_by=admin_user.id)
     db_session.commit()
     
     # Learner fetches course again. Since they started on V1, they MUST remain on V1!

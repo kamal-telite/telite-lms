@@ -1,9 +1,10 @@
 """RolePermission model for dynamic capability matrices."""
 
-from sqlalchemy import Boolean, Integer, String, ForeignKey
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
+
 
 class RolePermission(Base, TimestampMixin):
     __tablename__ = "role_permissions"

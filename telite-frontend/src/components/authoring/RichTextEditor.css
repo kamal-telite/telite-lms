@@ -1,0 +1,678 @@
+/* ==========================================================================
+   RICH TEXT EDITOR (TIPAP) STYLES
+   Modern Word/Google Docs-style editor toolbar and canvas
+   ========================================================================== */
+
+/* Editor Wrapper — integrated into Course Builder blocks */
+.word-editor-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  font-family: var(--font-body, 'Cabinet Grotesk', system-ui, sans-serif);
+  box-shadow: none;
+}
+
+.builder-block .word-editor-wrapper {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.word-editor-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  border-radius: 0;
+}
+
+/* Toolbar Container */
+.word-editor-toolbar {
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.builder-block .word-editor-toolbar {
+  background: var(--color-surface-alt);
+  border-bottom-color: var(--color-border);
+}
+
+/* Toolbar Rows */
+.word-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* Toolbar Groups */
+.word-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
+  margin-right: 6px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.word-toolbar-group:last-child {
+  border-right: none;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+/* Toolbar Buttons */
+.word-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  font-size: 13px;
+}
+
+.word-toolbar-btn:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.word-toolbar-btn:active:not(:disabled) {
+  background: var(--border-subtle);
+}
+
+.word-toolbar-btn:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.word-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.word-toolbar-btn.active {
+  background: var(--primary-bg);
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.word-toolbar-btn svg {
+  flex-shrink: 0;
+}
+
+/* Color Picker Buttons */
+.color-picker-btn {
+  position: relative;
+}
+
+.color-strip {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* Toolbar Select Dropdowns */
+.word-toolbar-select {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 140px;
+}
+
+.word-toolbar-select:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.word-toolbar-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.font-family-select {
+  max-width: 110px;
+}
+
+.font-size-select {
+  max-width: 80px;
+}
+
+.spacing-select {
+  max-width: 120px;
+}
+
+/* Popover/Dropdown Menus */
+.word-popover-anchor {
+  position: relative;
+  display: inline-block;
+}
+
+.word-color-picker-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 160px;
+}
+
+.color-picker-cell {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.color-picker-cell:hover {
+  transform: scale(1.15);
+  box-shadow: var(--shadow-md);
+  z-index: 1;
+}
+
+.clear-color-btn {
+  grid-column: span 6;
+  padding: 6px 12px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-color-btn:hover {
+  background: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+/* Table Dropdown Menu */
+.word-table-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 200px;
+  padding: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.word-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.word-dropdown-item:hover {
+  background: var(--surface-sunken);
+}
+
+.word-dropdown-item.text-danger {
+  color: var(--error);
+}
+
+.word-dropdown-item.text-danger:hover {
+  background: var(--error-bg);
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  border: none;
+  margin: 4px 0;
+}
+
+/* Nested Option Groups */
+.nested-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+}
+
+.nested-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.nested-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.nested-btn {
+  flex: 1;
+  padding: 6px 8px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nested-btn:hover {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+}
+
+/* Double Popover (nested dropdowns) */
+.double-popover {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 4px);
+  z-index: 101;
+  min-width: 140px;
+  padding: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.double-popover.color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 8px;
+  min-width: 160px;
+}
+
+/* Find & Replace Panel */
+.find-replace-panel {
+  padding: 12px;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.find-replace-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.find-replace-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.find-replace-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.find-replace-btn {
+  padding: 8px 16px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.find-replace-btn:hover {
+  background: var(--surface-sunken);
+  border-color: var(--border-strong);
+}
+
+/* Editor Canvas */
+.word-editor-canvas {
+  flex: 1;
+  padding: 16px 18px;
+  overflow-y: auto;
+  background: var(--surface-raised);
+  min-height: 180px;
+}
+
+.builder-block .word-editor-canvas {
+  background: var(--color-surface);
+  min-height: 160px;
+  padding: 14px 16px;
+}
+
+/* TipTap Editor Content Styles */
+.word-editor-canvas .ProseMirror {
+  outline: none;
+  min-height: 140px;
+}
+
+.builder-block .word-editor-canvas .ProseMirror {
+  min-height: 120px;
+}
+
+.word-editor-canvas .ProseMirror > * {
+  margin: 0.5em 0;
+}
+
+.word-editor-canvas .ProseMirror > *:first-child {
+  margin-top: 0;
+}
+
+.word-editor-canvas .ProseMirror > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Headings */
+.word-editor-canvas .ProseMirror h1 {
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0.67em 0;
+  color: var(--text-primary);
+}
+
+.word-editor-canvas .ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0.83em 0;
+  color: var(--text-primary);
+}
+
+.word-editor-canvas .ProseMirror h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 1em 0;
+  color: var(--text-primary);
+}
+
+.word-editor-canvas .ProseMirror h4,
+.word-editor-canvas .ProseMirror h5,
+.word-editor-canvas .ProseMirror h6 {
+  font-size: 1em;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 1.33em 0;
+  color: var(--text-primary);
+}
+
+/* Paragraphs */
+.word-editor-canvas .ProseMirror p {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+/* Lists */
+.word-editor-canvas .ProseMirror ul,
+.word-editor-canvas .ProseMirror ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.word-editor-canvas .ProseMirror li {
+  margin: 0.25em 0;
+  line-height: 1.6;
+}
+
+.word-editor-canvas .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+}
+
+.word-editor-canvas .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.word-editor-canvas .ProseMirror ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.word-editor-canvas .ProseMirror ul[data-type="taskList"] li > label input {
+  cursor: pointer;
+}
+
+.word-editor-canvas .ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.word-editor-canvas .ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] input:checked ~ p {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* Blockquote */
+.word-editor-canvas .ProseMirror blockquote {
+  border-left: 4px solid var(--border-strong);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Code */
+.word-editor-canvas .ProseMirror code {
+  background: var(--surface-sunken);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--primary);
+}
+
+.word-editor-canvas .ProseMirror pre {
+  background: var(--surface-sunken);
+  padding: 1em;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.word-editor-canvas .ProseMirror pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.9em;
+  color: var(--text-primary);
+}
+
+/* Horizontal Rule */
+.word-editor-canvas .ProseMirror hr {
+  border: none;
+  border-top: 2px solid var(--border-subtle);
+  margin: 2em 0;
+}
+
+/* Links */
+.word-editor-canvas .ProseMirror a {
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.word-editor-canvas .ProseMirror a:hover {
+  text-decoration: none;
+}
+
+/* Tables */
+.word-editor-canvas .ProseMirror table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  overflow: hidden;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.word-editor-canvas .ProseMirror table td,
+.word-editor-canvas .ProseMirror table th {
+  border: 1px solid var(--border-subtle);
+  padding: 8px 12px;
+  min-width: 1em;
+  vertical-align: top;
+  text-align: left;
+}
+
+.word-editor-canvas .ProseMirror table th {
+  background: var(--surface-sunken);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.word-editor-canvas .ProseMirror table .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(59, 130, 246, 0.1);
+  pointer-events: none;
+}
+
+.word-editor-canvas .ProseMirror table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  z-index: 20;
+  background-color: var(--primary);
+  pointer-events: none;
+}
+
+/* Images */
+.word-editor-canvas .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  margin: 1em 0;
+}
+
+/* Placeholder */
+.word-editor-canvas .ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--text-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .word-editor-toolbar {
+    padding: 6px 8px;
+  }
+
+  .word-toolbar-row {
+    gap: 2px;
+  }
+
+  .word-toolbar-group {
+    padding-right: 4px;
+    margin-right: 4px;
+  }
+
+  .word-toolbar-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .word-toolbar-select {
+    height: 28px;
+    padding: 0 6px;
+    font-size: 12px;
+    max-width: 100px;
+  }
+
+  .word-editor-canvas {
+    padding: 12px 14px;
+    min-height: 140px;
+  }
+
+  .builder-block .word-editor-canvas {
+    padding: 12px;
+    min-height: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  .word-toolbar-group {
+    border-right: none;
+    margin-right: 0;
+    padding-right: 0;
+  }
+
+  .word-toolbar-select {
+    max-width: 80px;
+  }
+}

@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.models.base import Base
+
 
 class LessonBlock(Base):
     __tablename__ = "lesson_blocks"

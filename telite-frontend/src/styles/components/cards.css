@@ -1,0 +1,372 @@
+/* Card and Banner Components */
+
+.hero-banner {
+  padding: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.22), transparent 36%),
+    linear-gradient(135deg, rgba(124, 58, 237, 0.94), rgba(37, 99, 235, 0.88));
+  color: white;
+  overflow: hidden;
+}
+
+.hero-banner h2 {
+  margin: 0;
+  font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+  line-height: 1.2;
+}
+
+.hero-banner p {
+  margin: 8px 0 0;
+  max-width: 560px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.6;
+}
+
+.hero-banner__metrics {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+@media (max-width: 640px) {
+  .hero-banner {
+    padding: 18px;
+  }
+
+  .hero-banner__metrics {
+    gap: 10px;
+  }
+
+  .hero-metric {
+    min-width: 0;
+    flex: 1 1 calc(50% - 10px);
+  }
+}
+
+.hero-metric {
+  min-width: 110px;
+}
+
+.hero-metric span {
+  display: block;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 11px;
+}
+
+.hero-metric strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  font-family: "Geist Mono", monospace;
+}
+
+.summary-chip {
+  padding: 12px 14px;
+}
+
+.summary-chip__label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.summary-chip__value {
+  margin-top: 4px;
+  font-size: 20px;
+  font-family: "Geist Mono", monospace;
+  font-weight: 700;
+}
+
+.category-card {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px 14px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.category-card__bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+.category-card__actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.category-card:hover .category-card__actions,
+.hover-actions:hover .hover-actions__buttons,
+.table-action-row:hover .table-action-row__buttons {
+  opacity: 1;
+}
+
+.category-card__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.category-card__meta {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: "Geist Mono", monospace;
+}
+
+.stat-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.stat-pair__card {
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.stat-pair__card span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.stat-pair__card strong {
+  display: block;
+  margin-top: 4px;
+  font-family: "Geist Mono", monospace;
+  font-size: 14px;
+}
+
+.category-card__footer,
+.toolbar,
+.search-toolbar,
+.quick-pills {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.category-card__footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.panel-link {
+  color: var(--theme-accent);
+  font-size: 11px;
+  font-weight: 500;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.course-card {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 200px;
+  height: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.grid-3 {
+  align-items: stretch;
+}
+
+.grid-4 {
+  align-items: stretch;
+}
+
+.course-card__cover {
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.course-card__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+
+.course-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  padding: 16px;
+}
+
+.course-card__content > div {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+.course-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.course-card__title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 36px;
+}
+
+.course-card__category-tier {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.course-card__progress-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.course-card__progress-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+.course-card__progress-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.course-card__action {
+  width: 100%;
+  margin-top: auto;
+}
+
+@media (max-width: 1023px) {
+  .course-card__cover {
+    height: 150px;
+  }
+
+  .course-card__content {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .course-card__title {
+    font-size: 13px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 767px) {
+  .course-card {
+    min-height: auto;
+  }
+
+  .course-card__cover {
+    height: 140px;
+  }
+
+  .course-card__content {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .course-card__title {
+    font-size: 13px;
+    height: 32px;
+  }
+
+  .course-card__action .btn,
+  .course-card__action button {
+    height: 36px;
+    font-size: 13px;
+  }
+}
+
+.course-card__action .btn,
+.course-card__action button {
+  width: 100%;
+}
+
+.task-card {
+  padding: 16px;
+}
+
+.heatmap-card {
+  padding: 16px;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.heatmap-legend span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.heatmap-legend__box {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}

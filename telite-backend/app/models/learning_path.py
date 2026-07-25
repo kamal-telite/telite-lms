@@ -1,6 +1,9 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from datetime import UTC, datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+
 from app.models.base import Base
+
 
 class LearningPath(Base):
     __tablename__ = "learning_paths"
@@ -10,7 +13,7 @@ class LearningPath(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     settings = Column(Text, nullable=False, default="{}") # Completion rules, prereqs
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True)
 

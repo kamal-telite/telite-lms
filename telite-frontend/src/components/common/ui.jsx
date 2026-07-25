@@ -279,7 +279,7 @@ export function FileUpload({ currentUrl, className = "", ...props }) {
 }
 
 ToastProvider.propTypes = {
-  children: PropTypes.node.isRequired,
+  children: PropTypes.node,
 };
 
 Button.propTypes = {

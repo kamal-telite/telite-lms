@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           bypass: (req) => {
             if (req.headers.accept && req.headers.accept.includes("text/html")) {
+              if (req.url.startsWith("/api/") || req.url.includes("/download") || req.url.includes("/certificates/")) {
+                return;
+              }
               return "/index.html";
             }
           },

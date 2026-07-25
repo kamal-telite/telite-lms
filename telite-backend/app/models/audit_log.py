@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, ForeignKey, JSON
+from sqlalchemy import JSON, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
+
 
 class AuditLog(Base, TimestampMixin):
     __tablename__ = "audit_logs"

@@ -1,0 +1,63 @@
+/* Question Picker Components */
+
+.question-picker {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-20);
+  min-height: 560px;
+}
+
+.question-picker-banks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-right: var(--space-16);
+  border-right: 1px solid var(--border);
+}
+
+.question-picker-bank {
+  width: 100%;
+  padding: var(--space-12);
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.question-picker-bank.is-active {
+  border-color: var(--border);
+  background: var(--surface-sunken);
+}
+
+.question-picker-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
+.question-picker-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) repeat(5, minmax(120px, 1fr));
+  gap: var(--space-12);
+  align-items: end;
+}
+
+.question-picker-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.question-picker-results {
+  min-height: 320px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.question-picker-results tr.is-selected {
+  background: var(--surface-sunken);
+}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, Button, useToast, Badge, EmptyState } from "../common/ui";
+import { useDebounce } from "../../hooks/useDebounce";
 import {
   QUESTION_BANK_SORT_FIELDS,
   fetchQuestionBanks,
@@ -66,12 +67,11 @@ export default function QuestionBankPicker({ open, onClose, onImport, slug }) {
       .catch((error) => showToast(getQuestionBankErrorMessage(error, "Failed to load Question Bank data"), "error"));
   }, [open, slug, showToast]);
 
+  const debouncedSearchInput = useDebounce(searchInput, 400);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setQuery((current) => ({ ...current, search: searchInput, page: 1 }));
-    }, 400);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
+    setQuery((current) => ({ ...current, search: debouncedSearchInput, page: 1 }));
+  }, [debouncedSearchInput]);
 
   useEffect(() => {
     setQuery((current) => ({ ...current, page: 1, versionState: "PUBLISHED" }));

@@ -1,6 +1,9 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Boolean, JSON, Text
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+
 from app.models.base import Base
+
 
 class QuizAnswer(Base):
     __tablename__ = "quiz_answers"
@@ -20,8 +23,8 @@ class GradingEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     attempt_id = Column(Integer, ForeignKey("quiz_attempts.id"), nullable=False, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    grader_id = Column(String(50), nullable=True)
+    grader_id = Column(String(50), ForeignKey("users.id"), nullable=True)
     previous_score = Column(Float, nullable=True)
     new_score = Column(Float, nullable=False)
     action = Column(String(50), nullable=False)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

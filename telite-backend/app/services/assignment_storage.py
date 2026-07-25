@@ -13,34 +13,44 @@ from app.core.storage_paths import assignment_upload_root
 
 MAX_ASSIGNMENT_FILE_BYTES = int(os.getenv("TELITE_ASSIGNMENT_MAX_FILE_BYTES", str(25 * 1024 * 1024)))
 ALLOWED_EXTENSIONS = {
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".zip",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".webp",
-    ".txt",
-    ".csv",
-    ".xlsx",
-    ".ppt",
-    ".pptx",
+    # Documents & Archives
+    ".pdf", ".doc", ".docx", ".zip", ".txt", ".csv", ".xlsx", ".ppt", ".pptx",
+    # Images
+    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+    # C/C++
+    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp",
+    # Java & JVM
+    ".java", ".kt", ".scala",
+    # Python
+    ".py",
+    # Web & JavaScript/TypeScript
+    ".js", ".mjs", ".ts", ".tsx",
+    ".html", ".css", ".scss",
+    ".json", ".xml", ".yml", ".yaml", ".md",
+    # C#
+    ".cs",
+    # Systems & Scripting
+    ".go", ".rs", ".swift", ".php", ".rb", ".pl", ".lua", ".dart",
+    # Data Science & Shell
+    ".r", ".m", ".sh", ".bash", ".zsh", ".sql",
 }
-ALLOWED_MIME_PREFIXES = ("image/",)
+ALLOWED_MIME_PREFIXES = ("image/", "text/")
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/zip",
     "application/x-zip-compressed",
-    "text/plain",
-    "text/csv",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/json",
+    "application/xml",
+    "application/javascript",
+    "application/x-javascript",
+    "application/typescript",
+    "application/x-sh",
 }
 
 

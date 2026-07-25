@@ -48,15 +48,20 @@ function isDynamicImportError(error) {
 class LazyChunkErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, isChunkError: false };
   }
 
   static getDerivedStateFromError(error) {
-    return { error };
+    return {
+      error,
+      isChunkError: isDynamicImportError(error),
+    };
   }
 
   componentDidCatch(error) {
     if (!isDynamicImportError(error) || typeof window === "undefined") {
+      // Non-chunk errors must not force a full page reload
+      console.error("Application render error:", error);
       return;
     }
 
@@ -70,10 +75,19 @@ class LazyChunkErrorBoundary extends React.Component {
 
   render() {
     if (this.state.error) {
+      if (this.state.isChunkError) {
+        return (
+          <FullPageMessage
+            title="Refreshing TELITE"
+            body="Reloading the latest application bundle."
+          />
+        );
+      }
+
       return (
         <FullPageMessage
-          title="Refreshing TELITE"
-          body="Reloading the latest application bundle."
+          title="Something went wrong"
+          body="An unexpected error occurred while rendering this view. Try refreshing the page."
         />
       );
     }
@@ -83,17 +97,18 @@ class LazyChunkErrorBoundary extends React.Component {
 }
 
 function FullPageMessage({ title, body }) {
+  const heading = title === "Loading..." ? "Preparing Workspace..." : title;
+
   return (
-    <div className="loader" style={{ display: 'flex', flexDirection: 'column', zIndex: 999999 }}>
-      <div className="loader-logo">Telite <span>LMS</span></div>
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-        {title === "Loading..." ? "Preparing Workspace..." : title}
-      </div>
-      {body ? (
-        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          {body}
+    <div className="app-loader" role="status" aria-live="polite" aria-busy="true">
+      <div className="app-loader__panel">
+        <div className="app-loader__brand">
+          Telite <span>LMS</span>
         </div>
-      ) : null}
+        <div className="spinner" aria-hidden="true" />
+        <h1 className="app-loader__title">{heading}</h1>
+        {body ? <p className="app-loader__body">{body}</p> : null}
+      </div>
     </div>
   );
 }

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from sqlalchemy import Integer, String, Text, ForeignKey, DateTime, JSON
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -16,7 +17,7 @@ class Certificate(Base, TenantMixin, TimestampMixin):
     user_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     course_id: Mapped[str] = mapped_column(String(50), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     pdf_s3_key: Mapped[str] = mapped_column(String(255), nullable=False)
     
     certificate_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
@@ -27,8 +28,8 @@ class Certificate(Base, TenantMixin, TimestampMixin):
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
-    user: Mapped["User"] = relationship("User")
-    course: Mapped["Course"] = relationship("Course")
+    user: Mapped[User] = relationship("User")
+    course: Mapped[Course] = relationship("Course")
 
     def to_dict(self) -> dict:
         return {

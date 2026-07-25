@@ -26,6 +26,17 @@ import { ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs
 import { BrandingSettingsTab } from "../../components/dashboard/BrandingSettingsTab";
 
 import { useSuperAdminStore } from "../../store/dashboardStore";
+import OverviewSection from "../../components/super-admin/OverviewSection";
+import CategoriesSection from "../../components/super-admin/CategoriesSection";
+import PALSection from "../../components/super-admin/PALSection";
+import AdminSection from "../../components/super-admin/AdminSection";
+import EnrollmentsSection from "../../components/super-admin/EnrollmentsSection";
+import VerificationsSection from "../../components/super-admin/VerificationsSection";
+import GradingSection from "../../components/super-admin/GradingSection";
+import AuditSection from "../../components/super-admin/AuditSection";
+import UsersSection from "../../components/super-admin/UsersSection";
+import AnalyticsSection from "../../components/super-admin/AnalyticsSection";
+import SettingsSection from "../../components/super-admin/SettingsSection";
 import {
   Avatar,
   Badge,
@@ -538,1107 +549,116 @@ export default function SuperAdminPage({ session, onLogout }) {
       >
         <div className="dashboard-stack">
           {activeNav === "section-overview" && (
-          <section id="section-overview" className="dashboard-stack">
-            <div className="grid-4">
-              <StatCard
-                accent="#7C3AED"
-                label="Total Categories"
-                value={dashboard.kpis.total_categories}
-                meta={`${dashboard.kpis?.total_categories || 0} active`}
-                pulse={kpiPulse.total_categories}
-              />
-              <StatCard
-                accent="#2563EB"
-                label="Total Courses"
-                value={dashboard.kpis.total_courses}
-                meta="Across all categories"
-                pulse={kpiPulse.total_courses}
-              />
-              <StatCard
-                accent="#059669"
-                label="Total Learners"
-                value={dashboard?.kpis?.total_users || 0}
-                meta="Enrolled this quarter"
-                pulse={kpiPulse.total_learners}
-              />
-              <StatCard
-                accent="#D97706"
-                label="Pending Approvals"
-                value={dashboard.kpis.pending_approvals}
-                meta="Requires action"
-                pulse={kpiPulse.pending_approvals}
-              />
-            </div>
-
-              <div className="grid-2" style={{ marginTop: 18 }}>
-                <Panel title="Recent enrollments" subtitle="Latest 10 enrollment requests">
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>User</th>
-                          <th>Category</th>
-                          <th>Status</th>
-                          <th>Requested</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(dashboard.enrollment_audit?.rows || []).slice(0, 10).map((row) => (
-                          <tr key={row.request_id}>
-                            <td>
-                              <div className="row-title">{row.full_name}</div>
-                              <div className="row-subtitle">{row.email || ""}</div>
-                            </td>
-                            <td className="muted">{row.category}</td>
-                            <td>
-                              <Badge tone={getStatusTone(row.status)}>{row.status}</Badge>
-                            </td>
-                            <td className="mono" style={{ whiteSpace: "nowrap" }}>
-                              {formatShortDate(row.requested_at || row.created_at || "") || "—"}
-                            </td>
-                          </tr>
-                        ))}
-                        {(dashboard.enrollment_audit?.rows || []).length === 0 ? (
-                          <tr>
-                            <td colSpan="4">
-                              <EmptyState title="No enrollments yet" body="Enrollment requests will show up here once learners start joining." />
-                            </td>
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-
-                <Panel title="Top learners by PAL score" subtitle="Current leaders across categories">
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th style={{ width: 60, textAlign: "center" }}>Rank</th>
-                          <th>Learner</th>
-                          <th style={{ textAlign: "right" }}>PAL</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(dashboard.leaderboard || []).slice(0, 5).map((user, idx) => (
-                          <tr key={user.id || `${user.full_name}-${idx}`}>
-                            <td style={{ textAlign: "center", fontWeight: 700, color: getRankColor(idx + 1) }}>
-                              #{idx + 1}
-                            </td>
-                            <td>
-                              <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
-                                <Avatar
-                                  initials={user.avatar_initials || getInitials(user.full_name)}
-                                  gradient={user.avatar_gradient || ["#2563EB", "#7C3AED"]}
-                                  size={26}
-                                />
-                                <div>
-                                  <div className="row-title">{user.full_name}</div>
-                                  <div className="row-subtitle">{user.category_scope}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="mono" style={{ textAlign: "right", fontWeight: 700, color: getScoreColor(user.pal_score) }}>
-                              {formatPercent(user.pal_score)}
-                            </td>
-                          </tr>
-                        ))}
-                        {(dashboard.leaderboard || []).length === 0 ? (
-                          <tr>
-                            <td colSpan="3">
-                              <EmptyState title="No PAL data yet" body="Once learners start progressing, this leaderboard will populate automatically." />
-                            </td>
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-              </div>
-          </section>
+            <OverviewSection 
+              dashboard={dashboard}
+              kpiPulse={kpiPulse}
+              handleApprove={handleApprove}
+              handleReject={handleReject}
+            />
           )}
 
           {activeNav === "section-categories" && (
-          <section id="section-categories">
-            <SectionTitle label="Learning Categories" />
-            <div className="grid-3">
-              {dashboard.categories.map((category) => (
-                <article className="category-card" key={category.id}>
-                  <span className="category-card__bar" style={{ background: category.accent_color }} />
-                  <div className="category-card__actions">
-                    <IconButton
-                      label="Edit category"
-                      icon="pencil"
-                      onClick={() => setCategoryModal({ open: true, item: category })}
-                    />
-                    <IconButton
-                      label="Delete category"
-                      icon="trash"
-                      onClick={() => setCategoryDeleteId((value) => (value === category.id ? null : category.id))}
-                    />
-                  </div>
-                  <div className="category-card__name">{category.name}</div>
-                  <div className="category-card__meta">
-                    {category.slug} · {category.total_courses} courses ·{" "}
-                    {`${category.courses_count || 0} courses`}
-                  </div>
-                  <div className="stat-pair">
-                    <div className="stat-pair__card">
-                      <span>Learners</span>
-                      <strong style={{ color: category.accent_color }}>{category.total_learners}</strong>
-                    </div>
-                    <div className="stat-pair__card">
-                      <span>Avg PAL</span>
-                      <strong style={{ color: category.accent_color }}>
-                        {formatPercent(category.avg_pal)}
-                      </strong>
-                    </div>
-                  </div>
-                  <div className="category-card__footer">
-                    <Badge tone={category.status === "active" ? "success" : "warn"}>
-                      {category.status === "active" ? "Active" : titleize(category.status)}
-                    </Badge>
-                    <button
-                      className="panel-link"
-                      type="button"
-                      onClick={() => {
-                        showToast(`Opening ${category.name} dashboard...`, "info");
-                        navigate(`/categories/${category.slug}/admin`);
-                      }}
-                    >
-                      View dashboard →
-                    </button>
-                  </div>
-                  {categoryDeleteId === category.id ? (
-                    <div className="inline-confirm">
-                      <span>Archive this category?</span>
-                      <div className="split-actions">
-                        <Button tone="danger" onClick={() => handleDeleteCategory(category.id)}>
-                          Confirm delete
-                        </Button>
-                        <Button tone="ghost" onClick={() => setCategoryDeleteId(null)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-          </section>
+            <CategoriesSection 
+              dashboard={dashboard}
+              setCategoryModal={setCategoryModal}
+              setCategoryDeleteId={setCategoryDeleteId}
+              categoryDeleteId={categoryDeleteId}
+              handleDeleteCategory={handleDeleteCategory}
+              navigate={navigate}
+              showToast={showToast}
+            />
           )}
 
           {activeNav === "section-pal" && (
-          <section id="section-pal">
-            <Panel
-              className="panel"
-              action={
-                isMoodleSource ? (
-                  <Badge tone="neutral">live Moodle</Badge>
-                ) : (
-                  <>
-                    <Badge tone="neutral">all-time</Badge>
-                    {dashboard.categories && dashboard.categories.length > 0 && (
-                      <button className="panel-link" type="button" onClick={() => navigate(`/categories/${dashboard.categories[0].slug}/stats`)}>
-                        Full report
-                      </button>
-                    )}
-                  </>
-                )
-              }
-            >
-              <div id="section-pal" className="bar-list">
-                {isMoodleSource ? (
-                  <EmptyState title="PAL data unavailable" body={dashboard.notes?.pal || "No PAL data returned from Moodle."} />
-                ) : (
-                  dashboard.leaderboard.slice(0, 6).map((user, index) => (
-                    <div className="leaderboard-row" key={user.id}>
-                      <div className="leaderboard-rank" style={{ color: getRankColor(index + 1), fontWeight: 700 }}>
-                        #{index + 1}
-                      </div>
-                      <Avatar
-                        initials={user.avatar_initials || getInitials(user.full_name)}
-                        gradient={user.avatar_gradient}
-                        size={26}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div className="row-title">{user.full_name}</div>
-                        <div className="row-subtitle">{user.category_scope}</div>
-                      </div>
-                      <div className="bar-score">
-                        <div className="progress-track">
-                          <div
-                            className="progress-fill"
-                            style={{ width: `${user.pal_score}%`, background: getScoreColor(user.pal_score) }}
-                          />
-                        </div>
-                      </div>
-                      <div className="mono" style={{ color: getScoreColor(user.pal_score), fontWeight: 700 }}>
-                        {formatPercent(user.pal_score)}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div style={{ marginTop: 18 }}>
-                <div className="row-title" style={{ marginBottom: 12 }}>
-                  {isMoodleSource ? "Courses per managed category" : "PAL Score Distribution by Category"}
-                </div>
-                <ChartCanvas
-                  type="bar"
-                  height={190}
-                  labels={(isMoodleSource
-                    ? dashboard.analytics.courses_per_category
-                    : dashboard.analytics.avg_pal_per_category
-                  ).map((item) => item.category)}
-                  datasets={[
-                    {
-                      label: isMoodleSource ? "Courses" : "Average PAL",
-                      data: (isMoodleSource
-                        ? dashboard.analytics.courses_per_category
-                        : dashboard.analytics.avg_pal_per_category
-                      ).map((item) => item.value),
-                      backgroundColor: (isMoodleSource
-                        ? dashboard.analytics.courses_per_category
-                        : dashboard.analytics.avg_pal_per_category
-                      ).map((item) => item.color),
-                      borderRadius: 8,
-                    },
-                  ]}
-                  options={{
-                    indexAxis: "y",
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                      x: {
-                        min: 0,
-                        max: isMoodleSource ? undefined : 100,
-                        border: { display: false },
-                        grid: { color: "#F2F4F8" },
-                        ticks: { color: "#94A3B8", font: { family: "Geist Mono", size: 10 } },
-                      },
-                      y: {
-                        border: { display: false },
-                        grid: { display: false },
-                        ticks: { color: "#475569", font: { family: "Geist", size: 11 } },
-                      },
-                    },
-                  }}
-                />
-              </div>
-            </Panel>
-          </section>
+            <PALSection 
+              dashboard={dashboard}
+              isMoodleSource={isMoodleSource}
+              navigate={navigate}
+            />
           )}
 
           {activeNav === "section-admin" && (
-          <section id="section-admin">
-            <Panel
-              title="Admin control"
-              subtitle={
-                isMoodleSource
-                  ? "Read-only admin roles mapped from live Moodle accounts"
-                  : "Assigned category administrators"
-              }
-              action={
-                <button className="panel-link" type="button" onClick={() => setAdminModal({ open: true, item: null })}>
-                  + Invite admin
-                </button>
-              }
-            >
-              <div id="section-admin">
-                {dashboard.admins.length ? (
-                  dashboard.admins.map((admin) => (
-                    <div className="admin-row" key={admin.id}>
-                      <Avatar initials={admin.avatar_initials} gradient={admin.avatar_gradient} size={30} />
-                      <div style={{ flex: 1 }}>
-                        <div className="row-title">{admin.full_name}</div>
-                        <div className="row-subtitle">{admin.email}</div>
-                      </div>
-                      <Badge tone={admin.role === "super_admin" ? "accent" : "brand"}>
-                        {getRoleLabel(admin)}
-                      </Badge>
-                      <IconButton
-                        label="Edit admin"
-                        icon="pencil"
-                        onClick={() => setAdminModal({ open: true, item: admin })}
-                      />
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState title="No synced admins found" body={dashboard.notes?.admins || "No admin data available."} />
-                )}
-              </div>
-              <div style={{ marginTop: 16 }}>
-                {isMoodleSource ? (
-                  <div className="field__help">{dashboard.notes?.admins}</div>
-                ) : (
-                  <Button
-                    tone="ghost"
-                    className="btn--block"
-                    onClick={() => document.getElementById("section-users")?.scrollIntoView({ behavior: "smooth" })}
-                  >
-                    Manage all admins
-                  </Button>
-                )}
-              </div>
-            </Panel>
-          </section>
+            <AdminSection 
+              dashboard={dashboard}
+              isMoodleSource={isMoodleSource}
+              setAdminModal={setAdminModal}
+            />
           )}
 
           {activeNav === "section-enrollments" && (
-          <section id="section-enrollments">
-            <Panel
-              title="Enrollment audit log"
-              subtitle={isMoodleSource ? "Read-only" : "manual & self-enrol"}
-              action={!isMoodleSource ? <button className="panel-link" type="button">View all</button> : null}
-            >
-              {isMoodleSource ? (
-                <EmptyState
-                  title="Enrollment queue unavailable"
-                  body={dashboard.notes?.enrollment || "No enrollment queue returned from Moodle."}
-                />
-              ) : (
-                <>
-                  <div id="section-enrollments" className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>User</th>
-                          <th>Category</th>
-                          <th>Type</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dashboard.enrollment_audit.rows.map((row) => (
-                          <tr key={row.request_id}>
-                            <td className="row-title">{row.full_name}</td>
-                            <td className="muted">{row.category}</td>
-                            <td>
-                              <Badge tone={row.type === "self" ? "accent" : "brand"}>{row.type}</Badge>
-                            </td>
-                            <td>
-                              <Badge tone={getStatusTone(row.status)}>{row.status}</Badge>
-                            </td>
-                            <td>
-                              {row.status === "Pending" ? (
-                                <div className="split-actions">
-                                  <Button tone="success" onClick={() => handleApprove(row.request_id)}>
-                                    Approve
-                                  </Button>
-                                  <Button tone="danger" onClick={() => handleReject(row.request_id)}>
-                                    Deny
-                                  </Button>
-                                </div>
-                              ) : (
-                                <IconButton
-                                  label="View request"
-                                  icon="eye"
-                                  onClick={() => showToast(`Viewing ${row.full_name} enrollment history.`, "info")}
-                                />
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="split-actions">
-                    <Button
-                      tone="ghost"
-                      onClick={handleApproveAll}
-                      disabled={!dashboard.enrollment_audit.visible_pending_ids.length}
-                    >
-                      Approve pending ({dashboard.enrollment_audit.visible_pending_ids.length})
-                    </Button>
-                    <Button tone="ghost" onClick={() => showToast("Enrollment log export initiated...", "info")}>
-                      Export CSV
-                    </Button>
-                  </div>
-                </>
-              )}
-            </Panel>
-          </section>
+            <EnrollmentsSection 
+              dashboard={dashboard}
+              isMoodleSource={isMoodleSource}
+              handleApprove={handleApprove}
+              handleReject={handleReject}
+              handleApproveAll={handleApproveAll}
+              showToast={showToast}
+            />
           )}
 
           {activeNav === "section-verifications" && (
-          <section id="section-verifications">
-            <Panel
-              id="section-verifications"
-              title="Signup Verifications"
-              subtitle="Approve or reject new user accounts"
-              action={
-                <div className="split-actions">
-                  <input 
-                    type="file" 
-                    id="bulk-verif-input" 
-                    style={{ display: 'none' }} 
-                    onChange={(e) => setBulkFile(e.target.files[0])}
-                  />
-                  {bulkFile && <span className="row-subtitle">{bulkFile.name}</span>}
-                  <Button 
-                    tone="ghost" 
-                    size="small" 
-                    onClick={() => document.getElementById('bulk-verif-input').click()}
-                  >
-                    {bulkFile ? "Change File" : "Select Bulk File"}
-                  </Button>
-                  <Button 
-                    tone="primary" 
-                    size="small" 
-                    disabled={!bulkFile || bulkLoading}
-                    loading={bulkLoading}
-                    onClick={handleBulkUpload}
-                  >
-                    Bulk Upload
-                  </Button>
-                </div>
-              }
-            >
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Org / Role</th>
-                      <th>Details</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {verifications.map((v) => (
-                      <tr key={v.id}>
-                        <td>
-                          <div className="row-title">{v.full_name}</div>
-                          <div className="row-subtitle">{v.email}</div>
-                        </td>
-                        <td>
-                          <div className="row-title">{v.organization_name}</div>
-                          <Badge tone="brand">{titleize(v.signup_role)}</Badge>
-                        </td>
-                        <td>
-                          <div className="row-subtitle">ID: {v.id_number || 'N/A'}</div>
-                          <div className="row-subtitle">{v.program} {v.branch ? `(${v.branch})` : ''}</div>
-                        </td>
-                        <td>
-                          <Badge tone={v.domain_type === 'official' ? 'success' : 'warn'}>
-                            {v.company_domain}
-                          </Badge>
-                        </td>
-                        <td>
-                          <div className="split-actions">
-                            <IconButton label="Approve" icon="check" onClick={() => handleVerification(v.id, 'approve')} />
-                            <IconButton label="Reject" icon="close" onClick={() => handleVerification(v.id, 'reject')} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {verifications.length === 0 && (
-                      <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', padding: '32px 0' }}>
-                          <div className="row-subtitle">No pending verifications</div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              {bulkResult && (
-                <div className="soft-card" style={{ marginTop: 16 }}>
-                  <div className="row-title">Bulk Result: {bulkResult.approved_count} approved, {bulkResult.ignored_count} ignored</div>
-                </div>
-              )}
-            </Panel>
-          </section>
+            <VerificationsSection 
+              verifications={verifications}
+              bulkFile={bulkFile}
+              bulkLoading={bulkLoading}
+              bulkResult={bulkResult}
+              setBulkFile={setBulkFile}
+              handleBulkUpload={handleBulkUpload}
+              handleVerification={handleVerification}
+            />
           )}
 
           {activeNav === "section-grading" && (
-          <section id="section-grading">
-            {gradingLoading ? (
-              <LoadingState title="Loading grading analytics..." body="Fetching grade data across the organization." />
-            ) : gradingAnalytics ? (
-              <>
-                <div className="grid-4">
-                  <StatCard accent="#7C3AED" label="Overall Average Grade" value={`${gradingAnalytics.overall_average}%`} meta="Across all courses" />
-                  <StatCard accent="#059669" label="Pass Rate" value={`${gradingAnalytics.pass_rate}%`} meta="Grades ≥ 60%" />
-                  <StatCard accent="#DC2626" label="Fail Rate" value={`${gradingAnalytics.fail_rate}%`} meta="Grades < 60%" />
-                  <StatCard accent="#2563EB" label="Total Assessments" value={gradingAnalytics.total_assessments} meta="Grade items created" />
-                </div>
-
-                <div className="grid-2-wide" style={{ marginTop: 18 }}>
-                  <Panel title="Grade Distribution" subtitle="Letter grade breakdown">
-                    <ChartCanvas
-                      type="bar"
-                      height={200}
-                      labels={gradingAnalytics.grade_distribution.map(d => d.label)}
-                      datasets={[
-                        {
-                          label: "Count",
-                          data: gradingAnalytics.grade_distribution.map(d => d.count),
-                          backgroundColor: ["#059669", "#2563EB", "#7C3AED", "#F59E0B", "#DC2626"],
-                          borderRadius: 8,
-                        },
-                      ]}
-                      options={{
-                        indexAxis: "y",
-                        plugins: { legend: { display: false } },
-                        scales: { x: { beginAtZero: true } },
-                      }}
-                    />
-                  </Panel>
-
-                  <Panel title="Top Performing Categories" subtitle="By average grade">
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Category</th>
-                            <th style={{ textAlign: "right" }}>Average</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gradingAnalytics.top_categories.length > 0 ? (
-                            gradingAnalytics.top_categories.map((cat, idx) => (
-                              <tr key={idx}>
-                                <td>{cat.name}</td>
-                                <td className="mono" style={{ textAlign: "right", color: getScoreColor(cat.average) }}>
-                                  {cat.average}%
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan="2">
-                                <EmptyState title="No category data" body="Grade categories will appear here once grading is active." />
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Panel>
-                </div>
-
-                <div className="grid-2-wide" style={{ marginTop: 18 }}>
-                  <Panel title="Lowest Performing Categories" subtitle="Categories needing attention">
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Category</th>
-                            <th style={{ textAlign: "right" }}>Average</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gradingAnalytics.lowest_categories.length > 0 ? (
-                            gradingAnalytics.lowest_categories.map((cat, idx) => (
-                              <tr key={idx}>
-                                <td>{cat.name}</td>
-                                <td className="mono" style={{ textAlign: "right", color: getScoreColor(cat.average) }}>
-                                  {cat.average}%
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan="2">
-                                <EmptyState title="No data" body="Insufficient data for lowest performers." />
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Panel>
-
-                  <Panel title="Organization Grade Trend" subtitle="Last 6 months">
-                    <ChartCanvas
-                      type="line"
-                      height={200}
-                      labels={gradingAnalytics.grade_trend.map(t => t.month)}
-                      datasets={[
-                        {
-                          label: "Average Grade",
-                          data: gradingAnalytics.grade_trend.map(t => t.average),
-                          borderColor: "#7C3AED",
-                          backgroundColor: "rgba(124, 58, 237, 0.1)",
-                          fill: true,
-                          tension: 0.4,
-                        },
-                      ]}
-                      options={{
-                        plugins: { legend: { display: false } },
-                        scales: { y: { beginAtZero: true, max: 100 } },
-                      }}
-                    />
-                  </Panel>
-                </div>
-
-                <Panel title="Grading Summary" subtitle="Key metrics" style={{ marginTop: 18 }}>
-                  <div className="grid-3">
-                    <div className="soft-card">
-                      <div className="row-title">Total Graded Learners</div>
-                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#7C3AED" }}>
-                        {gradingAnalytics.total_graded_learners}
-                      </div>
-                    </div>
-                    <div className="soft-card">
-                      <div className="row-title">Total Assessments</div>
-                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#2563EB" }}>
-                        {gradingAnalytics.total_assessments}
-                      </div>
-                    </div>
-                    <div className="soft-card">
-                      <div className="row-title">Overall Average</div>
-                      <div className="row-subtitle mono" style={{ fontSize: "24px", fontWeight: 700, color: "#059669" }}>
-                        {gradingAnalytics.overall_average}%
-                      </div>
-                    </div>
-                  </div>
-                </Panel>
-              </>
-            ) : (
-              <EmptyState title="No grading data available" body="Grading analytics will appear once courses have been graded." />
-            )}
-          </section>
+            <GradingSection 
+              gradingAnalytics={gradingAnalytics}
+              gradingLoading={gradingLoading}
+            />
           )}
 
           {activeNav === "section-audit" && (
-          <section id="section-audit">
-            <Panel
-              title="Audit log"
-              subtitle="Recent system activity"
-              action={
-                !isMoodleSource && visibleAudit.length ? (
-                  <button className="panel-link" type="button" onClick={() => setExpandedAudit((value) => !value)}>
-                    {expandedAudit ? "Collapse" : "Full log"}
-                  </button>
-                ) : null
-              }
-            >
-              <div className="search-toolbar" style={{ marginBottom: 16 }}>
-                <div className="toolbar">
-                  <label className="chip">
-                    <input type="radio" defaultChecked name="auditFilter" /> All
-                  </label>
-                  <label className="chip">
-                    <input type="radio" name="auditFilter" /> Login
-                  </label>
-                  <label className="chip">
-                    <input type="radio" name="auditFilter" /> Enrollment
-                  </label>
-                  <label className="chip">
-                    <input type="radio" name="auditFilter" /> Verification
-                  </label>
-                </div>
-                <label className="field" style={{ flex: 1, maxWidth: 300 }}>
-                  <input className="field__input" type="text" placeholder="Search users or actions..." />
-                </label>
-              </div>
-
-              {visibleAudit.length ? (
-                <div id="section-audit" className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Timestamp</th>
-                        <th>User</th>
-                        <th>Action</th>
-                        <th>Details</th>
-                        <th>IP Address</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleAudit.map((entry) => (
-                        <tr key={entry.id}>
-                          <td className="mono" style={{ whiteSpace: "nowrap" }}>
-                            {formatDateTime(entry.created_at)}
-                          </td>
-                          <td>
-                            <div className="row-title">{entry.actor_name}</div>
-                          </td>
-                          <td>
-                            <Badge tone={entry.accent === "amber" ? "warn" : entry.accent === "blue" ? "brand" : "neutral"}>
-                              {titleize(entry.accent || "system")}
-                            </Badge>
-                          </td>
-                          <td>
-                            <div className="row-subtitle" style={{ color: "var(--text-primary)" }}>{entry.message}</div>
-                            <div className="row-subtitle muted">{entry.result}</div>
-                          </td>
-                          <td className="mono">{entry.ip_address || "192.168.1.1"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <EmptyState title="Audit log unavailable" body={dashboard.notes?.audit || "No audit data available."} />
-              )}
-              {!isMoodleSource && visibleAudit.length ? (
-                <div style={{ marginTop: 16 }}>
-                  <Button tone="ghost" className="btn--block" onClick={() => setExpandedAudit((value) => !value)}>
-                    {expandedAudit ? "Hide extra entries" : "Load more entries"}
-                  </Button>
-                </div>
-              ) : null}
-            </Panel>
-          </section>
+            <AuditSection 
+              dashboard={dashboard}
+              isMoodleSource={isMoodleSource}
+              visibleAudit={visibleAudit}
+              expandedAudit={expandedAudit}
+              setExpandedAudit={setExpandedAudit}
+            />
           )}
 
           {activeNav === "section-users" && (
-          <section id="section-users">
-            <Panel
-              title="All users"
-              subtitle={
-                isMoodleSource
-                  ? `${users.length} live Moodle accounts`
-                  : `${users.length} accounts across admins and learners`
-              }
-              action={
-                <div className="toolbar">
-                  <label className="chip">
-                    <input
-                      type="radio"
-                      checked={userFilter === "all"}
-                      onChange={() => setUserFilter("all")}
-                    />
-                    All
-                  </label>
-                  <label className="chip">
-                    <input
-                      type="radio"
-                      checked={userFilter === "admins"}
-                      onChange={() => setUserFilter("admins")}
-                    />
-                    Admins
-                  </label>
-                  <label className="chip">
-                    <input
-                      type="radio"
-                      checked={userFilter === "learners"}
-                      onChange={() => setUserFilter("learners")}
-                    />
-                    Learners
-                  </label>
-                </div>
-              }
-            >
-              <div className="search-toolbar" style={{ marginBottom: 16 }}>
-                <label className="field" style={{ flex: 1 }}>
-                  <span className="field__label">{isMoodleSource ? "Search Moodle users" : "Search users"}</span>
-                  <input
-                    className="field__input"
-                    type="text"
-                    value={userQuery}
-                    onChange={(event) => setUserQuery(event.target.value)}
-                    placeholder="Search by name, email, or username..."
-                  />
-                </label>
-              </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Role</th>
-                      <th>Category</th>
-                      <th>PAL</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id}>
-                        <td>
-                          <div className="leaderboard-row" style={{ padding: 0, borderBottom: 0 }}>
-                            <Avatar
-                              initials={user.avatar_initials || getInitials(user.full_name)}
-                              gradient={user.avatar_gradient || ["#2563EB", "#7C3AED"]}
-                              size={28}
-                            />
-                            <div>
-                              <div className="row-title">{user.full_name}</div>
-                              <div className="row-subtitle">{user.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <Badge
-                            tone={
-                              user.role === "super_admin"
-                                ? "accent"
-                                : user.role === "category_admin"
-                                  ? "brand"
-                                  : "neutral"
-                            }
-                          >
-                            {getRoleLabel(user)}
-                          </Badge>
-                        </td>
-                        <td className="muted">{user.category_scope || "Global"}</td>
-                        <td className="mono">{user.role === "learner" ? formatPercent(user.pal_score) : "--"}</td>
-                        <td>
-                          <Badge tone={user.is_active ? "success" : "neutral"}>
-                            {user.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </td>
-                        <td>
-                          <div className="split-actions">
-                            <IconButton
-                              label="View user"
-                              icon="eye"
-                              onClick={() => showToast(`Viewing ${user.full_name}.`, "info")}
-                            />
-                            {!isMoodleSource ? (
-                              <IconButton
-                                label="Archive user"
-                                icon="trash"
-                                onClick={() => setUserDeleteId((value) => (value === user.id ? null : user.id))}
-                              />
-                            ) : null}
-                          </div>
-                          {!isMoodleSource && userDeleteId === user.id ? (
-                            <div className="inline-confirm">
-                              <span>Archive {user.full_name}?</span>
-                              <div className="split-actions">
-                                <Button tone="danger" onClick={() => handleDeleteUser(user.id)}>
-                                  Confirm delete
-                                </Button>
-                                <Button tone="ghost" onClick={() => setUserDeleteId(null)}>
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {!filteredUsers.length ? (
-                  <EmptyState title="No users found" body="Try a different role filter or search term." />
-                ) : null}
-              </div>
-            </Panel>
-          </section>
+            <UsersSection 
+              users={users}
+              isMoodleSource={isMoodleSource}
+              userFilter={userFilter}
+              setUserFilter={setUserFilter}
+              userQuery={userQuery}
+              setUserQuery={setUserQuery}
+              filteredUsers={filteredUsers}
+              setUserDeleteId={setUserDeleteId}
+              userDeleteId={userDeleteId}
+              handleDeleteUser={handleDeleteUser}
+              showToast={showToast}
+            />
           )}
 
           {activeNav === "section-analytics" && (
-          <section id="section-analytics">
-            <Panel
-              title="Analytics"
-              subtitle={
-                isMoodleSource
-                  ? "Live Moodle account and category distribution"
-                  : "Cross-category learner and PAL distribution"
-              }
-            >
-              <div className="grid-2">
-                <div className="soft-card">
-                  <div className="row-title" style={{ marginBottom: 12 }}>
-                    {isMoodleSource ? "Moodle account status" : "Learners per category"}
-                  </div>
-                  <ChartCanvas
-                    type="doughnut"
-                    height={240}
-                    labels={(isMoodleSource
-                      ? dashboard.analytics.user_status_distribution
-                      : dashboard.analytics.learners_per_category
-                    ).map((item) => item.category)}
-                    datasets={[
-                      {
-                        data: (isMoodleSource
-                          ? dashboard.analytics.user_status_distribution
-                          : dashboard.analytics.learners_per_category
-                        ).map((item) => item.value),
-                        backgroundColor: (isMoodleSource
-                          ? dashboard.analytics.user_status_distribution
-                          : dashboard.analytics.learners_per_category
-                        ).map((item) => item.color),
-                        borderWidth: 0,
-                        hoverOffset: 4,
-                      },
-                    ]}
-                    centerLabel={{
-                      title: isMoodleSource
-                        ? `${dashboard.kpis.total_learners} Active`
-                        : `${dashboard.kpis.total_learners} Learners`,
-                      subtitle: isMoodleSource ? "Moodle users" : "active",
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      cutout: "72%",
-                      plugins: { legend: { position: "bottom" } },
-                    }}
-                  />
-                </div>
-                <div className="soft-card">
-                  <div className="row-title" style={{ marginBottom: 12 }}>
-                    {isMoodleSource ? "Courses per managed category" : "Avg PAL Score per category"}
-                  </div>
-                  <ChartCanvas
-                    type="bar"
-                    height={240}
-                    labels={(isMoodleSource
-                      ? dashboard.analytics.courses_per_category
-                      : dashboard.analytics.avg_pal_per_category
-                    ).map((item) => item.category)}
-                    datasets={[
-                      {
-                        label: isMoodleSource ? "Courses" : "Avg PAL",
-                        data: (isMoodleSource
-                          ? dashboard.analytics.courses_per_category
-                          : dashboard.analytics.avg_pal_per_category
-                        ).map((item) => item.value),
-                        backgroundColor: (isMoodleSource
-                          ? dashboard.analytics.courses_per_category
-                          : dashboard.analytics.avg_pal_per_category
-                        ).map((item) => item.color),
-                        borderRadius: 8,
-                      },
-                    ]}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: {
-                        x: {
-                          border: { display: false },
-                          grid: { display: false },
-                          ticks: { color: "#475569", font: { family: "Geist", size: 11 } },
-                        },
-                        y: {
-                          min: 0,
-                          max: isMoodleSource ? undefined : 100,
-                          border: { display: false },
-                          grid: { color: "#F2F4F8" },
-                          ticks: { color: "#94A3B8", font: { family: "Geist Mono", size: 10 } },
-                        },
-                      },
-                    }}
-                  />
-                </div>
-              </div>
-            </Panel>
-          </section>
+            <AnalyticsSection 
+              dashboard={dashboard}
+              isMoodleSource={isMoodleSource}
+            />
           )}
 
           {activeNav === "section-settings" && (
-          <section id="section-settings">
-            <Panel
-              title="System settings"
-              subtitle={isMoodleSource ? "Live Moodle service configuration" : "Current backend and Moodle configuration"}
-            >
-              <div className="grid-3">
-                <div className="soft-card soft-card--tinted">
-                  <div className="row-subtitle">Moodle URL</div>
-                  <div className="row-title">{settings?.moodle_url}</div>
-                </div>
-                <div className="soft-card soft-card--tinted">
-                  <div className="row-subtitle">{isMoodleSource ? "Moodle release" : "API version"}</div>
-                  <div className="row-title mono">{isMoodleSource ? settings?.moodle_release : settings?.api_version}</div>
-                </div>
-                <div className="soft-card soft-card--tinted">
-                  <div className="row-subtitle">{isMoodleSource ? "Live categories" : "Category slugs"}</div>
-                  <div className="row-title">
-                    {isMoodleSource ? settings?.moodle_category_count : (settings?.category_slugs || []).join(", ")}
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 24 }}>
-                <div className="row-title" style={{ marginBottom: 4 }}>
-                  Allowed company domains
-                </div>
-                <div className="row-subtitle" style={{ marginBottom: 16 }}>
-                  Restrict signups to these verified email domains for corporate roles.
-                </div>
-                
-                <div className="table-wrap" style={{ marginBottom: 16 }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Domain</th>
-                        <th>Organization / Label</th>
-                        <th style={{ width: 80 }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(settings?.allowed_domains || []).map((item) => (
-                        <tr key={item.domain}>
-                          <td className="mono" style={{ fontWeight: 600 }}>{item.domain}</td>
-                          <td>
-                            <Badge tone="accent">{item.label}</Badge>
-                          </td>
-                          <td>
-                            <IconButton 
-                              icon="trash" 
-                              label="Delete domain" 
-                              onClick={() => handleDeleteDomain(item.domain)}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                      {(!settings?.allowed_domains || settings.allowed_domains.length === 0) && (
-                        <tr>
-                          <td colSpan="3" style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)' }}>
-                            No allowed domains configured
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="toolbar" style={{ alignItems: "flex-end" }}>
-                  <label className="field" style={{ flex: 1, maxWidth: 250 }}>
-                    <span className="field__label">Label (e.g. Acme Corp)</span>
-                    <input 
-                      className="field__input" 
-                      type="text" 
-                      value={newDomainLabel}
-                      onChange={(e) => setNewDomainLabel(e.target.value)}
-                      placeholder="Company Name"
-                    />
-                  </label>
-                  <label className="field" style={{ flex: 1, maxWidth: 250 }}>
-                    <span className="field__label">Domain</span>
-                    <input 
-                      className="field__input" 
-                      type="text" 
-                      value={newDomain}
-                      onChange={(e) => setNewDomain(e.target.value)}
-                      placeholder="@company.com"
-                    />
-                  </label>
-                  <Button tone="primary" onClick={handleAddDomain}>
-                    + Add domain
-                  </Button>
-                </div>
-              </div>
-              {isMoodleSource && settings?.service_functions?.length ? (
-                <div style={{ marginTop: 16 }}>
-                  <div className="row-title" style={{ marginBottom: 10 }}>
-                    Exposed Moodle functions
-                  </div>
-                  <div className="toolbar">
-                    {settings.service_functions.map((name) => (
-                      <Badge key={name} tone="neutral">
-                        {name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </Panel>
-          </section>
+            <SettingsSection 
+              settings={settings}
+              isMoodleSource={isMoodleSource}
+              newDomain={newDomain}
+              newDomainLabel={newDomainLabel}
+              setNewDomain={setNewDomain}
+              setNewDomainLabel={setNewDomainLabel}
+              handleAddDomain={handleAddDomain}
+              handleDeleteDomain={handleDeleteDomain}
+            />
           )}
 
           {activeNav === "section-branding" && (

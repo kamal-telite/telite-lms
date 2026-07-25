@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +19,7 @@ class LearningSession(Base, TenantMixin, TimestampMixin):
     module_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("course_modules.id", ondelete="SET NULL"), nullable=True, index=True)
     section_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("course_sections.id", ondelete="SET NULL"), nullable=True, index=True)
     block_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("lesson_blocks.id", ondelete="SET NULL"), nullable=True, index=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     active_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

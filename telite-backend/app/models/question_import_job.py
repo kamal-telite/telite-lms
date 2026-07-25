@@ -1,6 +1,9 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, JSON
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+
 from app.models.base import Base
+
 
 class QuestionImportJob(Base):
     __tablename__ = "question_import_jobs"
@@ -11,4 +14,4 @@ class QuestionImportJob(Base):
     status = Column(String(20), nullable=False, default="UPLOADED") # UPLOADED, VALIDATED, READY_TO_COMMIT, COMMITTED, FAILED
     error_log = Column(Text, nullable=True)
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

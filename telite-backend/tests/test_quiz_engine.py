@@ -56,18 +56,11 @@ class TeliteQuizEngineTests(unittest.TestCase):
         db.execute(text("PRAGMA foreign_keys=OFF"))
         db.commit()
 
-        # Create organization
-        org = db.query(Organization).filter_by(id=1).first()
-        if not org:
-            db.add(Organization(id=1, name="Default Org", domain="default.telite.com",
-                                type="company", status="active", plan="free"))
-            db.commit()
-
         repo = UserRepository(db)
 
         admin = repo.get_by_identifier("globaladmin")
         if not admin:
-            repo.create_user(
+            admin = repo.create_user(
                 email="admin@telite.com",
                 full_name="Global Admin",
                 role="super_admin",
@@ -87,6 +80,25 @@ class TeliteQuizEngineTests(unittest.TestCase):
                 password=TEST_LEARNER_PASSWORD,
                 username="learner",
             )
+            
+        from app.models.user import User
+        if not db.query(User).filter_by(id="system").first():
+            db.add(User(id="system", org_id=1, username="system", email="system@telite.com", full_name="System User", avatar_initials="SU", gradient_start="#000000", gradient_end="#FFFFFF", role="system", password_hash="", is_active=True))
+            
+        db.commit()
+
+        # Create basic course hierarchy if missing
+        from app.models.course import Course
+        from app.models.course_version import CourseVersion
+        from app.models.category import Category
+        from app.models.course_module import CourseModule
+        cat = db.query(Category).filter_by(id=1).first()
+        if not cat:
+            db.add(Category(id=1, org_id=1, name="Test Cat", slug="test-cat", status="active"))
+            db.add(Course(id="test_course_1", org_id=1, category_slug="test-cat", name="Test", slug="test", status="active"))
+            db.add(CourseVersion(id="test_version_1", course_id="test_course_1", org_id=1, version_number=1, status="published", created_by=admin.id))
+            db.add(CourseModule(id=1, course_id="test_course_1", title="M1", sort_order=1, org_id=1, module_type="quiz"))
+            db.commit()
 
         db.commit()
         db.close()

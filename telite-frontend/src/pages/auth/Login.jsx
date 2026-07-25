@@ -14,8 +14,9 @@ export default function Login({ onAuthenticated }) {
   const navigate = useNavigate();
 
   // ── Login state ──────────────────────────────────────────────────────────────
-  const [username, setUsername] = useState("username");
-  const [password, setPassword] = useState("Password");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
@@ -275,6 +276,7 @@ export default function Login({ onAuthenticated }) {
                       name="username"
                       autoComplete="username"
                       spellCheck="false"
+                      placeholder="Enter your email"
                       value={username}
                       onChange={(e) => {
                         setUsername(e.target.value);
@@ -297,19 +299,42 @@ export default function Login({ onAuthenticated }) {
                         Forgot password?
                       </button>
                     </div>
-                    <input
-                      className="auth-field-input"
-                      type="password"
-                      id="password"
-                      name="password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        if (loginError) setLoginError("");
-                      }}
-                      required
-                    />
+                    <div className="auth-password-wrapper">
+                      <input
+                        className="auth-field-input"
+                        type={showPassword ? "text" : "password"}
+                        id="password"
+                        name="password"
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (loginError) setLoginError("");
+                        }}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="auth-visibility-toggle"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M17.94 17.94C16.27 19.03 14.22 19.68 12 19.68 5 19.68 1 12 1 12s1.99-2.88 5.06-5.06" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M14.12 14.12A3.5 3.5 0 0 1 9.88 9.88" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M22 2L2 22" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.8"/>
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <button

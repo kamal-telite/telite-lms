@@ -1,6 +1,9 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String
+
 from app.models.base import Base
+
 
 class CourseVersion(Base):
     __tablename__ = "course_versions"
@@ -13,8 +16,9 @@ class CourseVersion(Base):
     status = Column(String(20), nullable=False, default="draft")
     published_by = Column(String(50), ForeignKey("users.id"), nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
+    created_by = Column(String(50), ForeignKey("users.id"), nullable=False)
     snapshot_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     def to_dict(self):
         return {

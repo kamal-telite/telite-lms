@@ -231,6 +231,47 @@ body.login-active {
   border-color: rgba(70,72,212,0.4);
 }
 
+.auth-password-wrapper {
+  position: relative;
+}
+
+.auth-password-wrapper .auth-field-input {
+  padding-right: 48px;
+}
+
+.auth-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: rgba(255,255,255,0.05);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.65);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.auth-visibility-toggle:hover,
+.auth-visibility-toggle:focus-visible {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  outline: none;
+}
+
+.auth-visibility-toggle:focus-visible {
+  box-shadow: 0 0 0 3px rgba(70,72,212,0.2);
+}
+
+.auth-visibility-toggle svg {
+  display: block;
+}
+
 .auth-form-alert {
   background: rgba(249, 128, 18, 0.15);
   border: 1px solid rgba(249, 128, 18, 0.4);

@@ -1,17 +1,20 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Boolean, JSON
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String
+
 from app.models.base import Base
+
 
 class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
     
     id = Column(Integer, primary_key=True, index=True)
     lesson_block_id = Column(Integer, ForeignKey("lesson_blocks.id"), nullable=True, index=True)
-    quiz_definition_id = Column(Integer, ForeignKey("quiz_definitions.id"), nullable=True, index=True)
+    quiz_definition_id = Column("quiz_id", Integer, ForeignKey("quiz_definitions.id"), nullable=True, index=True)
     user_id = Column(String(50), ForeignKey("users.id"), nullable=False, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     status = Column(String(50), nullable=False, default="in_progress") # in_progress, submitted, needs_manual_grading, graded
-    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     total_score = Column(Float, nullable=True)
     passed = Column(Boolean, nullable=True)
@@ -37,5 +40,5 @@ class QuizAttemptEvent(Base):
     attempt_id = Column(Integer, ForeignKey("quiz_attempts.id"), nullable=False, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     event_type = Column(String(50), nullable=False) # QUIZ_STARTED, ANSWER_SAVED, TAB_SWITCH, NETWORK_DISCONNECT, AUTO_SUBMIT, MANUAL_SUBMIT, GRADING_COMPLETED
-    event_timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    event_timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     metadata_json = Column(JSON, nullable=True)

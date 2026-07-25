@@ -43,7 +43,6 @@ def _client(db_session, monkeypatch) -> TestClient:
 
 def _seed_invitation(db_session) -> OrgInvitation:
     org = Organization(
-        id=11,
         name="THDC-IHET",
         type="college",
         domain="thdcihet.ac.in",
@@ -51,8 +50,10 @@ def _seed_invitation(db_session) -> OrgInvitation:
         status="pending_activation",
         plan="free",
     )
+    db_session.add(org)
+    db_session.flush()
     invitation = OrgInvitation(
-        org_id=11,
+        org_id=org.id,
         email="kp22ec06@thdcihet.ac.in",
         role="super_admin",
         token="invite-token",
@@ -60,7 +61,7 @@ def _seed_invitation(db_session) -> OrgInvitation:
         expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S"),
         delivery_status="failed",
     )
-    db_session.add_all([org, invitation])
+    db_session.add(invitation)
     db_session.commit()
     return invitation
 

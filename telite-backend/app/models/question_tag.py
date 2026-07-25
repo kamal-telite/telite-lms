@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, ForeignKey, Integer, String
+
 from app.models.base import Base
+
 
 class QuestionTag(Base):
     __tablename__ = "question_tags"

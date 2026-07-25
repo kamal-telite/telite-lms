@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -26,7 +24,7 @@ class Organization(Base, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # ── Branding (Phase 7 isolated table) ───────────────────────
-    branding: Mapped["OrganizationBranding"] = relationship(  # type: ignore[name-defined]
+    branding: Mapped[OrganizationBranding] = relationship(  # type: ignore[name-defined]
         "OrganizationBranding",
         back_populates="organization",
         uselist=False,
@@ -35,13 +33,13 @@ class Organization(Base, TimestampMixin):
     )
 
     # Relationships
-    users: Mapped[list["User"]] = relationship(  # type: ignore[name-defined]
+    users: Mapped[list[User]] = relationship(  # type: ignore[name-defined]
         "User", back_populates="organization", foreign_keys="User.org_id"
     )
-    memberships: Mapped[list["Membership"]] = relationship(  # type: ignore[name-defined]
+    memberships: Mapped[list[Membership]] = relationship(  # type: ignore[name-defined]
         "Membership", back_populates="organization"
     )
-    categories: Mapped[list["Category"]] = relationship(  # type: ignore[name-defined]
+    categories: Mapped[list[Category]] = relationship(  # type: ignore[name-defined]
         "Category", back_populates="organization", foreign_keys="Category.organization_id"
     )
 

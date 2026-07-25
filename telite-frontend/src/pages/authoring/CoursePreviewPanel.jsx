@@ -68,7 +68,7 @@ export function CoursePreviewPanel({ courseId, courseName, sections, activeModul
       <div className="builder-preview__body">
         <aside className="builder-preview__sidebar">
           <div className="builder-preview__sidebar-header">
-            <div style={{ fontWeight: 700, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontWeight: 700, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {courseName}
             </div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
@@ -109,10 +109,10 @@ export function CoursePreviewPanel({ courseId, courseName, sections, activeModul
 
         <main className="builder-preview__content">
           <header className="builder-preview__content-header">
-            <div style={{ color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>
+            <div style={{ color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {activeModule?.section_title || "Course modules"}
             </div>
-            <h3 style={{ margin: "4px 0 0", color: "var(--color-text-primary)" }}>{activeModule?.title || "Select a module"}</h3>
+            <h3 style={{ margin: "4px 0 0", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{activeModule?.title || "Select a module"}</h3>
           </header>
 
           <div className="builder-preview__content-body">

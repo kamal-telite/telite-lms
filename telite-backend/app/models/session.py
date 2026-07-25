@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -25,7 +25,7 @@ class AuthSession(Base, TenantMixin, TimestampMixin):
     ip_address: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="sessions")  # type: ignore[name-defined]
+    user: Mapped[User] = relationship("User", back_populates="sessions")  # type: ignore[name-defined]
 
     @property
     def is_active(self) -> bool:

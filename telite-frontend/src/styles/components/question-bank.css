@@ -1,0 +1,68 @@
+/* Question Bank Manager Components */
+
+.question-bank-manager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.question-bank-header-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.question-bank-select {
+  min-width: 220px;
+}
+
+.question-bank-filters {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) repeat(6, minmax(130px, 1fr));
+  gap: var(--space-16);
+  align-items: end;
+}
+
+.question-bank-search {
+  min-width: 0;
+}
+
+.question-bank-table th,
+.question-bank-table td {
+  vertical-align: middle;
+}
+
+.question-bank-question-cell {
+  min-width: 280px;
+  max-width: 520px;
+}
+
+.question-bank-question-cell .row-title {
+  white-space: normal;
+}
+
+.question-bank-tag-list,
+.question-bank-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.question-bank-empty-cell,
+.question-bank-loading {
+  padding: var(--space-24);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.question-bank-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.question-bank-page-size {
+  width: 130px;
+}

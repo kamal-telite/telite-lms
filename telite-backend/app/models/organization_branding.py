@@ -40,7 +40,7 @@ class OrganizationBranding(Base, TimestampMixin):
     custom_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
+    organization: Mapped[Organization] = relationship(  # type: ignore[name-defined]
         "Organization",
         back_populates="branding",
         foreign_keys=[organization_id],

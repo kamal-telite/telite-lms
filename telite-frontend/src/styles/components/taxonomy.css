@@ -1,0 +1,112 @@
+/* Taxonomy Manager Components */
+
+.taxonomy-manager {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: var(--space-20);
+}
+
+.taxonomy-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.taxonomy-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.taxonomy-section__header h4,
+.taxonomy-section__header p {
+  margin: 0;
+}
+
+.taxonomy-section__header h4 {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+
+.taxonomy-section__header p {
+  margin-top: 4px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.taxonomy-list,
+.taxonomy-tag-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.taxonomy-row,
+.taxonomy-tag-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border-bottom: 1px solid var(--border);
+}
+
+.taxonomy-row:last-child,
+.taxonomy-tag-card:last-child {
+  border-bottom: 0;
+}
+
+.taxonomy-row__main {
+  min-width: 0;
+}
+
+.taxonomy-row__actions {
+  flex-wrap: nowrap;
+}
+
+.taxonomy-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.taxonomy-modal-actions {
+  justify-content: flex-end;
+}
+
+.question-editor-tag-select,
+.version-history-taxonomy {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.question-editor-tag-select {
+  min-height: 42px;
+  padding: var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.question-editor-tag {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.question-editor-tag:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.version-history-taxonomy {
+  margin-top: var(--space-8);
+}

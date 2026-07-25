@@ -1,7 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Text, JSON, DateTime
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+
 from app.models.base import Base
+
 
 class Question(Base):
     __tablename__ = "questions"
@@ -36,5 +38,5 @@ class QuestionVersion(Base):
     correct_answer_json = Column(JSON, nullable=True)
     points = Column(Integer, nullable=False, default=1)
     metadata_json = Column(JSON, nullable=True) # Future AI hooks
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=True)

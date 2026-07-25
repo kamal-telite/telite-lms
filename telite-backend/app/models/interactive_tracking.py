@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, Text, ForeignKey
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -18,7 +18,7 @@ class InteractiveTracking(Base, TenantMixin, TimestampMixin):
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
-    attempt: Mapped["ModuleProgress"] = relationship("ModuleProgress")
+    attempt: Mapped[ModuleProgress] = relationship("ModuleProgress")
 
     def to_dict(self) -> dict:
         return {

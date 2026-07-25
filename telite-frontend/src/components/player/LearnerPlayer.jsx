@@ -4,6 +4,7 @@ import { Button, EmptyState, LoadingState, ErrorState, Icon, useToast } from "..
 import { CourseSidebar } from "./CourseSidebar";
 import { BlockRenderer } from "./BlockRenderer";
 import { api, endLearningSession, heartbeatLearningSession, startLearningSession } from "../../services/client";
+import { useCountdownTimer } from "../../hooks/useCountdownTimer";
 
 export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   const { showToast } = useToast();
@@ -211,6 +212,28 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     
     return timeSpent >= currentSection.minimum_time_seconds;
   };
+
+  // Get current section data for countdown timer
+  const getCurrentSection = () => {
+    if (!activeModule || !courseData?.sections) return null;
+    return courseData.sections.find(section => 
+      section.modules?.some(mod => mod.id === activeModule.id)
+    );
+  };
+
+  const currentSection = getCurrentSection();
+  const currentSectionProgress = currentSection ? (sectionProgress[String(currentSection.id)] || sectionProgress[currentSection.id]) : null;
+  const timeSpentSeconds = currentSectionProgress?.time_spent_seconds || 0;
+  const minimumTimeSeconds = currentSection?.minimum_time_seconds || 0;
+  const isSectionCompleted = currentSectionProgress?.status === "completed";
+
+  // Use countdown timer hook
+  const { formattedTime, isTimeMet, isExpired } = useCountdownTimer({
+    minimumTimeSeconds,
+    timeSpentSeconds,
+    isActive: !!activeModule && !!currentSection,
+    isCompleted: isSectionCompleted
+  });
 
   const handleModuleComplete = async () => {
     if (!activeModule) return;
@@ -492,11 +515,17 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           }
           
           .lesson-scroll-region {
-            padding: 20px 16px !important;
+            padding: 20px 16px 0 !important;
           }
           
           .lesson-scroll-region > div {
             max-width: 100% !important;
+          }
+          
+          .content-spacer {
+            height: 100px !important;
+            width: 100% !important;
+            flex-shrink: 0 !important;
           }
         }
         
@@ -526,6 +555,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
 
       {/* Sidebar Navigation — fixed height, internal scroll */}
       <div 
+        data-lenis-prevent
         style={{
           flexShrink: 0,
           width: "300px",
@@ -544,6 +574,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           onExit={onExit}
           refreshTrigger={sectionProgressRefreshTrigger}
           courseProgress={courseProgress}
+          sectionProgress={sectionProgress}
         />
       </div>
 
@@ -598,30 +629,54 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
             </button>
             <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeModule?.title || courseData.name}</h2>
           </div>
-          {canSubmitCourse() ? (
-            <Button 
-              tone="primary" 
-              onClick={handleSubmitCourse}
-              disabled={submittingCourse}
-            >
-              {submittingCourse ? "Submitting..." : "Submit Course"}
-            </Button>
-          ) : (
-            <Button 
-              tone="primary" 
-              onClick={handleModuleComplete}
-              disabled={!isSectionTimeRequirementMet()}
-            >
-              {!isSectionTimeRequirementMet() ? "Wait for timer..." : "Mark Complete"}
-            </Button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* Countdown Timer Display */}
+            {minimumTimeSeconds > 0 && (
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "6px",
+                padding: "6px 12px",
+                background: isTimeMet ? "var(--success-subtle)" : "var(--surface-subtle)",
+                borderRadius: "6px",
+                border: isTimeMet ? "1px solid var(--success)" : "1px solid var(--border-subtle)"
+              }}>
+                <span style={{ fontSize: "14px", color: isTimeMet ? "var(--success)" : "var(--text-muted)" }}>⏱</span>
+                <span style={{ 
+                  fontSize: "16px", 
+                  fontWeight: "600", 
+                  fontFamily: "monospace",
+                  color: isTimeMet ? "var(--success)" : "var(--text-primary)" 
+                }}>
+                  {formattedTime}
+                </span>
+              </div>
+            )}
+            {canSubmitCourse() ? (
+              <Button 
+                tone="primary" 
+                onClick={handleSubmitCourse}
+                disabled={submittingCourse}
+              >
+                {submittingCourse ? "Submitting..." : "Submit Course"}
+              </Button>
+            ) : (
+              <Button 
+                tone="primary" 
+                onClick={handleModuleComplete}
+                disabled={!isSectionTimeRequirementMet()}
+              >
+                {!isSectionTimeRequirementMet() ? "Wait for timer..." : "Mark Complete"}
+              </Button>
+            )}
+          </div>
         </header>
 
         {/* Scrollable Content */}
         <div
           ref={scrollRef}
           className="lesson-scroll-region"
-          style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "40px", display: "flex", justifyContent: "center", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "auto", touchAction: "pan-y" }}
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "40px 40px 0", display: "flex", flexDirection: "column", alignItems: "center", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "auto", touchAction: "pan-y" }}
         >
           <div style={{ maxWidth: "800px", width: "100%" }}>
             {showCompletionSuccess ? (
@@ -662,6 +717,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
                 Select a module to begin
               </div>
             )}
+            <div className="content-spacer" style={{ height: "100px", width: "100%" }} aria-hidden="true" />
           </div>
         </div>
       </div>

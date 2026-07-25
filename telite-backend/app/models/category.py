@@ -34,10 +34,10 @@ class Category(Base, TenantMixin, TimestampMixin):
     )
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
+    organization: Mapped[Organization] = relationship(  # type: ignore[name-defined]
         "Organization", back_populates="categories", foreign_keys=[organization_id]
     )
-    courses: Mapped[list["Course"]] = relationship(  # type: ignore[name-defined]
+    courses: Mapped[list[Course]] = relationship(  # type: ignore[name-defined]
         "Course", back_populates="category", foreign_keys="Course.category_slug",
         primaryjoin="Category.slug == Course.category_slug",
     )

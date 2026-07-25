@@ -22,7 +22,7 @@ class BrandingVersion(Base, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
+    organization: Mapped[Organization] = relationship(  # type: ignore[name-defined]
         "Organization"
     )
 
@@ -51,7 +51,7 @@ class BrandingAsset(Base, TimestampMixin):
     uploaded_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
+    organization: Mapped[Organization] = relationship(  # type: ignore[name-defined]
         "Organization"
     )
 
@@ -79,7 +79,7 @@ class BrandingAuditLog(Base, TimestampMixin):
     changes_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
+    organization: Mapped[Organization] = relationship(  # type: ignore[name-defined]
         "Organization"
     )
 

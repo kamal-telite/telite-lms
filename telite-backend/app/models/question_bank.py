@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, ForeignKey, Integer, String
+
 from app.models.base import Base
+
 
 class QuestionBank(Base):
     __tablename__ = "question_banks"
@@ -8,3 +10,4 @@ class QuestionBank(Base):
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     visibility = Column(String(50), nullable=False, default="tenant") # tenant, department, course, private
+    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True)

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, Boolean
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
+
 
 class OrgInvitation(Base, TimestampMixin):
     __tablename__ = "org_invitations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    org_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    org_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     email: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, nullable=False)

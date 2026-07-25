@@ -1,0 +1,61 @@
+/* Modal Components */
+
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.modal-card {
+  width: min(100%, 640px);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  transform: scale(1);
+  overflow: hidden;
+}
+
+.modal-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 24px 24px 0 24px;
+  flex-shrink: 0;
+}
+
+.modal-card__top h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.modal-card__top p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
+.modal-card__content {
+  margin-top: 18px;
+  padding: 0 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.modal-card__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+  z-index: 10;
+  padding: 16px 24px 24px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}

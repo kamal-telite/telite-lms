@@ -119,6 +119,7 @@ def _course_with_block(db: Session, *, block_type: str, settings: dict, org_id: 
             }
         ]
     }
+    admin = _user(db, "admin", org_id=org_id)
     db.add(
         CourseVersion(
             id=f"cv-{uuid.uuid4().hex[:8]}",
@@ -126,6 +127,7 @@ def _course_with_block(db: Session, *, block_type: str, settings: dict, org_id: 
             org_id=org_id,
             version_number=1,
             status="published",
+            created_by=admin.id,
             snapshot_json=snapshot,
         )
     )

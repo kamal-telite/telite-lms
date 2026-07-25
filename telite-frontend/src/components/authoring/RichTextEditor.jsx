@@ -20,6 +20,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import * as Icons from 'lucide-react';
+import './RichTextEditor.css';
 
 // --- CUSTOM EXTENSIONS ---
 
@@ -325,6 +326,13 @@ const FindAndReplace = Extension.create({
 
 // --- EDITOR COMPONENT ---
 
+function normalizeEditorHtml(value) {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  // Guard against corrupted non-string content (e.g. nested event-shaped objects)
+  return '';
+}
+
 export default function RichTextEditor({ value, onChange, disabled }) {
   const [fontFamily, setFontFamily] = useState('Inter');
   const [fontSize, setFontSize] = useState('16px');
@@ -347,11 +355,20 @@ export default function RichTextEditor({ value, onChange, disabled }) {
   const [showTableMenu, setShowTableMenu] = useState(false);
   const [showBordersMenu, setShowBordersMenu] = useState(false);
 
+  // Skip external setContent when the latest change originated from this editor
+  const isInternalUpdateRef = useRef(false);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   const colors = [
     '#000000', '#4b5563', '#9ca3af', '#ffffff', 
     '#ef4444', '#f97316', '#eab308', '#22c55e', 
     '#3b82f6', '#6366f1', '#a855f7', '#ec4899'
   ];
+
+  const initialContent = normalizeEditorHtml(value);
 
   const editor = useEditor({
     extensions: [
@@ -392,18 +409,35 @@ export default function RichTextEditor({ value, onChange, disabled }) {
       CustomTableStyles,
       FindAndReplace,
     ],
-    content: value || '',
+    content: initialContent,
     editable: !disabled,
-    onUpdate({ editor }) {
-      onChange({ target: { value: editor.getHTML() } });
+    immediatelyRender: false,
+    onUpdate({ editor: currentEditor }) {
+      const html = currentEditor.getHTML();
+      isInternalUpdateRef.current = true;
+      // Always emit a plain HTML string — callers expect a string, not an event object
+      onChangeRef.current?.(html);
     },
   });
 
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '');
+    if (!editor) return;
+
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false;
+      return;
+    }
+
+    const next = normalizeEditorHtml(value);
+    if (next !== editor.getHTML()) {
+      editor.commands.setContent(next, { emitUpdate: false });
     }
   }, [value, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!disabled);
+  }, [editor, disabled]);
 
   if (!editor) return null;
 

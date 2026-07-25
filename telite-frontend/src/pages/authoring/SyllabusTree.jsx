@@ -20,7 +20,17 @@ import { IconButton, useToast } from "../../components/common/ui";
 import { api, getErrorMessage } from "../../services/client";
 
 // Sortable Module Item
-function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDelete, canEdit }) {
+function SortableModule({ 
+  module, 
+  moduleIndex,
+  isActive, 
+  onClick, 
+  onRename, 
+  onDuplicate, 
+  onDelete, 
+  canEdit,
+  validationResults = [],
+}) {
   const {
     attributes,
     listeners,
@@ -37,6 +47,15 @@ function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDe
   };
 
   const className = `syllabus-module ${isActive ? "syllabus-module--active" : ""} ${isDragging ? "syllabus-module--dragging" : ""}`;
+
+  // Find module errors/warnings
+  const errors = (validationResults || []).filter(r => r.fix_target?.module_id === module.id && r.severity === "error");
+  const warnings = (validationResults || []).filter(r => r.fix_target?.module_id === module.id && r.severity === "warning");
+
+  const hasErrors = errors.length > 0;
+  const hasWarnings = warnings.length > 0;
+  const isDraft = module.status === "draft";
+  const isCompleted = !isDraft && !hasErrors;
 
   return (
     <div ref={setNodeRef} style={style} className={className} onClick={() => onClick(module.id)}>
@@ -56,17 +75,40 @@ function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDe
         </svg>
       </div>
       <div className="syllabus-module__icon">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-        </svg>
+        {module.module_type === "quiz" ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        ) : module.module_type === "assignment" ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+        )}
       </div>
-      <div className="syllabus-module__title">
-        {module.title}
+      <div className="syllabus-module__content-wrapper">
+        <div className="syllabus-module__label">
+          Module {moduleIndex}
+        </div>
+        <div className="syllabus-module__title">
+          {module.title}
+        </div>
+        <div className="syllabus-module__info">
+          {module.block_count || 0} {module.block_count === 1 ? "Block" : "Blocks"}
+          {module.module_type && ` • ${module.module_type.toUpperCase()}`}
+        </div>
       </div>
       <div className="syllabus-module__meta">
-        <div className="syllabus-module__count">{module.block_count || 0}</div>
-        <div className={`syllabus-module__status syllabus-module__status--${module.validationStatus || 'empty'}`} />
+        {isDraft && <span className="syllabus-badge syllabus-badge--draft">Draft</span>}
+        {isCompleted && <span className="syllabus-badge syllabus-badge--completed">✓</span>}
+        {hasErrors && <span className="syllabus-indicator syllabus-indicator--error" title={`${errors.length} validation errors`} />}
+        {hasWarnings && !hasErrors && <span className="syllabus-indicator syllabus-indicator--warning" title={`${warnings.length} warnings`} />}
       </div>
       {canEdit && (
         <div className="syllabus-module__actions">
@@ -106,6 +148,7 @@ function SortableModule({ module, isActive, onClick, onRename, onDuplicate, onDe
 // Section Container
 function SyllabusSection({
   section,
+  sectionIndex,
   modules,
   activeModuleId,
   isCollapsed,
@@ -119,6 +162,7 @@ function SyllabusSection({
   onDuplicateModule,
   onDeleteModule,
   canEdit,
+  validationResults = [],
 }) {
   const {
     attributes,
@@ -155,10 +199,18 @@ function SyllabusSection({
             label={isCollapsed ? `Expand ${section.title}` : `Collapse ${section.title}`}
             onClick={() => onToggleCollapsed(section.id)}
           />
-          <div className="syllabus-section__name">
-            {section.title}
+          <div className="syllabus-section__details">
+            <div className="syllabus-section__label">
+              {section.id === 0 ? "Course modules" : `Section ${sectionIndex}`}
+            </div>
+            <div className="syllabus-section__name">
+              {section.title}
+            </div>
+            <div className="syllabus-section__meta-info">
+              {modules.length} {modules.length === 1 ? "Module" : "Modules"}
+              {section.minimum_time_seconds > 0 && ` • Min ${Math.round(section.minimum_time_seconds / 60)}m`}
+            </div>
           </div>
-          <div className="syllabus-section__count">{modules.length}</div>
         </div>
         <div className="syllabus-section__actions">
           {canEdit && (
@@ -177,19 +229,21 @@ function SyllabusSection({
           items={modules.map(m => `mod-${m.id}`)}
           strategy={verticalListSortingStrategy}
         >
-          <div style={{ minHeight: "10px" }}>
+          <div style={{ minHeight: "10px" }} className="syllabus-section__modules">
             {modules
               .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-              .map((module) => (
+              .map((module, mIdx) => (
               <SortableModule
                 key={module.id}
                 module={module}
+                moduleIndex={mIdx + 1}
                 isActive={activeModuleId === module.id}
                 onClick={onSelectModule}
                 onRename={onRenameModule}
                 onDuplicate={onDuplicateModule}
                 onDelete={onDeleteModule}
                 canEdit={canEdit}
+                validationResults={validationResults}
               />
             ))}
             {modules.length === 0 && (
@@ -218,6 +272,7 @@ export function SyllabusTree({
   onDuplicateModule,
   onDeleteModule,
   canEdit = true,
+  validationResults = [],
 }) {
   const [collapsedSections, setCollapsedSections] = useState(() => new Set());
   const { showToast } = useToast();
@@ -409,25 +464,34 @@ export function SyllabusTree({
       >
         {sections
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-          .map((section) => (
-          <SyllabusSection 
-            key={section.id} 
-            section={section} 
-            modules={section.modules || []} 
-            activeModuleId={activeModuleId}
-            isCollapsed={collapsedSections.has(section.id)}
-            onToggleCollapsed={toggleCollapsed}
-            onSelectModule={onSelectModule}
-            onAddModule={onAddModule}
-            onRenameSection={onRenameSection}
-            onDuplicateSection={onDuplicateSection}
-            onDeleteSection={onDeleteSection}
-            onRenameModule={onRenameModule}
-            onDuplicateModule={onDuplicateModule}
-            onDeleteModule={onDeleteModule}
-            canEdit={canEdit}
-          />
-        ))}
+          .map((section) => {
+            const sortedSections = [...sections]
+              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+              .filter(s => s.id !== 0);
+            const sectionIndex = section.id === 0 ? null : sortedSections.findIndex(s => s.id === section.id) + 1;
+            
+            return (
+              <SyllabusSection 
+                key={section.id} 
+                section={section} 
+                sectionIndex={sectionIndex}
+                modules={section.modules || []} 
+                activeModuleId={activeModuleId}
+                isCollapsed={collapsedSections.has(section.id)}
+                onToggleCollapsed={toggleCollapsed}
+                onSelectModule={onSelectModule}
+                onAddModule={onAddModule}
+                onRenameSection={onRenameSection}
+                onDuplicateSection={onDuplicateSection}
+                onDeleteSection={onDeleteSection}
+                onRenameModule={onRenameModule}
+                onDuplicateModule={onDuplicateModule}
+                onDeleteModule={onDeleteModule}
+                canEdit={canEdit}
+                validationResults={validationResults}
+              />
+            );
+          })}
       </SortableContext>
       {sections.length === 0 && (
         <div style={{ color: "var(--text-secondary)", fontSize: "14px", textAlign: "center", marginTop: "20px" }}>

@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, ForeignKey, Integer, String
+
 from app.models.base import Base, TenantMixin, TimestampMixin
+
 
 class MediaAssetUsage(Base, TenantMixin, TimestampMixin):
     __tablename__ = "media_asset_usages"

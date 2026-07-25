@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Float, Integer, String, Text, CheckConstraint
+from sqlalchemy import Boolean, CheckConstraint, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -63,13 +63,13 @@ class User(Base, TenantMixin, TimestampMixin):
     organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
+    organization: Mapped[Organization] = relationship(  # type: ignore[name-defined]
         "Organization", back_populates="users", foreign_keys="User.org_id"
     )
-    memberships: Mapped[list["Membership"]] = relationship(  # type: ignore[name-defined]
+    memberships: Mapped[list[Membership]] = relationship(  # type: ignore[name-defined]
         "Membership", back_populates="user"
     )
-    sessions: Mapped[list["AuthSession"]] = relationship(  # type: ignore[name-defined]
+    sessions: Mapped[list[AuthSession]] = relationship(  # type: ignore[name-defined]
         "AuthSession", back_populates="user", cascade="all, delete-orphan"
     )
 

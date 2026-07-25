@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, Text, ForeignKey, DateTime
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime, timezone
 
 from app.models.base import Base, TenantMixin, TimestampMixin
 
@@ -37,7 +38,7 @@ class CourseModule(Base, TenantMixin, TimestampMixin):
     deleted_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True)
 
     # Relationships
-    course: Mapped["Course"] = relationship("Course")
+    course: Mapped[Course] = relationship("Course")
 
     def to_dict(self) -> dict:
         return {

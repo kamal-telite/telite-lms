@@ -21,7 +21,7 @@ class Announcement(Base, TenantMixin, TimestampMixin):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    audiences: Mapped[list["AnnouncementAudience"]] = relationship(
+    audiences: Mapped[list[AnnouncementAudience]] = relationship(
         "AnnouncementAudience",
         cascade="all, delete-orphan",
         back_populates="announcement",

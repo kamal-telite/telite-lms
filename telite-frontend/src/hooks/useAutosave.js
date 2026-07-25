@@ -62,7 +62,7 @@ export function useAutosave({ courseId, data, onConflict, onBlocksSaved, onRecov
           id: block.id || null,
           module_id: block.module_id,
           block_type: block.block_type,
-          content: block.content || "",
+          content: typeof block.content === "string" ? block.content : "",
           media_asset_id: block.media_asset_id || block.settings?.asset_id || null,
           settings: block.settings || {},
           sort_order: Number.isFinite(block.sort_order) ? block.sort_order : 0,

@@ -10,7 +10,7 @@ tenants. This migration fixes that critical isolation gap.
 
 from __future__ import annotations
 
-from sqlalchemy import Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -23,7 +23,7 @@ class PalQuizScore(Base, TenantMixin, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     enrollment_number: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    user_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     external_course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     course_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     quiz_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -3,9 +3,8 @@ from __future__ import annotations
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from sqlalchemy.orm import Mapped, mapped_column
-
 from app.models.base import Base, TimestampMixin
+
 
 class PendingVerification(Base, TimestampMixin):
     __tablename__ = "pending_verifications"

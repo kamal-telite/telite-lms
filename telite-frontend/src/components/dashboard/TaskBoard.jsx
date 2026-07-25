@@ -31,25 +31,25 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    cursor: "grab",
-    background: "var(--surface)", 
-    padding: 12, 
-    borderRadius: 8, 
-    marginBottom: 8, 
-    boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.15)" : "0 1px 3px rgba(0,0,0,0.1)",
-    textDecoration: task.status === "approved" || task.status === "completed" ? "line-through" : "none",
   };
 
+  const isComplete = task.status === "approved" || task.status === "completed";
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`task-kanban-card ${isDragging ? "is-dragging" : ""}`}
+      {...attributes}
+      {...listeners}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-8)" }}>
         <div>
-          <div className="row-title" style={{textDecoration: task.status === "approved" || task.status === "completed" ? "line-through" : "none"}}>{task.title}</div>
+          <div className="row-title" style={{ textDecoration: isComplete ? "line-through" : "none" }}>{task.title}</div>
           <div className="row-subtitle" style={{ marginTop: 4 }}>{task.assigned_label}</div>
           <div className="row-subtitle" style={{ marginTop: 2 }}>Due {task.due_at || "soon"}</div>
         </div>
-        <div style={{ display: "flex", gap: 4 }} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="task-kanban-card__actions" onPointerDown={(e) => e.stopPropagation()}>
           {onEdit ? (
             <button
               onClick={() => onEdit(task)}
@@ -87,9 +87,9 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
         </div>
       ) : null}
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-        <Badge tone={task.status === "submitted" ? "brand" : task.status === "in_progress" ? "warn" : task.status === "approved" || task.status === "completed" ? "success" : "neutral"}>
-          {task.status === "submitted" ? "Submitted" : task.status === "in_progress" ? "In Progress" : task.status === "approved" || task.status === "completed" ? "Completed" : "Assigned"}
+      <div className="task-kanban-card__footer">
+        <Badge tone={task.status === "submitted" ? "brand" : task.status === "in_progress" ? "warn" : isComplete ? "success" : "neutral"}>
+          {task.status === "submitted" ? "Submitted" : task.status === "in_progress" ? "In Progress" : isComplete ? "Completed" : "Assigned"}
         </Badge>
         <span className="mono muted" style={{ fontSize: 10 }}>{task.due_at || 'soon'}</span>
       </div>
@@ -99,12 +99,15 @@ function SortableTaskCard({ task, onEdit, onDelete }) {
 
 function TaskColumn({ id, title, tasks, onEdit, onDelete }) {
   return (
-    <div className="soft-card" style={{ background: "var(--surface-alt)", display: "flex", flexDirection: "column", minHeight: 300 }}>
-      <div className="row-title" style={{ marginBottom: 12 }}>{title} ({tasks.length})</div>
+    <div className="task-kanban-column">
+      <div className="task-kanban-column__header">
+        <span className="task-kanban-column__title">{title}</span>
+        <span className="task-status-card__count">{tasks.length}</span>
+      </div>
       <SortableContext id={id} items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-        <div style={{ flex: 1 }}>
+        <div className="task-kanban-column__list">
           {tasks.map(t => <SortableTaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />)}
-          {tasks.length === 0 && <div className="muted" style={{ fontSize: 12, textAlign: "center", padding: 16 }}>No tasks here.</div>}
+          {tasks.length === 0 && <div className="task-status-card__empty">No tasks here.</div>}
         </div>
       </SortableContext>
     </div>
@@ -202,10 +205,10 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid-3">
-        <TaskColumn id="pending" title="📋 To Do" tasks={columns.pending} onEdit={onEdit} onDelete={onDelete} />
-        <TaskColumn id="in_progress" title="🔄 In Progress" tasks={columns.in_progress} onEdit={onEdit} onDelete={onDelete} />
-        <TaskColumn id="completed" title="✅ Done" tasks={columns.completed} onEdit={onEdit} onDelete={onDelete} />
+      <div className="task-kanban-grid">
+        <TaskColumn id="pending" title="To Do" tasks={columns.pending} onEdit={onEdit} onDelete={onDelete} />
+        <TaskColumn id="in_progress" title="In Progress" tasks={columns.in_progress} onEdit={onEdit} onDelete={onDelete} />
+        <TaskColumn id="completed" title="Done" tasks={columns.completed} onEdit={onEdit} onDelete={onDelete} />
       </div>
     </DndContext>
   );

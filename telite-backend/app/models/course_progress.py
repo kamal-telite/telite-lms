@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Integer, String, Float, ForeignKey, DateTime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -27,8 +28,8 @@ class CourseProgress(Base, TenantMixin, TimestampMixin):
     enrolled_version: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="The published version number the learner is pinned to")
 
     # Relationships
-    user: Mapped["User"] = relationship("User")
-    course: Mapped["Course"] = relationship("Course")
+    user: Mapped[User] = relationship("User")
+    course: Mapped[Course] = relationship("Course")
 
     def to_dict(self) -> dict:
         return {

@@ -368,7 +368,15 @@ class CertificateService:
             pdf_bytes = HTML(string=html_content).write_pdf()
         else:
             logger.warning("WeasyPrint not installed. Generating mock PDF bytes.")
-            pdf_bytes = b"%PDF-1.4 Mock PDF"
+            # A minimal valid PDF structure so the browser viewer doesn't error out
+            pdf_bytes = (
+                b"%PDF-1.4\n"
+                b"1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj\n"
+                b"2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj\n"
+                b"3 0 obj <</Type /Page /MediaBox [0 0 600 400]>> endobj\n"
+                b"xref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000056 00000 n \n0000000111 00000 n \n"
+                b"trailer <</Size 4 /Root 1 0 R>>\nstartxref\n167\n%%EOF\n"
+            )
             
         return pdf_bytes
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { api } from "../../services/client";
+import { useCountdownTimer } from "../../hooks/useCountdownTimer";
 
 function formatTime(seconds) {
   if (!seconds || seconds === 0) return null;
@@ -11,14 +12,41 @@ function formatTime(seconds) {
   return `${total}s`;
 }
 
-export function CourseSidebar({ course, activeModule, onSelectModule, progressData, onExit, refreshTrigger, courseProgress }) {
+// Component to display live countdown timer for a section
+function SectionCountdownTimer({ minimumTimeSeconds, timeSpentSeconds, isActive, isCompleted }) {
+  const { formattedTime, isTimeMet, isExpired } = useCountdownTimer({
+    minimumTimeSeconds,
+    timeSpentSeconds,
+    isActive,
+    isCompleted
+  });
+
+  if (!minimumTimeSeconds || minimumTimeSeconds <= 0) {
+    return null;
+  }
+
+  if (isTimeMet) {
+    return <span style={{ fontSize: "10px", color: "var(--success)", fontWeight: 400, flexShrink: 0 }}>
+      ⏱ {formattedTime} ✓
+    </span>;
+  }
+
+  return <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 400, flexShrink: 0 }}>
+    ⏱ {formattedTime}
+  </span>;
+}
+
+export function CourseSidebar({ course, activeModule, onSelectModule, progressData, onExit, refreshTrigger, courseProgress, sectionProgress: propSectionProgress }) {
   const [lockedModules, setLockedModules] = useState({});
   const [lockedSections, setLockedSections] = useState({});
   const [validating, setValidating] = useState(false);
   const [expandedSections, setExpandedSections] = useState({});
-  const [sectionProgress, setSectionProgress] = useState({});
+  const [localSectionProgress, setLocalSectionProgress] = useState({});
   const validationAbortControllerRef = useRef(null);
   const validatingModuleIdsRef = useRef(new Set());
+
+  // Use propSectionProgress if provided (from parent for synchronization), otherwise use local state
+  const sectionProgress = propSectionProgress || localSectionProgress;
 
   const sections = course?.sections || [];
   
@@ -150,7 +178,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
       if (!course?.id) return;
       try {
         const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
-        setSectionProgress(data || {});
+        setLocalSectionProgress(data || {});
       } catch (err) {
         console.error("Failed to load section progress", err);
       }
@@ -167,8 +195,9 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
     if (refreshTrigger && course?.id) {
       async function loadSectionProgress() {
         try {
-          const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
-          setSectionProgress(data || {});
+          const { data } = await api.get(`/api/v1/learner/courses/${course.id}/section-progress`);
+
+          setLocalSectionProgress(data || {});
         } catch (err) {
           console.error("Failed to refresh section progress", err);
         }
@@ -239,7 +268,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
           }
         }
       `}</style>
-      <div className="course-sidebar" style={{ width: "300px", borderRight: "1px solid var(--border-subtle)", background: "var(--surface-bg)", display: "flex", flexDirection: "column", height: "100%" }}>
+      <div data-lenis-prevent className="course-sidebar" style={{ width: "300px", borderRight: "1px solid var(--border-subtle)", background: "var(--surface-bg)", display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <div style={{ padding: "16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
         <button onClick={onExit} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", borderRadius: "4px", minWidth: "44px", minHeight: "44px" }} title="Exit Course">
@@ -274,7 +303,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
       </div>
 
       {/* Module List */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 0" }}>
+      <div data-lenis-prevent style={{ flex: 1, overflowY: "auto", padding: "12px 0" }}>
         {sections.length > 0 ? (
           // Section-based rendering
           sections.map((section, sectionIndex) => {
@@ -316,18 +345,12 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
                   <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400, flexShrink: 0 }}>
                     {sectionModules.length}
                   </span>
-                  {section.minimum_time_seconds > 0 && (
-                    <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 400, flexShrink: 0 }}>
-                      ⏱ {(() => {
-                        const timeSpent = sectionProgress[String(section.id)]?.time_spent_seconds || sectionProgress[section.id]?.time_spent_seconds || 0;
-                        const remaining = Math.max(0, section.minimum_time_seconds - timeSpent);
-                        const isTimeMet = timeSpent >= section.minimum_time_seconds;
-                        return isTimeMet 
-                          ? `${formatTime(timeSpent)} ✓` 
-                          : `${formatTime(timeSpent)} / ${formatTime(section.minimum_time_seconds)}`;
-                      })()}
-                    </span>
-                  )}
+                  <SectionCountdownTimer
+                    minimumTimeSeconds={section.minimum_time_seconds}
+                    timeSpentSeconds={sectionProgress[String(section.id)]?.time_spent_seconds || sectionProgress[section.id]?.time_spent_seconds || 0}
+                    isActive={!isSectionLocked}
+                    isCompleted={sectionProgress[String(section.id)]?.status === "completed" || sectionProgress[section.id]?.status === "completed"}
+                  />
                   {isSectionLocked && (
                     <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: 500 }}>
                       🔒

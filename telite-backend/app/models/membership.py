@@ -11,9 +11,7 @@ The users table columns are kept for backward compatibility during migration.
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -53,8 +51,8 @@ class Membership(Base, TimestampMixin):
     granted_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="memberships")  # type: ignore[name-defined]
-    organization: Mapped["Organization"] = relationship(  # type: ignore[name-defined]
+    user: Mapped[User] = relationship("User", back_populates="memberships")  # type: ignore[name-defined]
+    organization: Mapped[Organization] = relationship(  # type: ignore[name-defined]
         "Organization", back_populates="memberships"
     )
 

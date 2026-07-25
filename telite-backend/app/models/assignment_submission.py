@@ -1,9 +1,21 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, UniqueConstraint, CheckConstraint
+from datetime import UTC, datetime
+
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
 from app.models.base import Base, TenantMixin
+
 
 class AssignmentSubmission(Base, TenantMixin):
     __tablename__ = "assignment_submissions"
@@ -31,10 +43,10 @@ class AssignmentSubmission(Base, TenantMixin):
     graded_at = Column(DateTime(timezone=True), nullable=True)
     reviewed_by = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    submitted_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    submitted_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     __table_args__ = (
         UniqueConstraint('block_id', 'user_id', name='uq_assignment_submission_block_user'),

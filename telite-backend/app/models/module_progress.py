@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Integer, String, Float, ForeignKey, DateTime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -26,8 +27,8 @@ class ModuleProgress(Base, TenantMixin, TimestampMixin):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    user: Mapped["User"] = relationship("User")
-    module: Mapped["CourseModule"] = relationship("CourseModule")
+    user: Mapped[User] = relationship("User")
+    module: Mapped[CourseModule] = relationship("CourseModule")
 
     def to_dict(self) -> dict:
         return {

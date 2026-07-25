@@ -1,0 +1,143 @@
+/* Form Components */
+
+.form-stack,
+.field-grid,
+.mini-form,
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.field__input,
+.field__select,
+.field__textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  outline: none;
+  min-height: 44px;
+}
+
+.field__textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.field__input:focus,
+.field__select:focus,
+.field__textarea:focus {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent) 15%, transparent);
+}
+
+.field__input.is-invalid,
+.field__select.is-invalid,
+.field__textarea.is-invalid {
+  border-color: var(--red);
+}
+
+.field__error {
+  color: var(--red);
+  font-size: 11px;
+}
+
+.field__help {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.radio-row,
+.checkbox-grid,
+.toolbar,
+.pagination,
+.split-actions,
+.meta-row,
+.summary-row,
+.hero-actions,
+.legend-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.radio-pill,
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.radio-pill input,
+.checkbox-grid input {
+  accent-color: var(--theme-accent);
+}
+
+.radio-pill.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  background: var(--surface-muted);
+}
+
+.radio-pill.is-disabled .field__help {
+  margin-left: 2px;
+}
+
+.chip {
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.chip.is-active {
+  background: var(--theme-accent-light);
+  border-color: var(--theme-accent-mid);
+  color: var(--theme-accent);
+}
+
+/* Form Sections */
+.form-section {
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.form-section:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.form-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 16px 0;
+}

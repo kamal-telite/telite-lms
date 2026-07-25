@@ -36,7 +36,7 @@ export function CourseBuilderLayout({
   const [highlightBlockId, setHighlightBlockId] = useState(initialBlockId || null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [showPreviewPanel, setShowPreviewPanel] = useState(false);
+  const [showPreviewPanel, setShowPreviewPanel] = useState(true);
   const [courseStatus, setCourseStatus] = useState("draft");
   const [editorSaveState, setEditorSaveState] = useState({ state: "idle", lastSaved: null });
   const [showLockWarningModal, setShowLockWarningModal] = useState(false);
@@ -55,6 +55,39 @@ export function CourseBuilderLayout({
   const [activeBlock, setActiveBlock] = useState(null);
   const [showInspector, setShowInspector] = useState(false);
   const [blockSettingsUpdater, setBlockSettingsUpdater] = useState(null);
+  
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = useCallback((e) => {
+    setIsResizing(true);
+    e.preventDefault();
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback((e) => {
+    if (!isResizing) return;
+    const newWidth = e.clientX;
+    if (newWidth > 220 && newWidth < 340) {
+      setSidebarWidth(newWidth);
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
+    }
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
 
   const activeContext = useMemo(() => {
     for (const section of sections || []) {
@@ -87,6 +120,28 @@ export function CourseBuilderLayout({
       setCourseStatus(course.status);
     }
   }, [course?.status]);
+
+  /* Prevent document/Lenis page scroll while the fullscreen builder is open */
+  useEffect(() => {
+    const html = document.documentElement;
+    const { body } = document;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+    };
+  }, []);
 
   useEffect(() => {
     if (!lockExpiresAt) return;
@@ -376,11 +431,26 @@ export function CourseBuilderLayout({
   }, [course?.id, sections, editorSaveState.state]);
 
   return (
-    <div className="builder-layout">
+    <div
+      className={`builder-layout ${isSidebarCollapsed ? "builder-layout--sidebar-collapsed" : ""}`}
+      data-lenis-prevent
+    >
       {/* Top Navbar */}
       <header className="builder-header">
         <div className="builder-header__left">
           <IconButton icon="arrow-left" label="Back to Admin" onClick={onBack} />
+          <IconButton 
+            icon="list" 
+            label="Toggle Menu" 
+            className="builder-header__menu-btn" 
+            onClick={() => {
+              if (window.innerWidth < 768) {
+                setIsMobileSidebarOpen(prev => !prev);
+              } else {
+                setIsSidebarCollapsed(prev => !prev);
+              }
+            }}
+          />
           <div>
             <div className="builder-header__title">
               {course?.name} 
@@ -396,9 +466,9 @@ export function CourseBuilderLayout({
         
         <div className="builder-header__right">
           {canViewAudit && (
-            <Button tone="neutral" icon="list" onClick={() => setShowAuditLogModal(true)}>Audit Log</Button>
+            <Button tone="neutral" icon="list" className="builder-header__btn" onClick={() => setShowAuditLogModal(true)}>Audit Log</Button>
           )}
-          <Button tone="neutral" icon="clock" onClick={() => setShowVersionHistory(!showVersionHistory)}>History</Button>
+          <Button tone="neutral" icon="clock" className="builder-header__btn" onClick={() => setShowVersionHistory(!showVersionHistory)}>History</Button>
           <IconButton 
             icon={showPreviewPanel ? "eye-off" : "eye"} 
             label={showPreviewPanel ? "Hide Preview" : "Show Preview"} 
@@ -421,10 +491,28 @@ export function CourseBuilderLayout({
       {/* 2-Pane Body */}
       <div className={`builder-body ${showPreviewPanel ? 'builder-body--split' : ''}`}>
         
+        {/* Mobile Backdrop */}
+        {isMobileSidebarOpen && (
+          <div className="builder-syllabus__backdrop" onClick={() => setIsMobileSidebarOpen(false)} />
+        )}
+
         {/* Left Pane: Syllabus */}
-        <div className="builder-syllabus">
+        <div 
+          className={`builder-syllabus ${isSidebarCollapsed ? 'builder-syllabus--collapsed' : ''} ${isMobileSidebarOpen ? 'builder-syllabus--mobile-open' : ''}`}
+          style={
+            !isSidebarCollapsed && typeof window !== "undefined" && window.innerWidth >= 1024
+              ? { width: `${sidebarWidth}px`, flexBasis: `${sidebarWidth}px`, minWidth: `${sidebarWidth}px`, maxWidth: `${sidebarWidth}px` }
+              : undefined
+          }
+        >
           <div className="builder-syllabus__header">
-            Syllabus
+            <span>Syllabus</span>
+            <IconButton 
+              icon="x" 
+              label="Close Menu" 
+              className="builder-syllabus__close-btn" 
+              onClick={() => setIsMobileSidebarOpen(false)} 
+            />
           </div>
           <div className="builder-syllabus__body">
             <SyllabusTree 
@@ -432,7 +520,10 @@ export function CourseBuilderLayout({
               sections={sections} 
               setSections={setSections} 
               activeModuleId={activeModuleId}
-              onSelectModule={setActiveModuleId}
+              onSelectModule={(moduleId) => {
+                setActiveModuleId(moduleId);
+                setIsMobileSidebarOpen(false);
+              }}
               onAddModule={openModuleModal}
               onRenameSection={openRenameSection}
               onDuplicateSection={handleDuplicateSection}
@@ -441,6 +532,7 @@ export function CourseBuilderLayout({
               onDuplicateModule={handleDuplicateModule}
               onDeleteModule={openDeleteModule}
               canEdit={canEditStructure}
+              validationResults={validationStatus?.results}
             />
           </div>
           {canEditStructure && (
@@ -451,6 +543,11 @@ export function CourseBuilderLayout({
             </div>
           )}
         </div>
+        
+        {/* Resize Divider handle on Desktop */}
+        {!isSidebarCollapsed && (
+          <div className="syllabus-resizer" onMouseDown={startResizing} />
+        )}
         
         {/* Main Pane: Editor (Stage 2) */}
         <div className={`builder-editor ${showPreviewPanel ? 'builder-editor--split' : ''}`}>
@@ -475,15 +572,17 @@ export function CourseBuilderLayout({
             </div>
           )}
         </div>
-
+ 
         {/* Right Pane: Live Preview (when enabled) */}
         {showPreviewPanel && (
-          <CoursePreviewPanel
-            courseId={course?.id}
-            courseName={course?.name}
-            sections={sections}
-            activeModuleId={activeModuleId}
-          />
+          <div className="builder-preview-wrapper">
+            <CoursePreviewPanel
+              courseId={course?.id}
+              courseName={course?.name}
+              sections={sections}
+              activeModuleId={activeModuleId}
+            />
+          </div>
         )}
       </div>
 
