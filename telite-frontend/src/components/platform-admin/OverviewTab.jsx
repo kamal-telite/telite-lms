@@ -130,7 +130,7 @@ export default function OverviewTab({ searchQuery }) {
               </div>
               <div className="act-item">
                 <div className="act-icon" style={{background: '#ECFDF5'}}><span className="material-symbols-outlined" style={{color: '#059669', fontSize: '16px'}}>check_circle</span></div>
-                <div><div className="act-title">Course Published</div><div className="act-sub">"Advanced React Patterns" by Vikram Sethi</div><div className="act-time">8 minutes ago</div></div>
+                <div><div className="act-title">Course Published</div><div className="act-sub">&quot;Advanced React Patterns&quot; by Vikram Sethi</div><div className="act-time">8 minutes ago</div></div>
               </div>
               <div className="act-item">
                 <div className="act-icon" style={{background: '#FEF2F2'}}><span className="material-symbols-outlined" style={{color: '#DC2626', fontSize: '16px'}}>error</span></div>
