@@ -429,9 +429,9 @@ export default function LearnerPage({ session, onLogout }) {
         >
           <LearnerPlayer
             courseId={activeCourseId}
-            onExit={() => {
+            onExit={async () => {
               setActiveCourseId(null);
-              load();
+              await load();
             }}
             onCertificateIssued={fetchCertificates}
           />

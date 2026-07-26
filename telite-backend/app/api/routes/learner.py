@@ -30,6 +30,7 @@ from app.models.section_progress import SectionProgress
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
 from app.models.lesson_block import LessonBlock
+from app.models.lesson_block_progress import LessonBlockProgress
 from app.models.media_asset import MediaAsset
 from app.models.learning_session import LearningSession
 from app.models.user import User
@@ -1309,8 +1310,6 @@ def submit_course(
         response_data["certificate"] = cert.to_dict()
     
     return response_data
-
-from app.models.lesson_block_progress import LessonBlockProgress
 
 from app.services.snapshot_resolver import SnapshotResolver
 

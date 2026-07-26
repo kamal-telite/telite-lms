@@ -73,3 +73,33 @@ def test_get_learner_summary(db_session, repo, seed_data):
     summary = repo.get_learner_summary(str(user.id))
     assert "quizzes_submitted" in summary["stats"]
     assert summary["stats"]["quizzes_submitted"] == 1
+
+
+def test_get_learner_summary_today_time_from_heartbeat_events(db_session, repo, seed_data):
+    from datetime import datetime, timedelta, timezone
+
+    org = seed_data["org"]
+    course = seed_data["course"]
+    user = seed_data["user"]
+    now = datetime.now(timezone.utc)
+
+    db_session.add(LearnerEvent(
+        user_id=str(user.id),
+        course_id=str(course.id),
+        event_type="HEARTBEAT",
+        payload_json={"time_spent_seconds": 30, "source": "learning_session"},
+        created_at=now,
+        org_id=org.id,
+    ))
+    db_session.add(LearnerEvent(
+        user_id=str(user.id),
+        course_id=str(course.id),
+        event_type="HEARTBEAT",
+        payload_json={"time_spent_seconds": 45, "source": "learning_session"},
+        created_at=now - timedelta(days=1),
+        org_id=org.id,
+    ))
+    db_session.flush()
+
+    summary = repo.get_learner_summary(str(user.id))
+    assert summary["hero"]["today_time_seconds"] == 30

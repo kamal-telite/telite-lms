@@ -595,13 +595,18 @@ class AnalyticsRepository(BaseRepository[LearnerEvent]):
             )
         ).scalar() or 0
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        today_time_seconds = self.session.execute(
-            select(func.sum(LearningSession.active_seconds)).where(
-                LearningSession.user_id == user_id,
-                LearningSession.org_id == user.org_id,
-                LearningSession.started_at >= today_start,
+        heartbeat_payloads = self.session.execute(
+            select(LearnerEvent.payload_json).where(
+                LearnerEvent.user_id == user_id,
+                LearnerEvent.org_id == user.org_id,
+                LearnerEvent.event_type == "HEARTBEAT",
+                LearnerEvent.created_at >= today_start,
             )
-        ).scalar() or 0
+        ).scalars().all()
+        today_time_seconds = sum(
+            max(0, int((payload or {}).get("time_spent_seconds") or 0))
+            for payload in heartbeat_payloads
+        )
         last_session = self.session.execute(
             select(LearningSession)
             .where(LearningSession.user_id == user_id, LearningSession.org_id == user.org_id)
