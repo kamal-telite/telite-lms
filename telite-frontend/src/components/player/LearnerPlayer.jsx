@@ -72,13 +72,42 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     loadCourse();
   }, [courseId]);
 
+  const sessionIdRef = useRef(null);
+  const accumulatedSecondsRef = useRef(0);
+  const flushRef = useRef(async () => {});
+
+  const flush = async () => {
+    const sessionId = sessionIdRef.current;
+    const seconds = Math.min(accumulatedSecondsRef.current, 90);
+    if (!sessionId || seconds <= 0) return;
+    accumulatedSecondsRef.current -= seconds;
+    try {
+      await heartbeatLearningSession({
+        session_id: sessionId,
+        course_id: courseId,
+        module_id: activeModule?.id || null,
+        active_seconds: seconds,
+      });
+      // Trigger section progress refresh to check if minimum time requirement was met
+      setSectionProgressRefreshTrigger(prev => prev + 1);
+    } catch {
+      accumulatedSecondsRef.current += seconds;
+    }
+  };
+
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [courseId, activeModule?.id]);
+
   useEffect(() => {
     if (!courseId) return undefined;
     let cancelled = false;
-    let sessionId = null;
     let lastActiveAt = Date.now();
-    let accumulatedSeconds = 0;
     let lastTickAt = Date.now();
+
+    // Reset session tracking refs
+    sessionIdRef.current = null;
+    accumulatedSecondsRef.current = 0;
 
     const markActive = () => {
       lastActiveAt = Date.now();
@@ -88,27 +117,12 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       && document.hasFocus()
       && Date.now() - lastActiveAt <= 120000
     );
-    const flush = async () => {
-      if (!sessionId || accumulatedSeconds <= 0) return;
-      const seconds = Math.min(accumulatedSeconds, 90);
-      accumulatedSeconds -= seconds;
-      try {
-        await heartbeatLearningSession({
-          session_id: sessionId,
-          course_id: courseId,
-          module_id: activeModule?.id || null,
-          active_seconds: seconds,
-        });
-        // Trigger section progress refresh to check if minimum time requirement was met
-        setSectionProgressRefreshTrigger(prev => prev + 1);
-      } catch {
-        accumulatedSeconds += seconds;
-      }
-    };
 
     startLearningSession({ course_id: courseId, module_id: activeModule?.id || null })
       .then((data) => {
-        if (!cancelled) sessionId = data?.session?.id;
+        if (!cancelled) {
+          sessionIdRef.current = data?.session?.id;
+        }
       })
       .catch(() => {});
 
@@ -117,18 +131,19 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       const delta = Math.max(0, Math.round((now - lastTickAt) / 1000));
       lastTickAt = now;
       if (isActivelyLearning()) {
-        accumulatedSeconds += Math.min(delta, 15);
+        accumulatedSecondsRef.current += Math.min(delta, 15);
       }
     }, 5000);
     const heartbeat = setInterval(() => {
-      flush();
+      flushRef.current();
     }, 30000);
 
     const end = (reason = "ended") => {
       cancelled = true;
       clearInterval(tick);
       clearInterval(heartbeat);
-      const pending = Math.min(accumulatedSeconds, 90);
+      const pending = Math.min(accumulatedSecondsRef.current, 90);
+      const sessionId = sessionIdRef.current;
       if (sessionId && pending > 0 && navigator.sendBeacon) {
         const payload = JSON.stringify({
           session_id: sessionId,
@@ -138,7 +153,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
         });
         navigator.sendBeacon("/api/v1/learner/learning-sessions/heartbeat", new Blob([payload], { type: "application/json" }));
       } else {
-        flush();
+        flushRef.current();
       }
       if (sessionId) {
         endLearningSession({ session_id: sessionId, reason }).catch(() => {});
@@ -161,8 +176,6 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   useEffect(() => {
     // Emit MODULE_STARTED
     if (activeModule && courseId) {
-      // Prevent duplicate starts if already completed or tracked recently? 
-      // The backend can handle deduplication or we just blindly send it.
       api.post("/api/v1/learner/events", {
           events: [
             {
@@ -193,25 +206,6 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     }, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, [courseId]);
-  // Check if current section's minimum time requirement is met
-  const isSectionTimeRequirementMet = () => {
-    if (!activeModule || !courseData?.sections) return true;
-    
-    // Find the section containing the current module
-    const currentSection = courseData.sections.find(section => 
-      section.modules?.some(mod => mod.id === activeModule.id)
-    );
-    
-    if (!currentSection || !currentSection.minimum_time_seconds || currentSection.minimum_time_seconds <= 0) {
-      return true; // No time requirement
-    }
-    
-    // Check if time spent meets requirement
-    const sectionProgressData = sectionProgress[String(currentSection.id)] || sectionProgress[currentSection.id];
-    const timeSpent = sectionProgressData?.time_spent_seconds || 0;
-    
-    return timeSpent >= currentSection.minimum_time_seconds;
-  };
 
   // Get current section data for countdown timer
   const getCurrentSection = () => {
@@ -235,16 +229,60 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     isCompleted: isSectionCompleted
   });
 
+  // Check if current section's minimum time requirement is met
+  const isSectionTimeRequirementMet = () => {
+    if (!activeModule || !courseData?.sections) return true;
+    if (!currentSection || !minimumTimeSeconds || minimumTimeSeconds <= 0) {
+      return true; // No time requirement
+    }
+    if (isTimeMet) {
+      return true;
+    }
+    return timeSpentSeconds >= minimumTimeSeconds;
+  };
+
+  // Immediate sync when timer completes
+  useEffect(() => {
+    if (isTimeMet && minimumTimeSeconds > 0 && currentSection) {
+      // 1. Immediately flush pending active seconds to backend
+      flushRef.current();
+      
+      // 2. Perform local optimistic state update for instant UI feedback
+      setSectionProgress(prev => ({
+        ...prev,
+        [currentSection.id]: {
+          ...prev[currentSection.id],
+          time_spent_seconds: minimumTimeSeconds,
+          status: isLastModule() ? "completed" : (prev[currentSection.id]?.status || "in_progress")
+        }
+      }));
+
+      // 3. Sync full states from backend to verify and persist unlocking rules
+      const syncProgress = async () => {
+        try {
+          const { data: sectionProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/section-progress`);
+          setSectionProgress(sectionProgressData || {});
+          
+          const { data: moduleProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/module-progress`);
+          setProgressData(moduleProgressData || {});
+          
+          setSectionProgressRefreshTrigger(prev => prev + 1);
+        } catch (err) {
+          console.error("Failed to sync progress on timer completion", err);
+        }
+      };
+
+      const timer = setTimeout(syncProgress, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [isTimeMet, minimumTimeSeconds, courseId, currentSection?.id]);
+
   const handleModuleComplete = async () => {
     if (!activeModule) return;
     
     // Check if section time requirement is met
     if (!isSectionTimeRequirementMet()) {
-      const currentSection = courseData.sections.find(section => 
-        section.modules?.some(mod => mod.id === activeModule.id)
-      );
-      const timeSpent = sectionProgress[String(currentSection.id)]?.time_spent_seconds || sectionProgress[currentSection.id]?.time_spent_seconds || 0;
-      const remaining = currentSection.minimum_time_seconds - timeSpent;
+      const remaining = minimumTimeSeconds - timeSpentSeconds;
       showToast(`Please spend at least ${Math.ceil(remaining / 60)} more minutes in this section before completing.`, "error");
       return;
     }

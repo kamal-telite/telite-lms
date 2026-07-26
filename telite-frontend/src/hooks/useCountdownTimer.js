@@ -73,18 +73,21 @@ export function useCountdownTimer({
       const elapsed = (now - lastUpdateTimeRef.current) / 1000;
       lastUpdateTimeRef.current = now;
 
-      setRemainingSeconds(prev => {
-        const newRemaining = Math.max(0, prev - elapsed);
-        if (newRemaining <= 0) {
-          // Clear interval when reaching zero
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
+      // Only decrement if tab is visible and focused
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        setRemainingSeconds(prev => {
+          const newRemaining = Math.max(0, prev - elapsed);
+          if (newRemaining <= 0) {
+            // Clear interval when reaching zero
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            return 0;
           }
-          return 0;
-        }
-        return newRemaining;
-      });
+          return newRemaining;
+        });
+      }
     }, 1000); // Update every second
 
     return () => {
@@ -99,16 +102,13 @@ export function useCountdownTimer({
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // When tab becomes visible, recalculate based on latest timeSpentSeconds
-        const newRemaining = calculateRemaining();
-        setRemainingSeconds(newRemaining);
         lastUpdateTimeRef.current = Date.now();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [calculateRemaining]);
+  }, []);
 
   const isTimeMet = isCompleted || remainingSeconds <= 0;
   const isExpired = remainingSeconds <= 0 && minimumTimeSeconds > 0;

@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
 from app.models.base import Base, TenantMixin
+from app.core.assignment_statuses import can_resubmit, normalize_status, status_label
 
 
 class AssignmentSubmission(Base, TenantMixin):
@@ -70,6 +71,7 @@ class AssignmentSubmission(Base, TenantMixin):
 
     def to_dict(self):
         files = self.submission_files_json or []
+        normalized_status = normalize_status(self.status)
         return {
             "id": self.id,
             "block_id": self.block_id,
@@ -87,6 +89,10 @@ class AssignmentSubmission(Base, TenantMixin):
             "file_size": self.file_size,
             "attempt_number": self.attempt_number,
             "status": self.status,
+            "normalized_status": normalized_status,
+            "status_display": normalized_status,
+            "status_label": status_label(self.status),
+            "can_resubmit": can_resubmit(self.status),
             "grade": self.grade,
             "feedback": self.feedback,
             "course_time_seconds_at_submission": self.course_time_seconds_at_submission or 0,

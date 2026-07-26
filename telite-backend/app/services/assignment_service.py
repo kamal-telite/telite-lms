@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -10,6 +12,7 @@ from app.models.assignment_submission import AssignmentSubmission
 from app.models.learner_event import LearnerEvent
 from app.models.lesson_block_progress import LessonBlockProgress
 from app.models.notification import NotificationType
+from app.core.assignment_statuses import AssignmentStatus, normalize_status
 from app.core.notification_payloads import assignment_graded_metadata
 from app.repositories.assignment_repo import AssignmentRepository
 from app.repositories.enrollment_repo import EnrollmentRepository
@@ -25,6 +28,8 @@ from datetime import datetime, timezone
 ADMIN_ROLES = {"platform_admin", "super_admin", "category_admin", "instructor", "author", "reviewer"}
 MUTABLE_STATUSES = {"draft", "returned", "rejected"}
 PENDING_STATUSES = {"submitted", "resubmitted", "pending_verification"}
+
+logger = logging.getLogger(__name__)
 
 
 def set_assignment_actor_context(db: Session, user: TokenData) -> None:
@@ -48,7 +53,7 @@ class AssignmentService:
     def _require_assignment_block(self, block_id: int, user: TokenData):
         context = self.repo.get_block_context(block_id, None if user.is_platform_admin else user.org_id)
         if not context:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment block not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
         block, module, course = context
         if block.block_type != "assignment":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Block is not an assignment")
@@ -70,6 +75,33 @@ class AssignmentService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Category access denied")
         return block, module, course
 
+    def _build_assignment_summary(self, block, module, course) -> dict:
+        title = (block.metadata_json or {}).get("title") or block.content or "Assignment"
+        return {
+            "block_id": block.id,
+            "module_id": module.id,
+            "course_id": course.id,
+            "course_name": course.name,
+            "title": title,
+            "instructions": block.content or "",
+            "due_date": (block.metadata_json or {}).get("due_date"),
+            "points": (block.metadata_json or {}).get("points"),
+        }
+
+    def _api_status(self, status: str | None) -> str:
+        normalized = normalize_status(status)
+        mapping = {
+            AssignmentStatus.NOT_SUBMITTED: "NOT_SUBMITTED",
+            AssignmentStatus.DRAFT: "DRAFT",
+            AssignmentStatus.SUBMITTED: "SUBMITTED",
+            AssignmentStatus.UNDER_REVIEW: "UNDER_REVIEW",
+            AssignmentStatus.APPROVED: "APPROVED",
+            AssignmentStatus.GRADED: "GRADED",
+            AssignmentStatus.REJECTED: "REJECTED",
+            AssignmentStatus.RESUBMISSION_REQUIRED: "RESUBMISSION_REQUIRED",
+        }
+        return mapping.get(normalized, "NOT_SUBMITTED")
+
     async def _store_files(self, *, block_id: int, user: TokenData, files: list[UploadFile] | None) -> list[dict]:
         stored = []
         for upload in files or []:
@@ -85,29 +117,63 @@ class AssignmentService:
         return stored
 
     def get_learner_submission(self, block_id: int, user: TokenData) -> dict:
-        self._require_learner_access(block_id, user)
-        submission = self.repo.get_submission_for_learner(block_id, user.id, user.org_id)
-        return {"submission": submission.to_dict() if submission else None}
+        try:
+            block, module, course = self._require_learner_access(block_id, user)
+            submission = self.repo.get_submission_for_learner(block_id, user.id, user.org_id)
+            payload = submission.to_dict() if submission else None
+            status_value = self._api_status(payload["status"] if payload else None)
+            return {
+                "assignment": self._build_assignment_summary(block, module, course),
+                "submission": payload,
+                "status": status_value,
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Failed to load learner assignment submission",
+                extra={
+                    "assignment_id": block_id,
+                    "learner_id": getattr(user, "id", None),
+                    "endpoint": "/api/v1/learner/assignments/{block_id}/submission",
+                },
+            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to load your assignment submission.") from exc
 
-    async def save_draft(self, block_id: int, user: TokenData, submission_text: str | None, files: list[UploadFile] | None = None) -> dict:
+    def _filter_kept_files(self, existing_files: list[dict], existing_file_paths: list[str] | None) -> list[dict]:
+        if existing_file_paths is None:
+            return existing_files
+        return [file for file in existing_files if file.get("file_path") in existing_file_paths]
+
+    def _cleanup_removed_files(self, existing_files: list[dict], kept_files: list[dict]) -> None:
+        kept_paths = {file.get("file_path") for file in kept_files if file.get("file_path")}
+        for file in existing_files:
+            path = file.get("file_path")
+            if path and path not in kept_paths:
+                self.storage.delete(path)
+
+    async def save_draft(self, block_id: int, user: TokenData, submission_text: str | None, files: list[UploadFile] | None = None, existing_file_paths: list[str] | None = None) -> dict:
         self._require_learner_access(block_id, user)
         existing = self.repo.get_submission_for_learner(block_id, user.id, user.org_id)
         if existing and existing.status in {"submitted", "graded"}:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submitted assignments cannot be edited as drafts")
         uploaded = await self._store_files(block_id=block_id, user=user, files=files)
-        existing_files = existing.submission_files_json if existing else []
+        kept_files = []
+        if existing and existing.submission_files_json:
+            kept_files = self._filter_kept_files(existing.submission_files_json, existing_file_paths)
+            self._cleanup_removed_files(existing.submission_files_json, kept_files)
         submission = self.repo.save_submission(
             block_id=block_id,
             learner_id=user.id,
             org_id=user.org_id,
             submission_text=submission_text,
-            files=[*(existing_files or []), *uploaded],
+            files=[*kept_files, *uploaded],
             status="draft",
         )
         self.db.commit()
         return {"message": "Assignment draft saved", "submission": submission.to_dict()}
 
-    async def submit(self, block_id: int, user: TokenData, submission_text: str | None, files: list[UploadFile] | None, *, resubmit: bool = False) -> dict:
+    async def submit(self, block_id: int, user: TokenData, submission_text: str | None, files: list[UploadFile] | None, *, resubmit: bool = False, existing_file_paths: list[str] | None = None) -> dict:
         block, module, course = self._require_learner_access(block_id, user)
         existing = self.repo.get_submission_for_learner(block_id, user.id, user.org_id)
         if existing and existing.status in {"approved", "graded"} and not resubmit:
@@ -116,8 +182,11 @@ class AssignmentService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submission is already awaiting review")
 
         uploaded = await self._store_files(block_id=block_id, user=user, files=files)
-        existing_files = existing.submission_files_json if existing else []
-        all_files = [*(existing_files or []), *uploaded]
+        kept_files = []
+        if existing and existing.submission_files_json:
+            kept_files = self._filter_kept_files(existing.submission_files_json, existing_file_paths)
+            self._cleanup_removed_files(existing.submission_files_json, kept_files)
+        all_files = [*kept_files, *uploaded]
         if not (submission_text or "").strip() and not all_files:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submission text or file is required")
 
@@ -327,6 +396,7 @@ class AssignmentService:
             feedback=feedback,
             reviewed_by=user.id,
         )
+        self.db.flush()
         AuditService.log(
             self.db,
             org_id=updated.org_id,

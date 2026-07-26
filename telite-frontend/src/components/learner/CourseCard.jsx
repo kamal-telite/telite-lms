@@ -122,7 +122,7 @@ export function CourseCard({
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            objectPosition: "center top",
+            objectPosition: "center center",
             transition: "transform 0.3s ease"
           }}
         />

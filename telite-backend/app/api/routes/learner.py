@@ -833,10 +833,17 @@ def _apply_active_seconds(
                 if mp and mp.status == "completed":
                     completed_in_section += 1
             
-            # Heartbeat ONLY updates time spent - NEVER auto-completes sections
-            # Section completion must be explicitly triggered by learner action
-            # If section has no modules, mark as completed immediately (edge case)
-            if len(section_modules) == 0 and sp.status != "completed":
+            # Check if minimum time requirement is met
+            time_requirement_met = True
+            if section.minimum_time_seconds and section.minimum_time_seconds > 0:
+                time_requirement_met = (sp.time_spent_seconds or 0) >= section.minimum_time_seconds
+            
+            # Auto-complete section if all modules completed AND time requirement is met
+            if completed_in_section == len(section_modules) and time_requirement_met:
+                sp.status = "completed"
+                sp.completed_at = now
+                logger.info(f"Section {section_id} marked as completed via heartbeat (time requirement met)")
+            elif len(section_modules) == 0:
                 sp.status = "completed"
                 sp.completed_at = now
                 logger.info(f"Section {section_id} has no modules, marked as completed")

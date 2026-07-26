@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import logging
+from inspect import isawaitable
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
@@ -15,10 +18,12 @@ from app.services.assignment_storage import get_storage_provider
 
 
 assignment_router = APIRouter(tags=["Native Assignments"])
+logger = logging.getLogger(__name__)
 
 
 class DraftRequest(BaseModel):
     submission_text: str | None = None
+    existing_file_paths: list[str] | None = None
 
 
 class GradeRequest(BaseModel):
@@ -36,7 +41,13 @@ def _service(db: Session, current_user: TokenData) -> AssignmentService:
     return AssignmentService(db)
 
 
-async def _parse_submission_request(request: Request) -> tuple[str | None, List[UploadFile]]:
+async def _await_if_needed(result):
+    if isawaitable(result):
+        return await result
+    return result
+
+
+async def _parse_submission_request(request: Request) -> tuple[str | None, List[UploadFile], list[str] | None]:
     content_type = request.headers.get("content-type", "")
     if "multipart/form-data" in content_type:
         form = await request.form()
@@ -46,7 +57,18 @@ async def _parse_submission_request(request: Request) -> tuple[str | None, List[
             if isinstance(value, StarletteUploadFile) and value.filename
         ]
         submission_text = form.get("submission_text")
-        return str(submission_text) if submission_text is not None else None, files
+        existing_file_paths = []
+        existing_json = form.get("existing_file_paths")
+        if existing_json:
+            try:
+                existing_file_paths = json.loads(str(existing_json))
+            except Exception:
+                existing_file_paths = []
+        return (
+            str(submission_text) if submission_text is not None else None,
+            files,
+            existing_file_paths,
+        )
 
     if "application/json" in content_type:
         try:
@@ -55,9 +77,14 @@ async def _parse_submission_request(request: Request) -> tuple[str | None, List[
             body = {}
         if isinstance(body, dict):
             submission_text = body.get("submission_text")
-            return str(submission_text) if submission_text is not None else None, []
+            existing_file_paths = body.get("existing_file_paths") or []
+            return (
+                str(submission_text) if submission_text is not None else None,
+                [],
+                existing_file_paths,
+            )
 
-    return None, []
+    return None, [], []
 
 
 @assignment_router.get("/learner/assignments/{block_id}/submission")
@@ -66,7 +93,20 @@ def get_assignment_submission(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user),
 ):
-    return _service(db, current_user).get_learner_submission(block_id, current_user)
+    try:
+        return _service(db, current_user).get_learner_submission(block_id, current_user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "Assignment submission lookup failed",
+            extra={
+                "assignment_id": block_id,
+                "learner_id": getattr(current_user, "id", None),
+                "endpoint": "/api/v1/learner/assignments/{block_id}/submission",
+            },
+        )
+        raise HTTPException(status_code=500, detail="Unable to load your assignment submission.") from exc
 
 
 @assignment_router.patch("/learner/assignments/{block_id}/draft")
@@ -76,7 +116,15 @@ async def save_assignment_draft(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user),
 ):
-    return await _service(db, current_user).save_draft(block_id, current_user, body.submission_text)
+    return await _await_if_needed(
+        _service(db, current_user).save_draft(
+            block_id,
+            current_user,
+            body.submission_text,
+            [],
+            existing_file_paths=body.existing_file_paths,
+        )
+    )
 
 
 @assignment_router.post("/learner/assignments/{block_id}/submit")
@@ -86,8 +134,17 @@ async def submit_assignment(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user),
 ):
-    submission_text, files = await _parse_submission_request(request)
-    return await _service(db, current_user).submit(block_id, current_user, submission_text, files, resubmit=False)
+    submission_text, files, existing_file_paths = await _parse_submission_request(request)
+    return await _await_if_needed(
+        _service(db, current_user).submit(
+            block_id,
+            current_user,
+            submission_text,
+            files,
+            resubmit=False,
+            existing_file_paths=existing_file_paths,
+        )
+    )
 
 
 @assignment_router.post("/learner/assignments/{block_id}/resubmit")
@@ -97,8 +154,17 @@ async def resubmit_assignment(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user),
 ):
-    submission_text, files = await _parse_submission_request(request)
-    return await _service(db, current_user).submit(block_id, current_user, submission_text, files, resubmit=True)
+    submission_text, files, existing_file_paths = await _parse_submission_request(request)
+    return await _await_if_needed(
+        _service(db, current_user).submit(
+            block_id,
+            current_user,
+            submission_text,
+            files,
+            resubmit=True,
+            existing_file_paths=existing_file_paths,
+        )
+    )
 
 
 @assignment_router.get("/admin/assignments/{block_id}/submissions")

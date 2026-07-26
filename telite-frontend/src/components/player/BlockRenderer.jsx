@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, fetchQuizStats } from "../../services/client";
 import { getEmbedUrl } from "../../utils/embedUtils";
+import { canEditAssignment, canResubmitAssignment, getAssignmentStatusLabel, normalizeAssignmentStatus } from "../../utils/assignmentStatus";
 
 const richTextThemeStyles = `
   .native-block-content,
@@ -371,60 +372,173 @@ function AssignmentBlock({ title, settings, blockId }) {
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState("");
+  const [fileError, setFileError] = useState("");
   const [files, setFiles] = useState([]);
-  const [pendingFiles, setPendingFiles] = useState([]);
+  const submittingRef = useRef(false);
+
+  const ALLOWED_FILE_EXTENSIONS = [
+    ".pdf", ".doc", ".docx", ".zip", ".txt", ".csv", ".xlsx", ".ppt", ".pptx",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp",
+    ".java", ".kt", ".scala", ".py", ".js", ".mjs", ".ts", ".tsx",
+    ".html", ".css", ".scss", ".json", ".xml", ".yml", ".yaml", ".md",
+    ".cs", ".go", ".rs", ".swift", ".php", ".rb", ".pl", ".lua", ".dart",
+    ".r", ".m", ".sh", ".bash", ".zsh", ".sql",
+  ];
+  const MAX_FILE_BYTES = 25 * 1024 * 1024;
+  const fileAcceptString = ALLOWED_FILE_EXTENSIONS.join(",");
+
+  const getFileCacheKey = (file) => {
+    if (file.cache_key) return file.cache_key;
+    if (file.isPending && file.file) {
+      return `${file.filename}:${file.size_bytes}:${file.file.lastModified}`;
+    }
+    return `${file.file_path || file.asset_id || file.filename}:${file.size_bytes}:${file.mime_type || ""}`;
+  };
+
+  const normalizeServerFile = (file) => ({
+    ...file,
+    isPending: false,
+    cache_key: `${file.file_path || file.asset_id || file.filename}:${file.size_bytes}:${file.mime_type || ""}`,
+  });
+
+  const normalizePendingFile = (selectedFile) => ({
+    cache_key: `${selectedFile.name}:${selectedFile.size}:${selectedFile.lastModified}`,
+    filename: selectedFile.name,
+    original_filename: selectedFile.name,
+    size_bytes: selectedFile.size,
+    mime_type: selectedFile.type || "application/octet-stream",
+    file: selectedFile,
+    isPending: true,
+  });
 
   useEffect(() => {
     let cancelled = false;
+    let requestId = 0;
+
     if (!blockId) {
       setStatus("idle");
       return undefined;
     }
-    setError("");
-    api.get(`/api/v1/learner/assignments/${blockId}/submission`)
-      .then(({ data }) => {
-        if (cancelled) return;
-        applySubmission(data?.submission, "idle");
-      })
-      .catch((requestError) => {
-        if (cancelled) return;
+
+    const resetSubmissionState = () => {
+      setSubmissionId(null);
+      setSubmissionText("");
+      setGrade(null);
+      setFeedback("");
+      setFiles([]);
+      setError("");
+      setFileError("");
+      setStatus("loading");
+    };
+
+    const fetchSubmission = async () => {
+      const currentRequestId = ++requestId;
+      resetSubmissionState();
+
+      try {
+        const { data } = await api.get(`/api/v1/learner/assignments/${blockId}/submission`);
+        if (cancelled || currentRequestId !== requestId) return;
+        applySubmission(data, "not_submitted");
+      } catch (requestError) {
+        if (cancelled || currentRequestId !== requestId) return;
+        const errorDetail = requestError?.response?.data?.detail || "Unable to load your assignment submission.";
         if (requestError?.response?.status === 404) {
-          setStatus("idle");
+          setStatus("error");
+          setError(errorDetail || "Assignment not found.");
           return;
         }
         setStatus("error");
-        setError(requestError?.response?.data?.detail || "Unable to load your assignment submission.");
-      });
+        setError(errorDetail);
+      }
+    };
+
+    fetchSubmission();
+    const intervalId = window.setInterval(fetchSubmission, 10000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchSubmission();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
+      requestId += 1;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [blockId]);
 
-  const applySubmission = (submission, fallbackStatus) => {
+  const applySubmission = (response, fallbackStatus) => {
+    const submission = response?.submission || null;
+    const apiStatus = response?.status || fallbackStatus;
+
     if (!submission) {
-      setStatus(fallbackStatus);
+      setSubmissionId(null);
+      setSubmissionText("");
+      setGrade(null);
+      setFeedback("");
+      setFiles([]);
+      setFileError("");
+      setStatus(normalizeAssignmentStatus(apiStatus));
       return;
     }
+
+    const normalizedStatus = normalizeAssignmentStatus(submission.normalized_status || submission.status || apiStatus);
     setSubmissionId(submission.id ?? null);
-    setStatus(submission.status || fallbackStatus);
+    setStatus(normalizedStatus);
     setSubmissionText(submission.submission_text || "");
     setGrade(submission.grade ?? null);
     setFeedback(submission.feedback || "");
-    setFiles(submission.files || submission.submission_files_json || []);
-    setPendingFiles([]);
+    setFiles((submission.files || submission.submission_files_json || []).map(normalizeServerFile));
+    setFileError("");
+  };
+
+  const validateFile = (file) => {
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if (!file.name || extension === "" || !ALLOWED_FILE_EXTENSIONS.includes(extension)) {
+      return `File type is not allowed. Accepted types: ${ALLOWED_FILE_EXTENSIONS.join(", ")}`;
+    }
+    if (file.size <= 0) {
+      return "Uploaded file is empty.";
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      return `File is too large. Maximum size is ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} MB.`;
+    }
+    return null;
   };
 
   const handleFileSelect = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     if (!selectedFiles.length) return;
-    setPendingFiles((current) => [...current, ...selectedFiles]);
+    setFileError("");
+
+    const newFiles = [];
+    const currentKeys = new Set(files.map(getFileCacheKey));
+
+    for (const file of selectedFiles) {
+      const validationError = validateFile(file);
+      if (validationError) {
+        setFileError(validationError);
+        continue;
+      }
+      const key = `${file.name}:${file.size}:${file.lastModified}`;
+      if (currentKeys.has(key)) {
+        setFileError("This file has already been selected.");
+        continue;
+      }
+      currentKeys.add(key);
+      newFiles.push(normalizePendingFile(file));
+    }
+
+    if (newFiles.length === 0) {
+      event.target.value = null;
+      return;
+    }
+
     setFiles((current) => [
-      ...current,
-      ...selectedFiles.map((file) => ({
-        filename: file.name,
-        original_filename: file.name,
-        size_bytes: file.size,
-      })),
+      ...current.filter((file) => !file.isPending),
+      ...newFiles,
     ]);
     event.target.value = null;
   };
@@ -432,19 +546,38 @@ function AssignmentBlock({ title, settings, blockId }) {
   const buildFormData = () => {
     const formData = new FormData();
     formData.append("submission_text", submissionText || "");
-    for (const file of pendingFiles) {
-      formData.append("files", file);
-    }
+    const existingFilePaths = files
+      .filter((file) => !file.isPending)
+      .map((file) => file.file_path || file.asset_id)
+      .filter(Boolean);
+    formData.append("existing_file_paths", JSON.stringify(existingFilePaths));
+    files.forEach((file) => {
+      if (file.isPending && file.file) {
+        formData.append("files", file.file);
+      }
+    });
     return formData;
   };
 
+  const buildDraftPayload = () => ({
+    submission_text: submissionText || "",
+    existing_file_paths: files
+      .filter((file) => !file.isPending)
+      .map((file) => file.file_path || file.asset_id)
+      .filter(Boolean),
+  });
+
+  const removeFile = (index) => {
+    setFiles((current) => current.filter((_, idx) => idx !== index));
+    setFileError("");
+  };
+
   const handleSaveDraft = async () => {
+    if (savingDraft || submittingRef.current) return;
     setSavingDraft(true);
     setError("");
     try {
-      const { data } = await api.patch(`/api/v1/learner/assignments/${blockId}/draft`, {
-        submission_text: submissionText,
-      });
+      const { data } = await api.patch(`/api/v1/learner/assignments/${blockId}/draft`, buildDraftPayload());
       applySubmission(data?.submission, "draft");
     } catch (requestError) {
       setError(requestError?.response?.data?.detail || "Failed to save assignment draft.");
@@ -454,8 +587,11 @@ function AssignmentBlock({ title, settings, blockId }) {
   };
 
   const handleSubmit = async ({ resubmit = false } = {}) => {
-    setSubmitting(true);
+    if (submittingRef.current) return;
     setError("");
+    setFileError("");
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
       const endpoint = resubmit
         ? `/api/v1/learner/assignments/${blockId}/resubmit`
@@ -465,6 +601,7 @@ function AssignmentBlock({ title, settings, blockId }) {
     } catch (requestError) {
       setError(requestError?.response?.data?.detail || "Failed to submit assignment.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -476,14 +613,8 @@ function AssignmentBlock({ title, settings, blockId }) {
     return `/api/v1/submissions/${submissionId}/download${query}`;
   };
 
-  const canEdit = ["idle", "draft", "returned"].includes(status);
-  const statusLabel = {
-    draft: "Draft saved",
-    submitted: "Submitted - Awaiting Review",
-    resubmitted: "Resubmitted - Awaiting Review",
-    graded: "Graded",
-    returned: "Returned for revision",
-  }[status] || "Not submitted";
+  const canEdit = canEditAssignment(status);
+  const statusLabel = getAssignmentStatusLabel(status);
 
   const renderFileList = () => files.length > 0 ? (
     <ul style={{ margin: "8px 0 0", paddingLeft: "20px", fontSize: "13px", color: "var(--text-secondary)" }}>
@@ -495,6 +626,15 @@ function AssignmentBlock({ title, settings, blockId }) {
               {" "}
               <a href={downloadUrl(file)} style={{ color: "var(--primary)" }}>Download</a>
             </>
+          ) : null}
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => removeFile(index)}
+              style={{ marginLeft: "10px", color: "var(--error)", background: "none", border: "none", cursor: "pointer", fontSize: "13px" }}
+            >
+              Remove
+            </button>
           ) : null}
         </li>
       ))}
@@ -513,7 +653,7 @@ function AssignmentBlock({ title, settings, blockId }) {
       <div style={{ marginTop: "12px" }}>
         <label style={{ display: "inline-block", padding: "6px 12px", background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)", borderRadius: "4px", cursor: submitting ? "not-allowed" : "pointer", fontSize: "13px", color: "var(--text-secondary)" }}>
           Attach File
-          <input type="file" multiple style={{ display: "none" }} onChange={handleFileSelect} disabled={submitting || savingDraft} />
+          <input type="file" accept={fileAcceptString} multiple style={{ display: "none" }} onChange={handleFileSelect} disabled={submitting || savingDraft} />
         </label>
         {renderFileList()}
       </div>
@@ -558,20 +698,25 @@ function AssignmentBlock({ title, settings, blockId }) {
           {error}
         </div>
       ) : null}
+      {fileError ? (
+        <div style={{ marginTop: "14px", padding: "10px 12px", borderRadius: "6px", background: "var(--error-bg)", color: "var(--error)" }}>
+          {fileError}
+        </div>
+      ) : null}
 
       {status === "loading" ? (
         <div style={{ marginTop: "24px", color: "var(--text-secondary)" }}>Loading submission...</div>
       ) : status === "error" ? null : (
         <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border-subtle)" }}>
           <div style={{ fontWeight: 600, marginBottom: "8px" }}>Your Submission</div>
-          {canEdit ? renderEditor({ resubmit: status === "returned" }) : (
+          {canEdit ? renderEditor({ resubmit: canResubmitAssignment(status) }) : (
             <div style={{ background: "var(--surface-sunken)", padding: "12px", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
               <div style={{ color: status === "graded" ? "var(--success)" : "var(--warning)", fontWeight: 600, fontSize: "14px", marginBottom: "8px" }}>
                 Status: {statusLabel}
               </div>
               <p style={{ margin: 0, whiteSpace: "pre-wrap", color: "var(--text-secondary)" }}>{submissionText || "No written response."}</p>
               {renderFileList()}
-              {status === "graded" && (
+              {(status === "graded" || status === "approved" || status === "rejected" || status === "resubmission_required") && (
                 <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px dashed var(--border-strong)" }}>
                   {grade !== null && grade !== undefined ? <div style={{ fontWeight: 600, marginBottom: "4px" }}>Grade: {grade}</div> : null}
                   {feedback ? <div><strong>Feedback:</strong> {feedback}</div> : null}

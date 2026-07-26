@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.api.auth import TokenData, get_current_user
 from app.db.engine import db_session
 from app.main import create_app
+from app.models.assignment_submission import AssignmentSubmission
 
 
 class FakeAssignmentService:
@@ -15,11 +16,11 @@ class FakeAssignmentService:
         self.calls.append(("get_learner_submission", block_id, user.id))
         return {"submission": None}
 
-    async def save_draft(self, block_id, user, submission_text):
+    def save_draft(self, block_id, user, submission_text, files=None, existing_file_paths=None):
         self.calls.append(("save_draft", block_id, user.id, submission_text))
         return {"submission": {"block_id": block_id, "status": "draft", "submission_text": submission_text}}
 
-    async def submit(self, block_id, user, submission_text, files, *, resubmit=False):
+    def submit(self, block_id, user, submission_text, files, *, resubmit=False, existing_file_paths=None):
         self.calls.append(("submit", block_id, user.id, submission_text, len(files), resubmit))
         return {
             "submission": {
@@ -71,6 +72,20 @@ def make_client(monkeypatch, user):
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[db_session] = lambda: FakeDb()
     return TestClient(app)
+
+
+def test_assignment_submission_payload_exposes_review_status_metadata():
+    pending = AssignmentSubmission(block_id=10, user_id="learner-1", org_id=1, status="pending_verification")
+    data = pending.to_dict()
+    assert data["status_display"] == "under_review"
+    assert data["status_label"] == "Under Review"
+    assert data["can_resubmit"] is False
+
+    rejected = AssignmentSubmission(block_id=10, user_id="learner-1", org_id=1, status="rejected")
+    rejected_data = rejected.to_dict()
+    assert rejected_data["status_display"] == "rejected"
+    assert rejected_data["status_label"] == "Rejected"
+    assert rejected_data["can_resubmit"] is True
 
 
 def test_learner_assignment_api_contract_accepts_json_submit_and_draft(monkeypatch):

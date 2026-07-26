@@ -538,3 +538,39 @@ def test_assignment_submission_ui_flow(client: TestClient, db_session: Session):
     data = res_get.json()
     assert data["submission"]["submission_text"] == "Here is my essay."
     assert data["submission"]["status"] == "pending_verification"
+
+
+def test_learner_assignment_submission_returns_not_submitted_state_for_new_submission(client: TestClient, db_session: Session):
+    user = _create_user(db_session, "newsubmit@a.com", org_id=1)
+    course_id, block_id = _create_course_with_block(db_session, org_id=1, block_type="assignment", settings={})
+    _enroll_user(db_session, user.id, course_id, org_id=1)
+    db_session.commit()
+
+    token = create_access_token(payload={"sub": user.id, "org_id": 1})
+
+    response = client.get(
+        f"/api/v1/learner/assignments/{block_id}/submission",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "NOT_SUBMITTED"
+    assert data["submission"] is None
+    assert data["assignment"]["block_id"] == block_id
+    assert data["assignment"]["course_id"] == course_id
+
+
+def test_learner_assignment_submission_returns_404_for_missing_assignment(client: TestClient, db_session: Session):
+    user = _create_user(db_session, "missingassign@a.com", org_id=1)
+    db_session.commit()
+
+    token = create_access_token(payload={"sub": user.id, "org_id": 1})
+
+    response = client.get(
+        "/api/v1/learner/assignments/999999/submission",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Assignment not found"

@@ -206,6 +206,17 @@ def test_category_admin_grading_is_category_scoped(db_session):
     assert exc.value.status_code == 403
 
 
+class RecordingDeleteStorage(NoopStorage):
+    def __init__(self):
+        self.deleted_paths = []
+
+    async def upload(self, **_kwargs):
+        raise AssertionError("No file uploads expected in this test")
+
+    def delete(self, file_path):
+        self.deleted_paths.append(file_path)
+
+
 def test_cross_tenant_assignment_access_is_rejected(db_session):
     org_one = seed_assignment_context(db_session, org_id=1, category_slug="backend-development")
     org_two = seed_assignment_context(db_session, org_id=2, category_slug="frontend-development")
@@ -217,6 +228,45 @@ def test_cross_tenant_assignment_access_is_rejected(db_session):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.submit(org_two["block"].id, org_one_learner, "Cross tenant attempt", [], resubmit=False))
     assert exc.value.status_code == 404
+
+
+def test_assignment_submit_removes_deleted_files_from_existing_submission(db_session):
+    context = seed_assignment_context(db_session)
+    existing = AssignmentSubmission(
+        block_id=context["block"].id,
+        user_id=context["learner"].id,
+        org_id=context["org"].id,
+        submission_text="Original submission",
+        submission_files_json=[
+            {"file_path": "keep/path.pdf", "original_filename": "keep.pdf", "size_bytes": 1024},
+            {"file_path": "remove/path.pdf", "original_filename": "remove.pdf", "size_bytes": 2048},
+        ],
+        status="returned",
+        attempt_number=1,
+    )
+    db_session.add(existing)
+    db_session.commit()
+
+    recording_storage = RecordingDeleteStorage()
+    service = AssignmentService(db_session, storage=recording_storage)
+    learner = token(context["learner"].id, org_id=context["org"].id)
+
+    result = asyncio.run(
+        service.submit(
+            context["block"].id,
+            learner,
+            "Updated response",
+            [],
+            resubmit=False,
+            existing_file_paths=["keep/path.pdf"],
+        )
+    )
+
+    assert recording_storage.deleted_paths == ["remove/path.pdf"]
+    assert result["submission"]["submission_files_json"] == [
+        {"file_path": "keep/path.pdf", "original_filename": "keep.pdf", "size_bytes": 1024}
+    ]
+    assert result["submission"]["status"] == "pending_verification"
 
 
 def test_assignment_actor_context_sets_rls_claims(db_session):

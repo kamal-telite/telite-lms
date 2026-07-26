@@ -52,9 +52,9 @@ export function PalRing({ score, size = 120 }) {
         <div className="pal-ring__value mono" style={{ fontSize: `${size * 0.22}px`, fontWeight: 800, color: "#ffffff", lineHeight: 1.1 }}>
           {Math.round(animatedScore)}%
         </div>
-        <div className="pal-ring__caption" style={{ fontSize: `${size * 0.09}px`, fontWeight: 600, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>
+        {/* <div className="pal-ring__caption" style={{ fontSize: `${size * 0.09}px`, fontWeight: 600, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>
           PAL
-        </div>
+        </div> */}
       </div>
     </div>
   );
