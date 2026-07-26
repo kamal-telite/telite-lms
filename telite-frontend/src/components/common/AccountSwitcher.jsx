@@ -79,14 +79,32 @@ export default function AccountSwitcher({ session, onSessionChange }) {
 
     setBusyUserId(account.user_id);
     try {
+      console.log("[ACCOUNT_SWITCHER] handleSwitch - switching to account:", account.user_id);
       const payload = await switchAccountRequest(account.user_id);
+      console.log("[ACCOUNT_SWITCHER] handleSwitch - switchAccountRequest payload:", payload);
       const latestUser = await fetchMe();
-      const nextSession = buildSessionFromAuth({ ...payload, ...latestUser });
+      console.log("[ACCOUNT_SWITCHER] handleSwitch - fetchMe latestUser:", latestUser);
+      
+      // Ensure proper session building - fetchMe data takes precedence for latest values
+      const mergedPayload = {
+        ...payload,
+        user: {
+          ...(payload.user || payload),
+          ...(latestUser.user || latestUser),
+        }
+      };
+      console.log("[ACCOUNT_SWITCHER] handleSwitch - merged payload:", mergedPayload);
+      
+      const nextSession = buildSessionFromAuth(mergedPayload);
+      console.log("[ACCOUNT_SWITCHER] handleSwitch - built session:", nextSession);
+      console.log("[ACCOUNT_SWITCHER] handleSwitch - session.user.role:", nextSession.user.role);
       persistSession(nextSession);
       onSessionChange?.(nextSession);
       setAccounts(getAccounts());
       setOpen(false);
-      routerNavigate(getDefaultRoute(nextSession.user));
+      const redirectRoute = getDefaultRoute(nextSession.user);
+      console.log("[ACCOUNT_SWITCHER] handleSwitch - redirecting to:", redirectRoute);
+      routerNavigate(redirectRoute);
     } catch (error) {
       showToast(getErrorMessage(error, "Add this account again to switch to it."), "warning");
     } finally {
@@ -100,16 +118,34 @@ export default function AccountSwitcher({ session, onSessionChange }) {
 
     setAdding(true);
     try {
+      console.log("[ACCOUNT_SWITCHER] handleAddAccount - adding account for:", form.username);
       const payload = await addAccountRequest(form.username, form.password);
+      console.log("[ACCOUNT_SWITCHER] handleAddAccount - addAccountRequest payload:", payload);
       const latestUser = await fetchMe();
-      const nextSession = buildSessionFromAuth({ ...payload, ...latestUser });
+      console.log("[ACCOUNT_SWITCHER] handleAddAccount - fetchMe latestUser:", latestUser);
+      
+      // Ensure proper session building
+      const mergedPayload = {
+        ...payload,
+        user: {
+          ...(payload.user || payload),
+          ...(latestUser.user || latestUser),
+        }
+      };
+      console.log("[ACCOUNT_SWITCHER] handleAddAccount - merged payload:", mergedPayload);
+      
+      const nextSession = buildSessionFromAuth(mergedPayload);
+      console.log("[ACCOUNT_SWITCHER] handleAddAccount - built session:", nextSession);
+      console.log("[ACCOUNT_SWITCHER] handleAddAccount - session.user.role:", nextSession.user.role);
       persistSession(nextSession);
       onSessionChange?.(nextSession);
       setForm({ username: "", password: "" });
       setAccounts(getAccounts());
       setOpen(false);
       showToast("Account added and switched.", "success");
-      routerNavigate(getDefaultRoute(nextSession.user));
+      const redirectRoute = getDefaultRoute(nextSession.user);
+      console.log("[ACCOUNT_SWITCHER] handleAddAccount - redirecting to:", redirectRoute);
+      routerNavigate(redirectRoute);
     } catch (error) {
       showToast(getErrorMessage(error, "Could not add account."), "error");
     } finally {

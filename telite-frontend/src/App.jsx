@@ -114,7 +114,9 @@ function FullPageMessage({ title, body }) {
 }
 
 function AppRoutes({ session, setSession, onLogout, booting }) {
+  console.log("[APP] AppRoutes - session:", session, "booting:", booting);
   if (booting) {
+    console.log("[APP] AppRoutes - still booting, showing loader");
     return (
       <FullPageMessage
         title="Loading Telite Systems LMS"
@@ -130,7 +132,10 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
           path="/login"
           element={
             session?.user ? (
-              <Navigate to={getDefaultRoute(session.user)} replace />
+              <>
+                {console.log("[APP] AppRoutes /login - user logged in, redirecting to:", getDefaultRoute(session.user))}
+                <Navigate to={getDefaultRoute(session.user)} replace />
+              </>
             ) : (
               <Login onAuthenticated={setSession} />
             )
@@ -326,26 +331,34 @@ export default function App() {
 
     async function restoreSession() {
       const stored = getSession();
+      console.log("[APP] restoreSession - stored session:", stored);
       if (!stored?.user) {
+        console.log("[APP] restoreSession - no stored user, setting boot to false");
         setBooting(false);
         return;
       }
 
       try {
+        console.log("[APP] restoreSession - calling fetchMe for user:", stored.user.user_id);
         const me = await fetchMe();
+        console.log("[APP] restoreSession - /auth/me response:", me);
         if (cancelled) {
+          console.log("[APP] restoreSession - cancelled");
           return;
         }
         const merged = mergeSessionUser(stored, me);
+        console.log("[APP] restoreSession - merged session:", merged);
         persistSession(merged);
         setSessionState(merged);
-      } catch {
+      } catch (error) {
+        console.error("[APP] restoreSession - error:", error);
         if (!cancelled) {
           clearSession();
           setSessionState(null);
         }
       } finally {
         if (!cancelled) {
+          console.log("[APP] restoreSession - setting boot to false");
           setBooting(false);
         }
       }

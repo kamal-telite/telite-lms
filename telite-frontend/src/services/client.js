@@ -127,19 +127,25 @@ export async function loginRequest(username, password) {
   form.append("username", username);
   form.append("password", password);
   // Backend sets HttpOnly cookies in the response — we only read the body for user profile
+  console.log("[CLIENT] loginRequest - sending login request for user:", username);
   const response = await api.post("/auth/login", form, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
+  console.log("[CLIENT] loginRequest - response:", response.data);
   return response.data;
 }
 
 export async function logoutRequest() {
   // Backend clears HttpOnly cookies; we clear sessionStorage
+  console.log("[CLIENT] logoutRequest - logging out");
   return unwrap(await api.post("/auth/logout", {}));
 }
 
 export async function fetchMe() {
-  return unwrap(await api.get("/auth/me"));
+  console.log("[CLIENT] fetchMe - calling /auth/me");
+  const result = unwrap(await api.get("/auth/me"));
+  console.log("[CLIENT] fetchMe - response:", result);
+  return result;
 }
 
 export async function updateThemePreference(themePreference) {
@@ -259,7 +265,10 @@ export async function fetchCategoryGradingAnalytics(slug) {
 }
 
 export async function fetchLearnerDashboard() {
-  return unwrap(await api.get("/dashboard/learner"));
+  console.log("[CLIENT] fetchLearnerDashboard - making GET /dashboard/learner request");
+  const result = unwrap(await api.get("/dashboard/learner"));
+  console.log("[CLIENT] fetchLearnerDashboard - received response:", result);
+  return result;
 }
 
 export async function fetchAssignmentVerifications(slug, params = {}) {

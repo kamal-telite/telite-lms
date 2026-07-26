@@ -39,6 +39,7 @@ export default function LearnerPage({ session, onLogout }) {
   const scrollRef = useRef(null);
 
   const { data, loading, error, fetchData: load } = useLearnerStore();
+  console.log("[LEARNER_PAGE] LearnerPage rendering - session:", session, "location:", location.pathname);
 
   // State management
   const [submittingTaskId, setSubmittingTaskId] = useState(null);

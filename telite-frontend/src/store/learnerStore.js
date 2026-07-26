@@ -12,11 +12,14 @@ export const useLearnerStore = create((set, get) => ({
   
   // Data Fetching
   fetchData: async () => {
+    console.log("[LEARNER_STORE] fetchData called - fetching learner dashboard");
     set({ loading: true, error: null });
     try {
       const payload = await fetchLearnerDashboard();
+      console.log("[LEARNER_STORE] fetchData - received data:", payload);
       set({ data: payload, loading: false });
     } catch (err) {
+      console.error("[LEARNER_STORE] fetchData - error:", err);
       set({ error: err.message, loading: false });
     }
   },

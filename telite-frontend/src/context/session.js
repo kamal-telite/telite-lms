@@ -48,15 +48,22 @@ const ROLE_ALIASES = {
 };
 
 export function normalizeRole(role) {
-  if (role == null || String(role).trim() === "") return "";
+  console.log("[SESSION] normalizeRole - input role:", role, "type:", typeof role);
+  if (role == null || String(role).trim() === "") {
+    console.log("[SESSION] normalizeRole - role is null/empty, returning empty string");
+    return "";
+  }
   const normalized = String(role).trim().toLowerCase();
-  return ROLE_ALIASES[normalized] || normalized;
+  const aliased = ROLE_ALIASES[normalized] || normalized;
+  console.log("[SESSION] normalizeRole - normalized:", normalized, "aliased:", aliased);
+  return aliased;
 }
 
 function normalizeUser(user) {
   if (!user) return null;
+  console.log("[SESSION] normalizeUser - input user:", user);
   const role = normalizeRole(user.role ?? user.user_type ?? user.type);
-  return {
+  const normalized = {
     ...user,
     role,
     category_scope:
@@ -70,6 +77,8 @@ function normalizeUser(user) {
       user.isPlatformAdmin ??
       role === "platform_admin",
   };
+  console.log("[SESSION] normalizeUser - output normalized user:", normalized);
+  return normalized;
 }
 
 // ── CSRF helpers ──────────────────────────────────────────────────────────────
@@ -257,9 +266,15 @@ export function mergeAuthPayload(session, payload) {
  * Merge updated user fields into an existing session.
  */
 export function mergeSessionUser(session, user) {
+  console.log("[SESSION] mergeSessionUser called with session.user:", session?.user);
+  console.log("[SESSION] mergeSessionUser called with user:", user);
+  const merged = { ...session?.user, ...user };
+  console.log("[SESSION] mergeSessionUser - merged object before normalize:", merged);
+  const normalizedUser = normalizeUser(merged);
+  console.log("[SESSION] mergeSessionUser - normalizedUser after normalize:", normalizedUser);
   return {
     ...session,
-    user: normalizeUser({ ...session?.user, ...user }),
+    user: normalizedUser,
   };
 }
 
@@ -267,27 +282,43 @@ export function mergeSessionUser(session, user) {
  * Determine the default route for a user based on their role.
  */
 export function getDefaultRoute(user) {
-  if (!user) return "/login";
+  console.log("[SESSION] getDefaultRoute called with user:", user);
+  if (!user) {
+    console.log("[SESSION] getDefaultRoute - user is null/undefined, returning /login");
+    return "/login";
+  }
 
   const normalizedUser = normalizeUser(user);
-  if (!normalizedUser) return "/login";
+  console.log("[SESSION] getDefaultRoute - normalizedUser:", normalizedUser);
+  if (!normalizedUser) {
+    console.log("[SESSION] getDefaultRoute - normalizedUser is null, returning /login");
+    return "/login";
+  }
 
   if (normalizedUser.is_platform_admin === true) {
+    console.log("[SESSION] getDefaultRoute - is_platform_admin=true, returning /platform-admin");
     return "/platform-admin";
   }
   const role = normalizeRole(normalizedUser.role);
+  console.log("[SESSION] getDefaultRoute - normalized role:", role);
   if (role === "platform_admin") {
+    console.log("[SESSION] getDefaultRoute - role is platform_admin, returning /platform-admin");
     return "/platform-admin";
   }
   if (role === "super_admin") {
+    console.log("[SESSION] getDefaultRoute - role is super_admin, returning /super-admin");
     return "/super-admin";
   }
   if (role === "category_admin") {
-    return `/categories/${normalizedUser.category_scope || "ats"}/admin`;
+    const route = `/categories/${normalizedUser.category_scope || "ats"}/admin`;
+    console.log("[SESSION] getDefaultRoute - role is category_admin, returning:", route);
+    return route;
   }
   if (role === "learner") {
+    console.log("[SESSION] getDefaultRoute - role is learner, returning /learner");
     return "/learner";
   }
+  console.log("[SESSION] getDefaultRoute - role not recognized, returning /login");
   return "/login";
 }
 
