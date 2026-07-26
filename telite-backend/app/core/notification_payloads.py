@@ -8,6 +8,7 @@ from app.core.notification_routes import (
     NotificationRoute,
     category_course_builder_route,
     learner_assignment_route,
+    learner_announcements_route,
     learner_certificates_route,
     learner_courses_route,
     learner_course_route,
@@ -30,6 +31,7 @@ ACTIVE_NOTIFICATION_TYPES = {
     "learning_path_assigned",
     "learning_path_unlocked",
     "learning_path_completed",
+    "announcement_published",
 }
 
 
@@ -172,3 +174,10 @@ def learning_path_completed_idempotency_key(*, user_id: str, path_id: int | str)
     if not user_id or not path_id:
         raise ValueError("learning_path_completed idempotency requires user_id and path_id")
     return f"{user_id}:learning_path_completed:{path_id}"
+
+
+def announcement_notification_metadata(*, announcement_id: int) -> dict[str, Any]:
+    return _metadata(
+        learner_announcements_route(),
+        announcement_id=announcement_id,
+    )

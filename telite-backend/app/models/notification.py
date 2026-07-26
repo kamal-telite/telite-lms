@@ -24,6 +24,7 @@ class NotificationType(str, enum.Enum):
     LEARNING_PATH_ASSIGNED = "learning_path_assigned"
     LEARNING_PATH_UNLOCKED = "learning_path_unlocked"
     LEARNING_PATH_COMPLETED = "learning_path_completed"
+    ANNOUNCEMENT_PUBLISHED = "announcement_published"
     INFO = "info"
 
 

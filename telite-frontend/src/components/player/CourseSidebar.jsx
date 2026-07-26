@@ -228,6 +228,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
           display: flex;
           flex-direction: column;
           height: 100%;
+          min-height: 0;
         }
         
         @media (max-width: 767px) {
@@ -268,7 +269,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
           }
         }
       `}</style>
-      <div data-lenis-prevent className="course-sidebar" style={{ width: "300px", borderRight: "1px solid var(--border-subtle)", background: "var(--surface-bg)", display: "flex", flexDirection: "column", height: "100%" }}>
+      <div data-lenis-prevent className="course-sidebar" style={{ width: "300px", borderRight: "1px solid var(--border-subtle)", background: "var(--surface-bg)", display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Header */}
       <div style={{ padding: "16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
         <button onClick={onExit} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", borderRadius: "4px", minWidth: "44px", minHeight: "44px" }} title="Exit Course">
@@ -303,7 +304,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
       </div>
 
       {/* Module List */}
-      <div data-lenis-prevent style={{ flex: 1, overflowY: "auto", padding: "12px 0" }}>
+      <div data-lenis-prevent style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 0" }}>
         {sections.length > 0 ? (
           // Section-based rendering
           sections.map((section, sectionIndex) => {

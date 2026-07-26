@@ -22,7 +22,7 @@ from app.repositories.org_repo import OrgRepository
 from app.repositories.user_repo import UserRepository
 from app.repositories.invite_repo import InviteRepository
 from app.repositories.audit_repo import AuditRepository
-from app.repositories.analytics_repo import AnalyticsRepository
+from app.repositories.analytics import AnalyticsRepository
 from app.services.user_provisioning import UserProvisioningService, ProvisioningError
 from app.core.identifier_masking import mask_identifier
 

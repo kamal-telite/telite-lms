@@ -74,6 +74,7 @@ class PALScoreService:
             "weights": PAL_WEIGHTS,
             "strengths": strengths,
             "weak_areas": weak_areas,
+            "improvements": weak_areas,
             "progress_trend": self._progress_trend(user_id, org_id),
             "completion_timeline": self._completion_timeline(user_id, org_id),
         }
@@ -90,6 +91,7 @@ class PALScoreService:
             "weights": PAL_WEIGHTS,
             "strengths": [],
             "weak_areas": ["Course completion", "Quiz average", "Assignment average", "Task completion"],
+            "improvements": ["Course completion", "Quiz average", "Assignment average", "Task completion"],
             "progress_trend": [],
             "completion_timeline": [],
         }

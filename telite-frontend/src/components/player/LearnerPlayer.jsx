@@ -520,6 +520,25 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           touch-action: pan-y;
           will-change: scroll-position;
           min-height: 0;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+
+        .lesson-scroll-region::-webkit-scrollbar {
+          display: none;
+        }
+
+        .learner-player__header {
+          position: sticky;
+          top: 0;
+          z-index: 10020;
+          isolation: isolate;
+        }
+
+        .learner-player__timer {
+          position: relative;
+          z-index: 1;
+          flex-shrink: 0;
         }
 
         .lesson-scroll-region > div {
@@ -569,12 +588,12 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
         
         @media (min-width: 768px) {
           .course-sidebar-container {
-            position: relative !important;
+            position: sticky !important;
             left: auto !important;
           }
         }
       `}</style>
-      <div className="learner-player" style={{ display: "flex", height: "100vh", background: "var(--surface-bg)", color: "var(--text-primary)", width: "100%", zIndex: 10000, overflow: "hidden" }}>
+      <div className="learner-player" style={{ position: "fixed", inset: 0, display: "flex", height: "100vh", background: "var(--surface-bg)", color: "var(--text-primary)", width: "100%", zIndex: 10000, overflow: "hidden" }}>
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
@@ -597,9 +616,10 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
         style={{
           flexShrink: 0,
           width: "300px",
-          height: "100%",
+          height: "100vh",
           overflowY: "auto",
-          position: "relative",
+          position: "sticky",
+          top: 0,
           background: "var(--surface-bg)"
         }}
         className={`course-sidebar-container ${sidebarOpen ? 'mobile-open' : ''}`}
@@ -617,9 +637,9 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       </div>
 
       {/* Main Content Area — single scroll region */}
-      <div className="player-main" style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", color: "var(--text-primary)" }}>
+      <div className="player-main" style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden", color: "var(--text-primary)" }}>
         {/* Sticky Header */}
-        <header style={{ flexShrink: 0, padding: "16px 24px", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+        <header className="learner-player__header" style={{ flexShrink: 0, padding: "16px 24px", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
             {/* Hamburger Menu Button - Mobile Only */}
             <button
@@ -670,7 +690,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {/* Countdown Timer Display */}
             {minimumTimeSeconds > 0 && (
-              <div style={{ 
+              <div className="learner-player__timer" style={{ 
                 display: "flex", 
                 alignItems: "center", 
                 gap: "6px",
@@ -714,7 +734,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
         <div
           ref={scrollRef}
           className="lesson-scroll-region"
-          style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "40px 40px 0", display: "flex", flexDirection: "column", alignItems: "center", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "auto", touchAction: "pan-y" }}
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "40px 40px 0", display: "flex", flexDirection: "column", alignItems: "center", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain", touchAction: "pan-y" }}
         >
           <div style={{ maxWidth: "800px", width: "100%" }}>
             {showCompletionSuccess ? (
