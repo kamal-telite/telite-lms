@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="Telite LMS Backend" \
       org.opencontainers.image.description="FastAPI backend for Telite LMS" \
