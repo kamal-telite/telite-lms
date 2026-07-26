@@ -59,10 +59,24 @@ export function normalizeRole(role) {
   return aliased;
 }
 
+function resolveRole(source, fallbackRole = "") {
+  const candidate = normalizeRole(source?.role ?? source?.user_type ?? source?.type);
+  if (candidate && candidate !== "learner") {
+    return candidate;
+  }
+
+  const fallback = normalizeRole(fallbackRole);
+  if (fallback && fallback !== "learner") {
+    return fallback;
+  }
+
+  return candidate || fallback;
+}
+
 function normalizeUser(user) {
   if (!user) return null;
   console.log("[SESSION] normalizeUser - input user:", user);
-  const role = normalizeRole(user.role ?? user.user_type ?? user.type);
+  const role = resolveRole(user, user?.role ?? user?.user_type ?? user?.type);
   const normalized = {
     ...user,
     role,
@@ -214,7 +228,7 @@ export function buildSessionFromAuth(payload) {
   const source = payload?.user || payload || {};
   const user = normalizeUser({
     user_id: source.user_id ?? source.id ?? source.sub,
-    role: source.role ?? source.user_type ?? source.type,
+    role: resolveRole(source),
     name: source.name ?? source.full_name,
     email: source.email,
     category_scope: source.category_scope ?? source.categoryScope ?? source.category_slug,
@@ -238,7 +252,7 @@ export function mergeAuthPayload(session, payload) {
   const user = normalizeUser({
     ...session?.user,
     user_id: source.user_id ?? source.id ?? source.sub ?? session?.user?.user_id,
-    role: source.role ?? source.user_type ?? source.type ?? session?.user?.role,
+    role: resolveRole(source, session?.user?.role),
     name: source.name ?? source.full_name ?? session?.user?.name,
     email: source.email ?? session?.user?.email,
     category_scope:
@@ -270,7 +284,10 @@ export function mergeSessionUser(session, user) {
   console.log("[SESSION] mergeSessionUser called with user:", user);
   const merged = { ...session?.user, ...user };
   console.log("[SESSION] mergeSessionUser - merged object before normalize:", merged);
-  const normalizedUser = normalizeUser(merged);
+  const normalizedUser = normalizeUser({
+    ...merged,
+    role: resolveRole(merged, session?.user?.role),
+  });
   console.log("[SESSION] mergeSessionUser - normalizedUser after normalize:", normalizedUser);
   return {
     ...session,

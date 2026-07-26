@@ -181,6 +181,7 @@ export default function Login({ onAuthenticated }) {
         user: {
           ...(payload.user || payload),  // Start with login payload (could be wrapped or direct)
           ...(latestUser.user || latestUser),  // Merge in fetchMe data
+          role: latestUser?.user?.role || latestUser?.role || payload?.user?.role || payload?.role,
         }
       };
       console.log("[LOGIN] handleLoginSubmit - merged payload:", mergedPayload);

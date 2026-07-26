@@ -91,6 +91,7 @@ export default function AccountSwitcher({ session, onSessionChange }) {
         user: {
           ...(payload.user || payload),
           ...(latestUser.user || latestUser),
+          role: latestUser?.user?.role || latestUser?.role || payload?.user?.role || payload?.role,
         }
       };
       console.log("[ACCOUNT_SWITCHER] handleSwitch - merged payload:", mergedPayload);
@@ -130,6 +131,7 @@ export default function AccountSwitcher({ session, onSessionChange }) {
         user: {
           ...(payload.user || payload),
           ...(latestUser.user || latestUser),
+          role: latestUser?.user?.role || latestUser?.role || payload?.user?.role || payload?.role,
         }
       };
       console.log("[ACCOUNT_SWITCHER] handleAddAccount - merged payload:", mergedPayload);

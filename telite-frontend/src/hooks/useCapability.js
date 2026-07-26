@@ -1,4 +1,4 @@
-import { getSession } from "../context/session";
+import { getSession, normalizeRole } from "../context/session";
 
 const SUPER_ADMIN_ROLE = "super_admin";
 
@@ -43,8 +43,8 @@ ROLE_CAPABILITIES.org_admin = ROLE_CAPABILITIES.super_admin;
 export function useCapability() {
   const session = getSession();
   const user = session?.user;
-  
-  const role = user?.role || "learner";
+
+  const role = normalizeRole(user?.role);
 
   const hasCapability = (permissionKey) => {
     if (role === SUPER_ADMIN_ROLE) return true;
