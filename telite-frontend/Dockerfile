@@ -21,7 +21,7 @@ RUN npm install --audit
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 
 LABEL org.opencontainers.image.title="Telite LMS Frontend" \
       org.opencontainers.image.description="Static React frontend for Telite LMS" \
