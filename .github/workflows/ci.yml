@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload backend smoke test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-smoke-test-results
           path: telite-backend/test-results/*.xml
@@ -163,7 +163,7 @@ jobs:
 
       - name: Upload backend critical regression results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-critical-regression-results
           path: telite-backend/test-results/*.xml
