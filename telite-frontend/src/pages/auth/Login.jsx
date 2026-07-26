@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { loginRequest, forgotPassword, getErrorMessage } from "../../services/client";
-import { buildSessionFromAuth, getDefaultRoute } from "../../context/session";
+import { loginRequest, forgotPassword, getErrorMessage, fetchMe } from "../../services/client";
+import { buildSessionFromAuth, clearClientSessionState, getDefaultRoute } from "../../context/session";
 import { canUseWebGL, loadVantaDependencies } from "../../utils/scriptLoader";
 import "./Login.css";
 
@@ -167,8 +167,10 @@ export default function Login({ onAuthenticated }) {
     setLoginLoading(true);
     setLoginError("");
     try {
+      clearClientSessionState();
       const payload = await loginRequest(username, password);
-      const session = buildSessionFromAuth(payload);
+      const latestUser = await fetchMe();
+      const session = buildSessionFromAuth({ ...payload, ...latestUser });
       onAuthenticated(session);
       window.location.replace(getDefaultRoute(session.user));
     } catch (requestError) {

@@ -181,7 +181,7 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
         />
         
         <Route
-          path="/dashboard"
+          path="/dashboard/*"
           element={
             session?.user ? (
               <Navigate to={getDefaultRoute(session.user)} replace />

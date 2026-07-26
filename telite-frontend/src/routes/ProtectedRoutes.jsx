@@ -7,7 +7,7 @@ import { getDefaultRoute, getSession, normalizeRole } from "../context/session";
  * Route guard for standard organization-scoped routes.
  */
 export function ProtectedRoute({ session: _staleSession, allowRoles, children }) {
-  const currentSession = getSession();
+  const currentSession = _staleSession?.user ? _staleSession : getSession();
 
   if (!currentSession?.user) {
     return <Navigate to="/login" replace />;
@@ -32,7 +32,7 @@ export function ProtectedRoute({ session: _staleSession, allowRoles, children })
  * Route guard for platform-wide admin routes.
  */
 export function ProtectedPlatformRoute({ session: _staleSession, children }) {
-  const currentSession = getSession();
+  const currentSession = _staleSession?.user ? _staleSession : getSession();
 
   if (!currentSession?.user) {
     return <Navigate to="/login" replace />;

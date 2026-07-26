@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addAccountRequest,
+  fetchMe,
   fetchActiveSessions,
   getErrorMessage,
   revokeSession,
@@ -79,7 +80,8 @@ export default function AccountSwitcher({ session, onSessionChange }) {
     setBusyUserId(account.user_id);
     try {
       const payload = await switchAccountRequest(account.user_id);
-      const nextSession = buildSessionFromAuth(payload);
+      const latestUser = await fetchMe();
+      const nextSession = buildSessionFromAuth({ ...payload, ...latestUser });
       persistSession(nextSession);
       onSessionChange?.(nextSession);
       setAccounts(getAccounts());
@@ -99,7 +101,8 @@ export default function AccountSwitcher({ session, onSessionChange }) {
     setAdding(true);
     try {
       const payload = await addAccountRequest(form.username, form.password);
-      const nextSession = buildSessionFromAuth(payload);
+      const latestUser = await fetchMe();
+      const nextSession = buildSessionFromAuth({ ...payload, ...latestUser });
       persistSession(nextSession);
       onSessionChange?.(nextSession);
       setForm({ username: "", password: "" });

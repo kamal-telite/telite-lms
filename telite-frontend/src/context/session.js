@@ -48,8 +48,28 @@ const ROLE_ALIASES = {
 };
 
 export function normalizeRole(role) {
-  const normalized = String(role || "learner").trim().toLowerCase();
+  if (role == null || String(role).trim() === "") return "";
+  const normalized = String(role).trim().toLowerCase();
   return ROLE_ALIASES[normalized] || normalized;
+}
+
+function normalizeUser(user) {
+  if (!user) return null;
+  const role = normalizeRole(user.role ?? user.user_type ?? user.type);
+  return {
+    ...user,
+    role,
+    category_scope:
+      user.category_scope ??
+      user.categoryScope ??
+      user.category_slug ??
+      user.categorySlug ??
+      null,
+    is_platform_admin:
+      user.is_platform_admin ??
+      user.isPlatformAdmin ??
+      role === "platform_admin",
+  };
 }
 
 // ── CSRF helpers ──────────────────────────────────────────────────────────────
@@ -108,8 +128,8 @@ export function getSession() {
   if (!rawUser) return null;
 
   try {
-    const user = JSON.parse(rawUser);
-    return { user: { ...user, role: normalizeRole(user.role) } };
+    const user = normalizeUser(JSON.parse(rawUser));
+    return user ? { user } : null;
   } catch {
     return null;
   }
@@ -121,10 +141,11 @@ export function getSession() {
  */
 export function persistSession(session) {
   if (!session?.user) return;
-  writeStorage(USER_KEY, JSON.stringify(session.user));
+  const user = normalizeUser(session.user);
+  writeStorage(USER_KEY, JSON.stringify(user));
 
   // Also update the multi-account list
-  _upsertAccount(session.user);
+  _upsertAccount(user);
 }
 
 /**
@@ -181,19 +202,22 @@ export function clearClientSessionState() {
  * Tokens are NOT stored here — they arrive as HttpOnly cookies.
  */
 export function buildSessionFromAuth(payload) {
+  const source = payload?.user || payload || {};
+  const user = normalizeUser({
+    user_id: source.user_id ?? source.id ?? source.sub,
+    role: source.role ?? source.user_type ?? source.type,
+    name: source.name ?? source.full_name,
+    email: source.email,
+    category_scope: source.category_scope ?? source.categoryScope ?? source.category_slug,
+    org_id: source.org_id ?? source.organization_id,
+    is_platform_admin: source.is_platform_admin ?? source.isPlatformAdmin,
+    permissions: source.permissions ?? [],
+    theme_preference: source.theme_preference ?? "system",
+  });
+
   return {
     authenticated: true,
-    user: {
-      user_id: payload.user_id,
-      role: normalizeRole(payload.role),
-      name: payload.name,
-      email: payload.email,
-      category_scope: payload.category_scope ?? null,
-      org_id: payload.org_id ?? null,
-      is_platform_admin: payload.is_platform_admin ?? false,
-      permissions: payload.permissions ?? [],
-      theme_preference: payload.theme_preference ?? "system",
-    },
+    user,
   };
 }
 
@@ -201,20 +225,31 @@ export function buildSessionFromAuth(payload) {
  * Merge an updated auth payload into an existing session.
  */
 export function mergeAuthPayload(session, payload) {
+  const source = payload?.user || payload || {};
+  const user = normalizeUser({
+    ...session?.user,
+    user_id: source.user_id ?? source.id ?? source.sub ?? session?.user?.user_id,
+    role: source.role ?? source.user_type ?? source.type ?? session?.user?.role,
+    name: source.name ?? source.full_name ?? session?.user?.name,
+    email: source.email ?? session?.user?.email,
+    category_scope:
+      source.category_scope ??
+      source.categoryScope ??
+      source.category_slug ??
+      session?.user?.category_scope,
+    org_id: source.org_id ?? source.organization_id ?? session?.user?.org_id,
+    is_platform_admin:
+      source.is_platform_admin ??
+      source.isPlatformAdmin ??
+      session?.user?.is_platform_admin,
+    permissions: source.permissions ?? session?.user?.permissions ?? [],
+    theme_preference:
+      source.theme_preference ?? session?.user?.theme_preference ?? "system",
+  });
+
   return {
     authenticated: true,
-    user: {
-      ...session?.user,
-      user_id: payload.user_id || session?.user?.user_id,
-      role: normalizeRole(payload.role || session?.user?.role),
-      name: payload.name || session?.user?.name,
-      email: payload.email || session?.user?.email,
-      category_scope: payload.category_scope ?? session?.user?.category_scope ?? null,
-      org_id: payload.org_id ?? session?.user?.org_id ?? null,
-      is_platform_admin: payload.is_platform_admin ?? session?.user?.is_platform_admin ?? false,
-      permissions: payload.permissions ?? session?.user?.permissions ?? [],
-      theme_preference: payload.theme_preference ?? session?.user?.theme_preference ?? "system",
-    },
+    user,
   };
 }
 
@@ -224,7 +259,7 @@ export function mergeAuthPayload(session, payload) {
 export function mergeSessionUser(session, user) {
   return {
     ...session,
-    user: { ...session?.user, ...user, role: normalizeRole(user?.role || session?.user?.role) },
+    user: normalizeUser({ ...session?.user, ...user }),
   };
 }
 
@@ -234,10 +269,13 @@ export function mergeSessionUser(session, user) {
 export function getDefaultRoute(user) {
   if (!user) return "/login";
 
-  if (user.is_platform_admin === true) {
+  const normalizedUser = normalizeUser(user);
+  if (!normalizedUser) return "/login";
+
+  if (normalizedUser.is_platform_admin === true) {
     return "/platform-admin";
   }
-  const role = normalizeRole(user.role);
+  const role = normalizeRole(normalizedUser.role);
   if (role === "platform_admin") {
     return "/platform-admin";
   }
@@ -245,9 +283,12 @@ export function getDefaultRoute(user) {
     return "/super-admin";
   }
   if (role === "category_admin") {
-    return `/categories/${user.category_scope || "ats"}/admin`;
+    return `/categories/${normalizedUser.category_scope || "ats"}/admin`;
   }
-  return "/learner";
+  if (role === "learner") {
+    return "/learner";
+  }
+  return "/login";
 }
 
 // ── Multi-account switcher ────────────────────────────────────────────────────
