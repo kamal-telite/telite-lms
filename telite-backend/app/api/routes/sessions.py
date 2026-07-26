@@ -24,14 +24,11 @@ from pydantic import BaseModel
 from app.api.auth import (
     TokenData,
     _account_refresh_cookie_name,
-    _set_auth_cookies,
     _clear_auth_cookies,
-    _build_token_response,
     get_current_user,
     issue_login_response,
     require_platform_admin,
 )
-from app.core.security import generate_csrf_token
 from app.core.password_utils import verify_password
 from sqlalchemy.orm import Session
 from app.db.engine import db_session
@@ -295,15 +292,7 @@ def switch_browser_account(
     if session.org_id is not None:
         user.org_id = session.org_id
         
-    token_response = _build_token_response(user, refresh_token)
-    csrf_token = generate_csrf_token()
-    _set_auth_cookies(
-        response,
-        token_response.access_token,
-        refresh_token,
-        csrf_token,
-        account_user_id=user.id,
-    )
+    token_response = issue_login_response(db, user, response, request)
 
     logger.info("Browser switched active account to user=%s", user.id)
     return {

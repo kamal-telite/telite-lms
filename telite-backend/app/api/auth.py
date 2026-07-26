@@ -39,8 +39,9 @@ from sqlalchemy import or_, select, update, text
 from sqlalchemy.orm import Session
 
 from app.db.rls import set_rls_context, set_platform_context, clear_rls_context
-from app.db.engine import db_session
+from app.db.engine import db_session, is_postgres_dsn
 from app.models.user import User
+from app.models.membership import Membership
 from app.repositories.user_repo import UserRepository, fetch_user_by_id
 from app.repositories.auth_repo import AuthRepository
 
@@ -310,7 +311,7 @@ def get_current_user(
         email=payload.get("email") or user.email,
         role=payload.get("role") or user.role,
         full_name=payload.get("name") or user.full_name,
-        category_scope=user.category_scope,
+        category_scope=payload.get("category_scope", user.category_scope),
         org_id=payload.get("org_id", user.org_id),
         is_platform_admin=bool(payload.get("is_platform_admin", user.is_platform_admin)),
         permissions=payload.get("permissions", []),
@@ -428,14 +429,37 @@ def issue_login_response(
     request: Request | None = None,
 ) -> TokenResponse:
     """Issue tokens, persist session, set cookies, return response body."""
+    resolved_role = user.role
+    resolved_category_scope = user.category_scope
+    resolved_org_id = user.org_id
+
+    if not user.is_platform_admin and user.org_id is not None:
+        try:
+            if is_postgres_dsn():
+                db.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+            membership = db.execute(
+                select(Membership).where(
+                    Membership.user_id == user.id,
+                    Membership.org_id == user.org_id,
+                    Membership.status == "active",
+                )
+            ).scalar_one_or_none()
+            if membership:
+                resolved_role = membership.role
+                resolved_category_scope = membership.category_scope
+                resolved_org_id = membership.org_id
+        finally:
+            if is_postgres_dsn():
+                db.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+
     user_dict = {
         "id": user.id,
         "username": user.username,
         "email": user.email,
-        "role": user.role,
+        "role": resolved_role,
         "full_name": user.full_name,
-        "category_scope": user.category_scope,
-        "org_id": user.org_id,
+        "category_scope": resolved_category_scope,
+        "org_id": resolved_org_id,
         "is_platform_admin": user.is_platform_admin,
         "theme_preference": user.theme_preference or "system",
     }

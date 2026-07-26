@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react";
-import { Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoutes";
 
 const SuperAdminPage = lazy(() => import("../pages/super-admin/SuperAdminPage"));
@@ -9,7 +9,6 @@ const CourseBuilderPage = lazy(() => import("../pages/authoring/CourseBuilderPag
 const LearningPathBuilder = lazy(() => import('../pages/authoring/LearningPathBuilder'));
 const QuestionBankManagerPage = lazy(() => import('../pages/authoring/QuestionBankManagerPage'));
 const AnnouncementManagementPage = lazy(() => import('../pages/authoring/AnnouncementManagementPage'));
-const BulkEnrollmentPage = lazy(() => import('../pages/super-admin/BulkEnrollmentPage'));
 
 export default function OrgRouter({ session, onLogout }) {
   const location = useLocation();
