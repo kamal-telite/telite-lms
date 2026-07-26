@@ -17,9 +17,9 @@ import {
   getSession,
   mergeAuthPayload,
   persistSession,
-} from "../context/session";
+} from "../context/session.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -55,15 +55,31 @@ function _processQueue(error) {
   _refreshQueue = [];
 }
 
+export function shouldAttemptRefresh(config = {}, error) {
+  if (!error?.response || error.response.status !== 401 || config?._retry) {
+    return false;
+  }
+
+  if (config?._skipRefresh) {
+    return false;
+  }
+
+  const url = String(config.url || "").toLowerCase();
+  const isAuthEndpoint =
+    url.includes("/auth/login") ||
+    url.includes("/auth/refresh") ||
+    url.includes("/auth/me") ||
+    url.includes("/auth/logout");
+
+  return !isAuthEndpoint;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config || {};
-    const isAuthEndpoint =
-      String(original.url || "").includes("/auth/login") ||
-      String(original.url || "").includes("/auth/refresh");
 
-    if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
+    if (error.response?.status === 401 && !original._retry && shouldAttemptRefresh(original, error)) {
       if (_refreshing) {
         // Queue this request until the refresh completes
         return new Promise((resolve, reject) => {
@@ -130,6 +146,7 @@ export async function loginRequest(username, password) {
   console.log("[CLIENT] loginRequest - sending login request for user:", username);
   const response = await api.post("/auth/login", form, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    _skipRefresh: true,
   });
   console.log("[CLIENT] loginRequest - response:", response.data);
   return response.data;
@@ -138,12 +155,12 @@ export async function loginRequest(username, password) {
 export async function logoutRequest() {
   // Backend clears HttpOnly cookies; we clear sessionStorage
   console.log("[CLIENT] logoutRequest - logging out");
-  return unwrap(await api.post("/auth/logout", {}));
+  return unwrap(await api.post("/auth/logout", {}, { _skipRefresh: true }));
 }
 
 export async function fetchMe() {
   console.log("[CLIENT] fetchMe - calling /auth/me");
-  const result = unwrap(await api.get("/auth/me"));
+  const result = unwrap(await api.get("/auth/me", { _skipRefresh: true }));
   console.log("[CLIENT] fetchMe - response:", result);
   return result;
 }
