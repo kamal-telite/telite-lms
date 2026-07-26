@@ -6,6 +6,23 @@ import { BlockRenderer } from "./BlockRenderer";
 import { api, endLearningSession, heartbeatLearningSession, startLearningSession } from "../../services/client";
 import { useCountdownTimer } from "../../hooks/useCountdownTimer";
 
+function mergeSectionProgress(prev, incoming) {
+  if (!incoming || typeof incoming !== "object") return prev || {};
+  const merged = { ...incoming };
+  for (const key of Object.keys(merged)) {
+    const prevEntry = prev?.[key] ?? prev?.[String(key)];
+    if (!prevEntry) continue;
+    merged[key] = {
+      ...merged[key],
+      time_spent_seconds: Math.max(
+        merged[key]?.time_spent_seconds || 0,
+        prevEntry.time_spent_seconds || 0,
+      ),
+    };
+  }
+  return merged;
+}
+
 export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   const { showToast } = useToast();
   const scrollRef = useRef(null);
@@ -42,7 +59,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
         // Load section progress
         try {
           const { data: sectionProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/section-progress`);
-          setSectionProgress(sectionProgressData || {});
+          setSectionProgress((prev) => mergeSectionProgress(prev, sectionProgressData || {}));
         } catch (sectionProgressErr) {
           console.error("Failed to load section progress", sectionProgressErr);
           setSectionProgress({});
@@ -200,7 +217,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     const interval = setInterval(async () => {
       try {
         const { data: sectionProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/section-progress`);
-        setSectionProgress(sectionProgressData || {});
+        setSectionProgress((prev) => mergeSectionProgress(prev, sectionProgressData || {}));
       } catch (err) {
         console.error("Failed to refresh section progress", err);
       }
@@ -227,7 +244,8 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     minimumTimeSeconds,
     timeSpentSeconds,
     isActive: !!activeModule && !!currentSection,
-    isCompleted: isSectionCompleted
+    isCompleted: isSectionCompleted,
+    resetKey: currentSection?.id ?? null,
   });
 
   // Check if current section's minimum time requirement is met
@@ -242,41 +260,73 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     return timeSpentSeconds >= minimumTimeSeconds;
   };
 
-  // Immediate sync when timer completes
+  const timerSyncedSectionRef = useRef(null);
+
+  // Sync section time to backend when local countdown completes (heartbeats may lag behind UI)
   useEffect(() => {
-    if (isTimeMet && minimumTimeSeconds > 0 && currentSection) {
-      // 1. Immediately flush pending active seconds to backend
-      flushRef.current();
-      
-      // 2. Perform local optimistic state update for instant UI feedback
-      setSectionProgress(prev => ({
-        ...prev,
-        [currentSection.id]: {
-          ...prev[currentSection.id],
-          time_spent_seconds: minimumTimeSeconds,
-          status: isLastModule() ? "completed" : (prev[currentSection.id]?.status || "in_progress")
-        }
-      }));
+    if (!isExpired || minimumTimeSeconds <= 0 || !currentSection) return;
+    if (timerSyncedSectionRef.current === currentSection.id) return;
+    timerSyncedSectionRef.current = currentSection.id;
 
-      // 3. Sync full states from backend to verify and persist unlocking rules
-      const syncProgress = async () => {
-        try {
-          const { data: sectionProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/section-progress`);
-          setSectionProgress(sectionProgressData || {});
-          
-          const { data: moduleProgressData } = await api.get(`/api/v1/learner/courses/${courseId}/module-progress`);
-          setProgressData(moduleProgressData || {});
-          
-          setSectionProgressRefreshTrigger(prev => prev + 1);
-        } catch (err) {
-          console.error("Failed to sync progress on timer completion", err);
-        }
-      };
+    setSectionProgress((prev) => ({
+      ...prev,
+      [currentSection.id]: {
+        ...(prev[currentSection.id] || prev[String(currentSection.id)] || {}),
+        time_spent_seconds: minimumTimeSeconds,
+        status: prev[currentSection.id]?.status || prev[String(currentSection.id)]?.status || "in_progress",
+      },
+    }));
 
-      const timer = setTimeout(syncProgress, 600);
-      return () => clearTimeout(timer);
-    }
-  }, [isTimeMet, minimumTimeSeconds, courseId, currentSection?.id]);
+    const syncProgress = async () => {
+      try {
+        await flushRef.current();
+
+        const sectionId = currentSection.id;
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          const { data: sectionProgressData } = await api.get(
+            `/api/v1/learner/courses/${courseId}/section-progress`,
+          );
+          const spent =
+            sectionProgressData?.[sectionId]?.time_spent_seconds ??
+            sectionProgressData?.[String(sectionId)]?.time_spent_seconds ??
+            0;
+
+          if (spent >= minimumTimeSeconds) {
+            setSectionProgress((prev) => mergeSectionProgress(prev, sectionProgressData || {}));
+            setSectionProgressRefreshTrigger((prev) => prev + 1);
+            return;
+          }
+
+          const gap = minimumTimeSeconds - spent;
+          const sessionId = sessionIdRef.current;
+          if (gap > 0 && sessionId) {
+            await heartbeatLearningSession({
+              session_id: sessionId,
+              course_id: courseId,
+              module_id: activeModule?.id || null,
+              active_seconds: Math.min(gap, 90),
+            });
+          } else {
+            break;
+          }
+        }
+
+        const { data: sectionProgressData } = await api.get(
+          `/api/v1/learner/courses/${courseId}/section-progress`,
+        );
+        setSectionProgress((prev) => mergeSectionProgress(prev, sectionProgressData || {}));
+        setSectionProgressRefreshTrigger((prev) => prev + 1);
+      } catch (err) {
+        console.error("Failed to sync progress on timer completion", err);
+      }
+    };
+
+    syncProgress();
+  }, [isExpired, minimumTimeSeconds, courseId, currentSection?.id, activeModule?.id]);
+
+  useEffect(() => {
+    timerSyncedSectionRef.current = null;
+  }, [currentSection?.id]);
 
   const handleModuleComplete = async () => {
     if (!activeModule || markingModuleComplete) return;
@@ -290,6 +340,20 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     
     setMarkingModuleComplete(true);
     try {
+      if (minimumTimeSeconds > 0 && timeSpentSeconds < minimumTimeSeconds && isTimeMet) {
+        await flushRef.current();
+        const gap = minimumTimeSeconds - timeSpentSeconds;
+        const sessionId = sessionIdRef.current;
+        if (gap > 0 && sessionId) {
+          await heartbeatLearningSession({
+            session_id: sessionId,
+            course_id: courseId,
+            module_id: activeModule.id,
+            active_seconds: Math.min(gap, 90),
+          });
+        }
+      }
+
       const { data: progressResponse } = await api.post("/api/v1/learner/progress", {
         course_id: courseId,
         module_updates: [{ module_id: activeModule.id, status: "completed" }]
@@ -302,7 +366,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       ]);
 
       setProgressData(moduleProgressResponse.data || {});
-      setSectionProgress(sectionProgressResponse.data || {});
+      setSectionProgress((prev) => mergeSectionProgress(prev, sectionProgressResponse.data || {}));
       setCourseProgress(courseResponse.data?.progress || { status: progressResponse?.course_status || "in_progress" });
       setSectionProgressRefreshTrigger(prev => prev + 1);
       showToast("Module marked complete.", "success");

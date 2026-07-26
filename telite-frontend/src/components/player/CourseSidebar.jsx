@@ -13,12 +13,13 @@ function formatTime(seconds) {
 }
 
 // Component to display live countdown timer for a section
-function SectionCountdownTimer({ minimumTimeSeconds, timeSpentSeconds, isActive, isCompleted }) {
+function SectionCountdownTimer({ minimumTimeSeconds, timeSpentSeconds, isActive, isCompleted, resetKey }) {
   const { formattedTime, isTimeMet, isExpired } = useCountdownTimer({
     minimumTimeSeconds,
     timeSpentSeconds,
     isActive,
-    isCompleted
+    isCompleted,
+    resetKey,
   });
 
   if (!minimumTimeSeconds || minimumTimeSeconds <= 0) {
@@ -351,6 +352,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
                     timeSpentSeconds={sectionProgress[String(section.id)]?.time_spent_seconds || sectionProgress[section.id]?.time_spent_seconds || 0}
                     isActive={!isSectionLocked}
                     isCompleted={sectionProgress[String(section.id)]?.status === "completed" || sectionProgress[section.id]?.status === "completed"}
+                    resetKey={section.id}
                   />
                   {isSectionLocked && (
                     <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: 500 }}>
