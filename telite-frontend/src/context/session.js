@@ -34,6 +34,24 @@ const SESSION_LOCAL_STORAGE_KEYS = [
   "telite_last_dashboard",
 ];
 
+const ROLE_ALIASES = {
+  "category admin": "category_admin",
+  "category-admin": "category_admin",
+  categoryadmin: "category_admin",
+  cat_admin: "category_admin",
+  "super admin": "super_admin",
+  "super-admin": "super_admin",
+  superadmin: "super_admin",
+  "platform admin": "platform_admin",
+  "platform-admin": "platform_admin",
+  platformadmin: "platform_admin",
+};
+
+export function normalizeRole(role) {
+  const normalized = String(role || "learner").trim().toLowerCase();
+  return ROLE_ALIASES[normalized] || normalized;
+}
+
 // ── CSRF helpers ──────────────────────────────────────────────────────────────
 
 /**
@@ -91,7 +109,7 @@ export function getSession() {
 
   try {
     const user = JSON.parse(rawUser);
-    return { user };
+    return { user: { ...user, role: normalizeRole(user.role) } };
   } catch {
     return null;
   }
@@ -167,7 +185,7 @@ export function buildSessionFromAuth(payload) {
     authenticated: true,
     user: {
       user_id: payload.user_id,
-      role: payload.role,
+      role: normalizeRole(payload.role),
       name: payload.name,
       email: payload.email,
       category_scope: payload.category_scope ?? null,
@@ -188,7 +206,7 @@ export function mergeAuthPayload(session, payload) {
     user: {
       ...session?.user,
       user_id: payload.user_id || session?.user?.user_id,
-      role: payload.role || session?.user?.role,
+      role: normalizeRole(payload.role || session?.user?.role),
       name: payload.name || session?.user?.name,
       email: payload.email || session?.user?.email,
       category_scope: payload.category_scope ?? session?.user?.category_scope ?? null,
@@ -206,7 +224,7 @@ export function mergeAuthPayload(session, payload) {
 export function mergeSessionUser(session, user) {
   return {
     ...session,
-    user: { ...session?.user, ...user },
+    user: { ...session?.user, ...user, role: normalizeRole(user?.role || session?.user?.role) },
   };
 }
 
@@ -219,10 +237,14 @@ export function getDefaultRoute(user) {
   if (user.is_platform_admin === true) {
     return "/platform-admin";
   }
-  if (user.role === "super_admin") {
+  const role = normalizeRole(user.role);
+  if (role === "platform_admin") {
+    return "/platform-admin";
+  }
+  if (role === "super_admin") {
     return "/super-admin";
   }
-  if (user.role === "category_admin") {
+  if (role === "category_admin") {
     return `/categories/${user.category_scope || "ats"}/admin`;
   }
   return "/learner";

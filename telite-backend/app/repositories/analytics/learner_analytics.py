@@ -236,6 +236,7 @@ def get_learner_summary(session: Session, user_id: str) -> dict[str, Any]:
         },
         "courses": course_rows,
         "tasks": task_rows,
+        "leaderboard": leaderboard_data,
         "pal_breakdown": {
             "completion": completion_pct,
             "pal_quiz_avg": quiz_avg,

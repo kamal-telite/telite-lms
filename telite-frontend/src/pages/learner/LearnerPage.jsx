@@ -308,9 +308,11 @@ export default function LearnerPage({ session, onLogout }) {
   const notifications = Array.isArray(data.notifications)
     ? data.notifications
     : [];
-  const leaderboard = Array.isArray(data.recommendation?.leaderboard)
-    ? data.recommendation.leaderboard
-    : [];
+  const leaderboard = Array.isArray(data.leaderboard)
+    ? data.leaderboard
+    : Array.isArray(data.recommendation?.leaderboard)
+      ? data.recommendation.leaderboard
+      : [];
 
   const navGroups = [
     {

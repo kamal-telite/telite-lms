@@ -17,6 +17,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [courseProgress, setCourseProgress] = useState(null);
   const [submittingCourse, setSubmittingCourse] = useState(false);
+  const [markingModuleComplete, setMarkingModuleComplete] = useState(false);
   const [certificate, setCertificate] = useState(null);
   const [showCompletionSuccess, setShowCompletionSuccess] = useState(false);
   const [sectionProgressRefreshTrigger, setSectionProgressRefreshTrigger] = useState(0);
@@ -278,7 +279,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   }, [isTimeMet, minimumTimeSeconds, courseId, currentSection?.id]);
 
   const handleModuleComplete = async () => {
-    if (!activeModule) return;
+    if (!activeModule || markingModuleComplete) return;
     
     // Check if section time requirement is met
     if (!isSectionTimeRequirementMet()) {
@@ -287,14 +288,22 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       return;
     }
     
+    setMarkingModuleComplete(true);
     try {
-      await api.post("/api/v1/learner/progress", {
+      const { data: progressResponse } = await api.post("/api/v1/learner/progress", {
         course_id: courseId,
         module_updates: [{ module_id: activeModule.id, status: "completed" }]
       });
-      // Update local progress state
-      setProgressData(prev => ({ ...prev, [activeModule.id]: "completed" }));
-      // Trigger section progress refresh to check if section should be completed
+
+      const [moduleProgressResponse, sectionProgressResponse, courseResponse] = await Promise.all([
+        api.get(`/api/v1/learner/courses/${courseId}/module-progress`),
+        api.get(`/api/v1/learner/courses/${courseId}/section-progress`),
+        api.get(`/api/v1/learner/courses/${courseId}`),
+      ]);
+
+      setProgressData(moduleProgressResponse.data || {});
+      setSectionProgress(sectionProgressResponse.data || {});
+      setCourseProgress(courseResponse.data?.progress || { status: progressResponse?.course_status || "in_progress" });
       setSectionProgressRefreshTrigger(prev => prev + 1);
       showToast("Module marked complete.", "success");
       
@@ -328,7 +337,10 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       }
     } catch (e) {
       console.error("Failed to update progress", e);
-      showToast("Unable to update progress.", "error");
+      const errorMsg = e?.response?.data?.detail || e?.message || "Unable to update progress.";
+      showToast(errorMsg, "error");
+    } finally {
+      setMarkingModuleComplete(false);
     }
   };
 
@@ -722,9 +734,9 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
               <Button 
                 tone="primary" 
                 onClick={handleModuleComplete}
-                disabled={!isSectionTimeRequirementMet()}
+                disabled={markingModuleComplete || !isSectionTimeRequirementMet()}
               >
-                {!isSectionTimeRequirementMet() ? "Wait for timer..." : "Mark Complete"}
+                {markingModuleComplete ? "Marking..." : !isSectionTimeRequirementMet() ? "Wait for timer..." : "Mark Complete"}
               </Button>
             )}
           </div>

@@ -1,7 +1,7 @@
 import React from "react";
 
 import { Navigate } from "react-router-dom";
-import { getDefaultRoute, getSession } from "../context/session";
+import { getDefaultRoute, getSession, normalizeRole } from "../context/session";
 
 /**
  * Route guard for standard organization-scoped routes.
@@ -14,13 +14,14 @@ export function ProtectedRoute({ session: _staleSession, allowRoles, children })
   }
 
   const user = currentSession.user;
+  const role = normalizeRole(user.role);
 
   // Explicitly block Platform Admins from accessing tenant/org-scoped routes
   if (user.is_platform_admin) {
     return <Navigate to="/platform-admin" replace />;
   }
 
-  if (allowRoles && !allowRoles.includes(user.role)) {
+  if (allowRoles && !allowRoles.includes(role)) {
     return <Navigate to={getDefaultRoute(user)} replace />;
   }
   
