@@ -556,7 +556,16 @@ export async function deleteAnnouncement(id) {
 }
 
 export async function fetchSettings() {
-  return unwrap(await api.get("/settings/system"));
+  try {
+    return unwrap(await api.get("/settings/system"));
+  } catch (error) {
+    // The native backend no longer exposes this legacy settings endpoint.
+    // It must not prevent the super-admin dashboard from loading.
+    if (error?.response?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function addAllowedDomain(payload) {

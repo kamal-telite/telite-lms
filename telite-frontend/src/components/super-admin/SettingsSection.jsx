@@ -10,6 +10,24 @@ export default function SettingsSection({
   handleAddDomain, 
   handleDeleteDomain 
 }) {
+  if (!settings) {
+    return (
+      <section id="section-settings">
+        <Panel
+          title="System settings"
+          subtitle="This legacy system-settings service is not available in the current backend."
+        >
+          <div className="soft-card soft-card--tinted">
+            <div className="row-title">Settings unavailable</div>
+            <div className="row-subtitle">
+              The rest of the super-admin dashboard remains available. Contact an administrator if system settings are required.
+            </div>
+          </div>
+        </Panel>
+      </section>
+    );
+  }
+
   return (
     <section id="section-settings">
       <Panel

@@ -178,7 +178,7 @@ export const useSuperAdminStore = create((set) => ({
       set({
         dashboard: normalizeSuperAdminDashboard(dashboardPayload, users),
         users,
-        settings: settingsPayload || {},
+        settings: settingsPayload,
         verifications: asArray(verifPayload?.verifications),
         organizations: isolatedOrgs,
         loading: false

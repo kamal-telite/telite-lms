@@ -1,4 +1,5 @@
 import copy
+import copy
 from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,13 +30,13 @@ class PublishingRepository(BaseRepository):
         )
         return self.session.execute(stmt).scalars().all()
 
-    def get_version(self, version_id: int, org_id: int) -> CourseVersion | None:
+    def get_version(self, version_id: str, org_id: int) -> CourseVersion | None:
         stmt = select(CourseVersion).where(
             CourseVersion.id == version_id, CourseVersion.org_id == org_id
         )
         return self.session.execute(stmt).scalar_one_or_none()
 
-    def create_version(self, course_id: str, org_id: int, version_number: int, parent_version_id: int | None = None, snapshot: dict | None = None) -> CourseVersion:
+    def create_version(self, course_id: str, org_id: int, version_number: int, parent_version_id: str | None = None, snapshot: dict | None = None, created_by: str | None = None) -> CourseVersion:
         import uuid
         version = CourseVersion(
             id=uuid.uuid4().hex,
@@ -44,7 +45,8 @@ class PublishingRepository(BaseRepository):
             version_number=version_number,
             parent_version_id=parent_version_id,
             snapshot_json=snapshot,
-            status="draft"
+            status="draft",
+            created_by=created_by,
         )
         self.session.add(version)
         self.session.flush()
@@ -89,7 +91,6 @@ class PublishingRepository(BaseRepository):
             # Resolve Question Bank references (Hybrid Model)
             if block.block_type == "quiz" and "questions" in settings:
                 from app.models.question import QuestionVersion
-                from datetime import datetime, timezone
                 
                 hydrated_questions = []
                 for q in settings["questions"]:
