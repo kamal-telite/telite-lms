@@ -6,6 +6,52 @@
   gap: var(--space-16);
 }
 
+.learners-tab-panel .panel__header {
+  padding: var(--space-12) var(--space-16);
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.learners-tab-panel .panel__header h3 {
+  line-height: 1.25;
+}
+
+.learners-tab-panel .panel__header p {
+  margin-top: var(--space-4);
+}
+
+.learners-tab-panel .panel__action {
+  margin-left: auto;
+  align-self: flex-start;
+}
+
+.learners-tab-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.learners-tab-toolbar .field__input {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.learners-tab-toolbar .field__select {
+  flex: 0 0 120px;
+}
+
+.learners-tab-toolbar .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.learners-tab-panel .panel__body {
+  padding: var(--space-12) var(--space-16) var(--space-16);
+}
+
 /* Shared toolbar spacing below panel header content */
 .admin-tab-toolbar {
   display: flex;
@@ -293,8 +339,20 @@
 
 /* Panel header actions — list/kanban + CTA alignment */
 .panel__action .split-actions {
+  display: flex;
   align-items: center;
   gap: var(--space-12);
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.panel__action .split-actions .field__input {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.panel__action .split-actions .btn {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 640px) {

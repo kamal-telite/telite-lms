@@ -19,12 +19,13 @@ export default function LearnersTab({
   dashboard
 }) {
   return (
-    <div className="tab-stack">
+    <div className="tab-stack"  >
       <Panel
+        className="learners-tab-panel"
         title={`Manage ${labels.users}`}
         subtitle={`Overview of ${labels.users.toLowerCase()} enrolled in ${dashboard.category?.name}`}
         action={
-          <div className="toolbar">
+          <div className="learners-tab-toolbar" >
             <input
               className="field__input"
               placeholder={`Search by name or email...`}

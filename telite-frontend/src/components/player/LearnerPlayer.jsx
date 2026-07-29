@@ -71,8 +71,26 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           // Find the module to activate based on sequential progression
           if (resumeData.last_module_id && data.modules_json) {
             const mod = data.modules_json.find(m => m.id === resumeData.last_module_id);
-            if (mod) setActiveModule(mod);
-            else if (data.modules_json.length > 0) setActiveModule(data.modules_json[0]);
+            if (mod) {
+              try {
+                const validation = await api.post("/api/v1/learner/validate-access", {
+                  target_type: "module",
+                  target_id: mod.id,
+                });
+                if (validation.data.allowed) {
+                  setActiveModule(mod);
+                } else {
+                  const unlockedModule = data.modules_json.find((candidate) =>
+                    candidate && candidate.id && candidate.id !== mod.id,
+                  );
+                  if (unlockedModule) setActiveModule(unlockedModule);
+                }
+              } catch {
+                setActiveModule(mod);
+              }
+            } else if (data.modules_json.length > 0) {
+              setActiveModule(data.modules_json[0]);
+            }
           } else if (data.modules_json && data.modules_json.length > 0) {
             setActiveModule(data.modules_json[0]);
           }
@@ -342,15 +360,38 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     try {
       if (minimumTimeSeconds > 0 && timeSpentSeconds < minimumTimeSeconds && isTimeMet) {
         await flushRef.current();
-        const gap = minimumTimeSeconds - timeSpentSeconds;
+
+        let remaining = minimumTimeSeconds - timeSpentSeconds;
         const sessionId = sessionIdRef.current;
-        if (gap > 0 && sessionId) {
+
+        while (remaining > 0 && sessionId) {
+          const sendSeconds = Math.min(remaining, 90);
           await heartbeatLearningSession({
             session_id: sessionId,
             course_id: courseId,
             module_id: activeModule.id,
-            active_seconds: Math.min(gap, 90),
+            active_seconds: sendSeconds,
           });
+          remaining -= sendSeconds;
+
+          if (remaining > 0) {
+            try {
+              const { data: sectionProgressData } = await api.get(
+                `/api/v1/learner/courses/${courseId}/section-progress`,
+              );
+              const spent =
+                sectionProgressData?.[currentSection?.id]?.time_spent_seconds ??
+                sectionProgressData?.[String(currentSection?.id)]?.time_spent_seconds ??
+                0;
+              if (spent >= minimumTimeSeconds) {
+                break;
+              }
+              remaining = minimumTimeSeconds - spent;
+            } catch (syncErr) {
+              console.warn("Failed to refresh section progress while syncing time", syncErr);
+              break;
+            }
+          }
         }
       }
 
@@ -397,7 +438,28 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
       }
       
       if (nextModule) {
-        setActiveModule(nextModule);
+        const currentSectionId = currentSection?.id;
+        const refreshedSectionProgress = sectionProgressResponse.data || {};
+        const currentSectionProgressRefreshed = currentSectionId
+          ? refreshedSectionProgress[String(currentSectionId)] || refreshedSectionProgress[currentSectionId]
+          : null;
+        const currentSectionCompleted = currentSectionProgressRefreshed?.status === "completed";
+        const nextModuleInCurrentSection = currentSectionId && nextModule.section_id === currentSectionId;
+
+        // Only auto-advance to the next section if the current section is completed and unlocked.
+        if (nextModuleInCurrentSection || currentSectionCompleted) {
+          try {
+            const { data: validationData } = await api.post("/api/v1/learner/validate-access", {
+              target_type: "module",
+              target_id: nextModule.id,
+            });
+            if (validationData.allowed) {
+              setActiveModule(nextModule);
+            }
+          } catch (validationError) {
+            console.warn("Next module access validation failed", validationError);
+          }
+        }
       }
     } catch (e) {
       console.error("Failed to update progress", e);

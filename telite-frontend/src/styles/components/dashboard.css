@@ -1,6 +1,7 @@
 /* Dashboard Layout Components */
 
 .dashboard-shell {
+  --dashboard-header-height: calc(var(--space-16) * 2 + var(--space-24));
   display: flex;
   min-height: 100vh;
   background: var(--surface-2);
@@ -53,8 +54,9 @@
 }
 
 .dashboard-sidebar--collapsed .sidebar-brand {
-  padding: 18px 0;
+  padding: 0;
   justify-content: center;
+  min-height: var(--dashboard-header-height);
 }
 
 .dashboard-sidebar--collapsed .nav-item {
@@ -68,9 +70,10 @@
 
 .sidebar-brand {
   display: flex;
-  gap: 12px;
+  gap: var(--space-12);
   align-items: center;
-  padding: 18px 16px;
+  padding: 0 var(--space-16);
+  min-height: var(--dashboard-header-height);
   border-bottom: 1px solid var(--border);
 }
 
@@ -219,7 +222,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  min-height: 56px;
+  min-height: var(--dashboard-header-height);
   background: color-mix(in srgb, var(--surface-raised) 0.94, transparent);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
@@ -267,7 +270,7 @@
 
 .topbar__actions {
   display: flex;
-  gap: 10px;
+  gap: var(--space-12);
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -344,9 +347,12 @@
 }
 
 @media (max-width: 640px) {
+  .dashboard-shell {
+    --dashboard-header-height: calc(var(--space-20) * 3);
+  }
+
   .topbar {
     padding: 0 14px;
-    min-height: 60px;
     gap: 10px;
   }
 

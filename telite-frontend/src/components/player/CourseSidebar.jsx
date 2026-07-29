@@ -157,7 +157,7 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
         validationAbortControllerRef.current.abort();
       }
     };
-  }, [course?.id, modules]);
+  }, [course?.id, modules, progressData, sectionProgress, courseProgress]);
 
   // Auto-expand sections containing the active module
   useEffect(() => {

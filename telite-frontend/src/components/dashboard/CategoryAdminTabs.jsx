@@ -126,7 +126,7 @@ export function ReportsTab({ dashboard, learners }) {
           (learners || []).map(l => `"${l.full_name}",${l.total_courses},${l.courses_completed},${l.pal_score}%,${l.last_active || "N/A"},${l.is_active ? "Active" : "Inactive"}`).join("\n");
       } else if (reportType === "enrollment_summary") {
         csvContent = "Period,New Enrollments,Approved,Denied,Manual,Self\n" +
-          `"This Month",${dashboard?.kpis?.pending_verifications || 0},${dashboard?.kpis?.active_learners || 0},0,0,0`;
+          `"This Month",${dashboard?.kpis?.pending_enrollment || 0},${dashboard?.kpis?.active_learners || 0},0,0,0`;
       }
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
@@ -166,7 +166,7 @@ export function ReportsTab({ dashboard, learners }) {
         ]);
       } else if (reportType === "enrollment_summary") {
         head = [["Period", "New Enrollments", "Approved", "Denied", "Manual", "Self"]];
-        body = [["This Month", dashboard?.kpis?.pending_verifications || 0, dashboard?.kpis?.active_learners || 0, 0, 0, 0]];
+        body = [["This Month", dashboard?.kpis?.pending_enrollment || 0, dashboard?.kpis?.active_learners || 0, 0, 0, 0]];
       }
 
       autoTable(doc, {
@@ -305,7 +305,7 @@ export function ReportsTab({ dashboard, learners }) {
             <tbody>
               <tr>
                 <td><div className="row-title">This Month</div></td>
-                <td>{dashboard?.kpis?.pending_verifications || 0}</td>
+                <td>{dashboard?.kpis?.pending_enrollment || 0}</td>
                 <td>{dashboard?.kpis?.active_learners || 0}</td>
                 <td>0</td>
                 <td>0</td>
@@ -659,7 +659,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
             <div className="dashboard-stack">
               {[
                 { title: "Enrollment Requests", desc: "Get notified when a user requests enrollment to a course." },
-                { title: "Verification Alerts", desc: "Get notified about new account verification requests." },
+                { title: "Assignment Alerts", desc: "Get notified about new submission reviews and pending grade actions." },
                 { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
                 { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." }
               ].map((item, idx) => (

@@ -56,7 +56,9 @@ export default function OrgRouter({ session, onLogout }) {
               path="question-banks/*"
               element={
                 <ProtectedRoute session={session} allowRoles={["category_admin"]}>
-                  <QuestionBankManagerPage session={session} onLogout={onLogout} />
+                  <CategoryAdminPage session={session} onLogout={onLogout}>
+                    <QuestionBankManagerPage session={session} onLogout={onLogout} embedded />
+                  </CategoryAdminPage>
                 </ProtectedRoute>
               }
             />
@@ -64,7 +66,9 @@ export default function OrgRouter({ session, onLogout }) {
               path="announcements"
               element={
                 <ProtectedRoute session={session} allowRoles={["category_admin"]}>
-                  <AnnouncementManagementPage session={session} onLogout={onLogout} />
+                  <CategoryAdminPage session={session} onLogout={onLogout}>
+                    <AnnouncementManagementPage session={session} onLogout={onLogout} embedded />
+                  </CategoryAdminPage>
                 </ProtectedRoute>
               }
             />

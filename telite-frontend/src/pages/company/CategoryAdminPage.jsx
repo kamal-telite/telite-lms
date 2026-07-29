@@ -3,8 +3,6 @@ import { useNavigate, useParams, useLocation, useSearchParams } from "react-rout
 import {
   approveEnrollmentRequest,
   approveAssignmentSubmission,
-  approveVerification,
-  bulkUploadVerifications,
   createCourse,
   createTask,
   deleteCourse,
@@ -17,7 +15,6 @@ import {
   manualEnroll,
   rejectEnrollmentRequest,
   rejectAssignmentSubmission,
-  rejectVerification,
   reviewTask,
   updateCourse,
   updateTask,
@@ -42,7 +39,7 @@ import { useKpiPulse } from "../../hooks/useKpiPulse";
 import { ActivityFeedTab, SettingsTab, ReportsTab, PalTrackerTab, TasksTab, ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
 import { useDashboardStore } from "../../store/dashboardStore";
 import { ErrorBoundary, CourseEditorModal, LearnerEditorModal, TaskAssignModal } from "../../features/admin/category/dashboard-shell/Dialogs";
-import { LEARNER_INITIAL, tabs } from "../../features/admin/category/dashboard-shell/constants";
+import { LEARNER_INITIAL, tabs, buildCategoryAdminNavGroups } from "../../features/admin/category/dashboard-shell/constants";
 import { exportCategoryCsv, exportCategoryPdf } from "../../features/admin/category/dashboard-shell/exportUtils";
 import OverviewTab from "../../components/category-admin/OverviewTab";
 import CoursesTab from "../../components/category-admin/CoursesTab";
@@ -52,7 +49,7 @@ import AssignmentVerificationTab from "../../components/category-admin/Assignmen
 import QuizAttemptsTab from "../../components/category-admin/QuizAttemptsTab";
 import GradingTab from "../../components/category-admin/GradingTab";
 
-function CategoryAdminPageContent({ session, onLogout }) {
+function CategoryAdminPageContent({ session, onLogout, children }) {
   const navigate = useNavigate();
   const { slug = "ats" } = useParams();
   const { showToast } = useToast();
@@ -60,8 +57,7 @@ function CategoryAdminPageContent({ session, onLogout }) {
     dashboard, 
     dashboardLoading: loading, 
     dashboardError: error, 
-    fetchDashboardData, 
-    fetchVerificationsData,
+    fetchDashboardData,
     updateTaskState
   } = useDashboardStore();
   const location = useLocation();
@@ -84,11 +80,6 @@ function CategoryAdminPageContent({ session, onLogout }) {
   const [manualForm, setManualForm] = useState(LEARNER_INITIAL);
   const [manualErrors, setManualErrors] = useState({});
   const [manualSuccess, setManualSuccess] = useState("");
-  /* eslint-disable no-unused-vars -- retained for the existing verification bulk-upload flow, which is routed but not currently rendered in this page shell. */
-  const [bulkFile, setBulkFile] = useState(null);
-  const [bulkResult, setBulkResult] = useState(null);
-  const [bulkLoading, setBulkLoading] = useState(false);
-  /* eslint-enable no-unused-vars */
   const [gradingAnalytics, setGradingAnalytics] = useState(null);
   const [gradingLoading, setGradingLoading] = useState(false);
   const [gradingFilters, setGradingFilters] = useState({ course: "", learner: "", type: "", status: "", grade: "", from: "", to: "", search: "" });
@@ -277,51 +268,6 @@ function CategoryAdminPageContent({ session, onLogout }) {
     }
   }
 
-  const loadVerifications = useCallback(async () => {
-    await fetchVerificationsData(slug);
-  }, [fetchVerificationsData, slug]);
-
-  useEffect(() => {
-    if (resolvedTab === "verifications") {
-      loadVerifications();
-    }
-  }, [resolvedTab, loadVerifications]);
-
-  // eslint-disable-next-line no-unused-vars -- retained for the routed verification flow.
-  async function handleVerification(id, action, reason = "") {
-    try {
-      if (action === "approve") {
-        await approveVerification(id);
-        showToast("Account approved", "success");
-      } else {
-        await rejectVerification(id, reason);
-        showToast("Account rejected", "warning");
-      }
-      await loadVerifications();
-    } catch (err) {
-      showToast(getErrorMessage(err, `Failed to ${action} account`), "error");
-    }
-  }
-
-  // eslint-disable-next-line no-unused-vars -- retained for the routed verification flow.
-  async function handleBulkUpload(e) {
-    e.preventDefault();
-    if (!bulkFile) return;
-
-    setBulkLoading(true);
-    setBulkResult(null);
-    try {
-      const result = await bulkUploadVerifications(bulkFile);
-      setBulkResult(result);
-      showToast("Bulk verification completed", "success");
-      await loadVerifications();
-    } catch (err) {
-      showToast(getErrorMessage(err, "Bulk upload failed"), "error");
-    } finally {
-      setBulkLoading(false);
-    }
-  }
-
   async function load() {
     await fetchDashboardData(slug);
   }
@@ -449,42 +395,11 @@ function CategoryAdminPageContent({ session, onLogout }) {
     return <ErrorState body={error || "The admin dashboard did not return data."} action={<Button tone="primary" onClick={load}>Retry</Button>} />;
   }
 
-  const navGroups = [
-    {
-      label: "Overview",
-      items: [
-        { id: "dashboard", label: "Dashboard", icon: "dashboard" },
-        { id: "activity", label: "Activity feed", icon: "reports" },
-      ],
-    },
-    {
-      label: "Management",
-      items: [
-        { id: "courses", label: "Courses", icon: "course", badge: String(dashboard.kpis.total_courses), badgeTone: "brand" },
-        { id: "question_banks", label: "Question banks", icon: "database" },
-        { id: "announcements", label: "Announcements", icon: "bell" },
-        { id: "learners", label: "Learners", icon: "users", badge: String(dashboard.kpis.active_learners), badgeTone: "brand" },
-        { id: "enrollment", label: "Enrollment", icon: "enrollments", badge: String(dashboard.kpis.pending_enrollment), badgeTone: "warn" },
-        { id: "verifications", label: "Verifications", icon: "shield", badge: String(dashboard.kpis.pending_verifications || 0), badgeTone: "warn" },
-        { id: "assignment_verification", label: "Assignment verification", icon: "task", badge: String(assignmentQueue?.stats?.pending || 0), badgeTone: "warn" },
-        { id: "tasks", label: "Tasks", icon: "task", badge: String(dashboard.tasks.length), badgeTone: "neutral" },
-      ],
-    },
-    {
-      label: "Analytics",
-      items: [
-        { id: "pal", label: "PAL tracking", icon: "leaderboard" },
-        { id: "reports", label: "Reports", icon: "analytics" },
-      ],
-    },
-    {
-      label: "Settings",
-      items: [
-        { id: "settings", label: "Settings", icon: "settings" },
-
-      ],
-    },
-  ];
+  const navGroups = buildCategoryAdminNavGroups({
+    kpis: dashboard?.kpis || {},
+    tasks: dashboard?.tasks || [],
+    assignmentQueueStats: assignmentQueue?.stats || {},
+  });
 
   const currentCourse = (dashboard?.courses || []).find((course) => course.id === detailLearner?.current_course_id);
   const pendingTasks = (dashboard?.tasks || []).filter((task) => !["approved", "completed"].includes(task.status));
@@ -507,10 +422,15 @@ function CategoryAdminPageContent({ session, onLogout }) {
   } else if (currentSegment === "settings") {
     activeNav = "settings";
     activeTab = "settings";
-
   } else if (currentSegment === "profile") {
     activeNav = "settings";
     activeTab = searchParams.get("tab") || "profile";
+  } else if (currentSegment === "announcements") {
+    activeNav = "announcements";
+    activeTab = "overview";
+  } else if (currentSegment === "question-banks") {
+    activeNav = "question_banks";
+    activeTab = "overview";
   } else {
     const mapped = {
       overview: "dashboard",
@@ -520,7 +440,6 @@ function CategoryAdminPageContent({ session, onLogout }) {
       pal: "pal",
       tasks: "tasks",
       reports: "reports",
-      verifications: "verifications",
       assignment_verification: "assignment_verification",
     };
     activeNav = mapped[activeTab] || "dashboard";
@@ -572,7 +491,6 @@ function CategoryAdminPageContent({ session, onLogout }) {
             enrollment: "enrollment",
             pal: "pal",
             tasks: "tasks",
-            verifications: "verifications",
             assignment_verification: "assignment_verification",
           };
           const targetTab = mapped[item.id] || "overview";
@@ -638,10 +556,15 @@ function CategoryAdminPageContent({ session, onLogout }) {
             }} />
           </>
         }
-        tabBar={activeNav !== "activity" && activeNav !== "settings" ? <TabBar tabs={tabs} activeTab={activeTab} onChange={handleTabChange} /> : null}
+        tabBar={
+        !["activity", "settings", "announcements", "question_banks"].includes(activeNav)
+          ? <TabBar tabs={tabs} activeTab={activeTab} onChange={handleTabChange} />
+          : null
+      }
       >
-        <div className="dashboard-stack">
-          {activeTab === "overview" ? (
+        {children ?? (
+          <div className="dashboard-stack">
+            {activeTab === "overview" ? (
             <OverviewTab 
               dashboard={dashboard}
               labels={labels}
@@ -783,7 +706,8 @@ function CategoryAdminPageContent({ session, onLogout }) {
             />
           ) : null}
 
-        </div>
+          </div>
+        )}
       </DashboardShell>
 
       <CourseEditorModal
