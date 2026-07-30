@@ -160,6 +160,7 @@ class PublishingRepository(BaseRepository):
                 "id": section.id,
                 "title": section.title,
                 "sort_order": section.sort_order,
+                "minimum_time_seconds": section.minimum_time_seconds or 0,
                 "modules": modules_by_section.get(section.id, []),
             }
             for section in sections

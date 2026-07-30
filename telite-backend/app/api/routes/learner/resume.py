@@ -97,9 +97,21 @@ def resume_course(
 
             if previous_section:
                 prev_sp = progress_repo.get_section_progress(current_user.id, previous_section.id, current_user.org_id)
+                # Check if previous section is completed (both modules and time requirement)
                 if not prev_sp or prev_sp.status != "completed":
                     # Previous section not completed, skip this section
                     continue
+                
+                # Additionally check if minimum time requirement is met (same logic as MinimumSectionTimeEvaluator)
+                if previous_section.minimum_time_seconds and previous_section.minimum_time_seconds > 0:
+                    time_spent = (prev_sp.time_spent_seconds if prev_sp else 0) or 0
+                    if time_spent < previous_section.minimum_time_seconds:
+                        # Time requirement not met, skip this section
+                        logger.info(
+                            f"Resume: Previous section {previous_section.id} time requirement not met "
+                            f"(spent {time_spent}s, required {previous_section.minimum_time_seconds}s)"
+                        )
+                        continue
 
         # Get modules in this section, ordered by sort_order
         modules = db.query(CourseModule).filter(

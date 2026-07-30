@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { IconButton } from "../../components/common/ui";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import "./builder.css";
 
 export function BuilderDrawer({ open, onClose, title, subtitle, children }) {
@@ -15,15 +16,7 @@ export function BuilderDrawer({ open, onClose, title, subtitle, children }) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Prevent body scroll when drawer is open
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
+  useBodyScrollLock(open);
 
   return createPortal(
     <>

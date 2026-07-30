@@ -172,7 +172,8 @@ def update_progress(
                 sp.status = "in_progress"
                 sp.started_at = sp.started_at or datetime.utcnow()
         
-        # Mark section as completed if all modules are completed AND minimum time requirement is met
+        # A section is complete only when all of its modules are complete and
+        # its configured minimum time has been satisfied.
         time_requirement_met = True
         if section.minimum_time_seconds and section.minimum_time_seconds > 0:
             time_requirement_met = (sp.time_spent_seconds or 0) >= section.minimum_time_seconds
@@ -192,10 +193,12 @@ def update_progress(
             f"Current status: {sp.status}"
         )
         
-        if completed_in_section == len(section_modules) and time_requirement_met and sp.status != "completed":
+        should_complete = completed_in_section == len(section_modules) and time_requirement_met
+        
+        if should_complete and sp.status != "completed":
             sp.status = "completed"
             sp.completed_at = datetime.utcnow()
-            logger.info(f"Section {section.id} marked as completed during progress update")
+            logger.info(f"Section {section.id} marked as completed during progress update (time met: {time_requirement_met}, modules complete: {completed_in_section == len(section_modules)})")
             # Emit SECTION_COMPLETED event
             db.add(LearnerEvent(
                 user_id=current_user.id,

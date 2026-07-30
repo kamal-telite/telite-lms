@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import TokenData
@@ -62,7 +63,7 @@ def list_question_banks(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    stmt = QuestionBank.__table__.select().where(QuestionBank.org_id == current_user.org_id)
+    stmt = select(QuestionBank).where(QuestionBank.org_id == current_user.org_id)
     return db.execute(stmt).scalars().all()
 
 
@@ -180,7 +181,7 @@ def get_question_bank(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    stmt = QuestionBank.__table__.select().where(QuestionBank.id == bank_id, QuestionBank.org_id == current_user.org_id)
+    stmt = select(QuestionBank).where(QuestionBank.id == bank_id, QuestionBank.org_id == current_user.org_id)
     bank = db.execute(stmt).scalar_one_or_none()
     if not bank:
         raise HTTPException(status_code=404, detail="Question bank not found")

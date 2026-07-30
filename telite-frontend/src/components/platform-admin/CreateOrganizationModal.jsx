@@ -2,9 +2,11 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "../../components/common/ui";
 import { platformApi } from "../../services/platform";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 export default function CreateOrganizationModal({ open, onClose, onCreated }) {
   const { showToast } = useToast();
+  useBodyScrollLock(open);
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", type: "college", domain: "", slug: "", super_admin_email: "" });

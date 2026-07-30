@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.progression_rule import ProgressionRule
 from app.models.module_progress import ModuleProgress
+from app.models.section_progress import SectionProgress
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
 
@@ -452,6 +453,54 @@ class ProgressionRuleEngine:
             org_id=org_id,
             session=self.session,
         )
+
+        if target_type == "module":
+            module = self.session.query(CourseModule).filter(
+                CourseModule.id == target_id,
+                CourseModule.org_id == org_id,
+                CourseModule.deleted_at.is_(None),
+            ).first()
+            if module and module.section_id:
+                section_result = self.validate_access(
+                    user_id=user_id,
+                    target_type="section",
+                    target_id=module.section_id,
+                    org_id=org_id,
+                )
+                if not section_result.allowed:
+                    return section_result
+
+        if target_type == "section":
+            current_section = self.session.query(CourseSection).filter(
+                CourseSection.id == target_id,
+                CourseSection.org_id == org_id,
+                CourseSection.deleted_at.is_(None),
+            ).first()
+            if not current_section:
+                return AccessValidationResult(allowed=False, reason="Section not found")
+
+            previous_section = (
+                self.session.query(CourseSection)
+                .filter(
+                    CourseSection.course_id == current_section.course_id,
+                    CourseSection.org_id == org_id,
+                    CourseSection.deleted_at.is_(None),
+                    CourseSection.sort_order < current_section.sort_order,
+                )
+                .order_by(CourseSection.sort_order.desc())
+                .first()
+            )
+            if previous_section:
+                previous_progress = self.session.query(SectionProgress).filter(
+                    SectionProgress.user_id == user_id,
+                    SectionProgress.section_id == previous_section.id,
+                    SectionProgress.org_id == org_id,
+                ).first()
+                if not previous_progress or previous_progress.status != "completed":
+                    return AccessValidationResult(
+                        allowed=False,
+                        reason=f"Complete '{previous_section.title}' first",
+                    )
 
         rules = self._load_rules(target_type, target_id, org_id)
         logger.info(f"Found {len(rules)} active rules for {target_type}:{target_id}")

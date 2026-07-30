@@ -80,10 +80,17 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
                 if (validation.data.allowed) {
                   setActiveModule(mod);
                 } else {
-                  const unlockedModule = data.modules_json.find((candidate) =>
-                    candidate && candidate.id && candidate.id !== mod.id,
-                  );
-                  if (unlockedModule) setActiveModule(unlockedModule);
+                  for (const candidate of data.modules_json) {
+                    if (!candidate?.id) continue;
+                    const candidateValidation = await api.post("/api/v1/learner/validate-access", {
+                      target_type: "module",
+                      target_id: candidate.id,
+                    });
+                    if (candidateValidation.data.allowed) {
+                      setActiveModule(candidate);
+                      break;
+                    }
+                  }
                 }
               } catch {
                 setActiveModule(mod);
@@ -771,6 +778,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           refreshTrigger={sectionProgressRefreshTrigger}
           courseProgress={courseProgress}
           sectionProgress={sectionProgress}
+          activeSectionTimer={{ formattedTime, isTimeMet }}
         />
       </div>
 

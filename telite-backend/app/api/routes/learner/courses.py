@@ -118,6 +118,14 @@ def get_learner_course(
         if version and version.snapshot_json:
             snapshot = version.snapshot_json
             snapshot_sections = []
+            section_minimum_times = dict(db.query(
+                CourseSection.id,
+                CourseSection.minimum_time_seconds,
+            ).filter(
+                CourseSection.course_id == course.id,
+                CourseSection.org_id == current_user.org_id,
+                CourseSection.deleted_at.is_(None),
+            ).all())
             # Sort sections by sort_order
             sorted_sections = sorted(snapshot.get("sections", []), key=lambda s: s.get("sort_order", 0))
             for section in sorted_sections:
@@ -144,15 +152,27 @@ def get_learner_course(
                     "org_id": section.get("org_id"),
                     "title": section.get("title", ""),
                     "sort_order": section.get("sort_order", 0),
+                    "minimum_time_seconds": (
+                        section.get("minimum_time_seconds")
+                        if section.get("minimum_time_seconds") is not None
+                        else section_minimum_times.get(section.get("id"), 0)
+                    ) or 0,
                     "deleted_at": section.get("deleted_at"),
                     "deleted_by": section.get("deleted_by"),
                     "modules": section_modules,
                 })
+            modules_json = [
+                module
+                for section in snapshot_sections
+                for module in section.get("modules", [])
+            ]
             return {
                 "id": course.id,
                 "name": snapshot.get("course", {}).get("name", course.name),
                 "description": course.description,
                 "sections": snapshot_sections,
+                "modules_json": modules_json,
+                "progress": cp.to_dict() if cp else None,
                 "version": enrolled_version,
             }
 

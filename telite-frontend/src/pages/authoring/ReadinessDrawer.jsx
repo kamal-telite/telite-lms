@@ -1,6 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../../components/common/ui";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import "./builder.css";
 
 function getFixLabel(type, fixTarget) {
@@ -27,6 +28,8 @@ function getFixIcon(type) {
 }
 
 export function ReadinessDrawer({ open, onClose, validationResults, onFixValidation }) {
+  useBodyScrollLock(open);
+
   const errors = validationResults.filter(r => r.severity === "error");
   const warnings = validationResults.filter(r => r.severity === "warning");
   const infos = validationResults.filter(r => r.severity === "info");

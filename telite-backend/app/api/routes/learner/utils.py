@@ -216,7 +216,7 @@ def apply_active_seconds(
                 org_id=current_user.org_id,
                 status="in_progress",
                 completion_percentage=0.0,
-                time_spent_seconds=0,
+                time_spent_seconds=seconds,
                 started_at=now,
                 last_entered_at=now,
             )
@@ -254,11 +254,12 @@ def apply_active_seconds(
             if section.minimum_time_seconds and section.minimum_time_seconds > 0:
                 time_requirement_met = (sp.time_spent_seconds or 0) >= section.minimum_time_seconds
             
-            # Auto-complete section if all modules completed AND time requirement is met
-            if completed_in_section == len(section_modules) and time_requirement_met:
+            should_complete = completed_in_section == len(section_modules) and time_requirement_met
+            
+            if should_complete and sp.status != "completed":
                 sp.status = "completed"
                 sp.completed_at = now
-                logger.info(f"Section {section_id} marked as completed via heartbeat (time requirement met)")
+                logger.info(f"Section {section_id} marked as completed via heartbeat (time met: {time_requirement_met}, modules complete: {completed_in_section == len(section_modules)})")
             elif len(section_modules) == 0:
                 sp.status = "completed"
                 sp.completed_at = now

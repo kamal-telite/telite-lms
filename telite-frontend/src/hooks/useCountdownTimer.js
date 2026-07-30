@@ -23,7 +23,8 @@ export function useCountdownTimer({
   const intervalRef = useRef(null);
   const lastUpdateTimeRef = useRef(null);
   const isInitializedRef = useRef(false);
-  const expiredLocallyRef = useRef(false);
+  const [initializedKey, setInitializedKey] = useState(null);
+  const expiredKeyRef = useRef(null);
   const prevResetKeyRef = useRef(resetKey);
 
   const serverRequirementMet =
@@ -48,20 +49,24 @@ export function useCountdownTimer({
     prevResetKeyRef.current = resetKey;
 
     if (resetKeyChanged) {
-      expiredLocallyRef.current = false;
+      expiredKeyRef.current = null;
     }
 
-    if (serverRequirementMet) {
-      expiredLocallyRef.current = true;
+    // Only expire immediately if the section is already marked as completed
+    // Don't expire just because time requirement is met - let the timer count down naturally
+    if (isCompleted) {
+      expiredKeyRef.current = resetKey;
       setRemainingSeconds(0);
       lastUpdateTimeRef.current = Date.now();
       isInitializedRef.current = true;
+      setInitializedKey(resetKey);
       return;
     }
 
-    if (expiredLocallyRef.current) {
+    if (expiredKeyRef.current === resetKey) {
       setRemainingSeconds(0);
       lastUpdateTimeRef.current = Date.now();
+      setInitializedKey(resetKey);
       return;
     }
 
@@ -78,7 +83,8 @@ export function useCountdownTimer({
 
     lastUpdateTimeRef.current = Date.now();
     isInitializedRef.current = true;
-  }, [resetKey, calculateRemaining, serverRequirementMet]);
+    setInitializedKey(resetKey);
+  }, [resetKey, calculateRemaining, isCompleted]);
 
   useEffect(() => {
     if (intervalRef.current) {
@@ -89,7 +95,7 @@ export function useCountdownTimer({
     if (
       !isActive ||
       serverRequirementMet ||
-      expiredLocallyRef.current ||
+      expiredKeyRef.current === resetKey ||
       !minimumTimeSeconds ||
       minimumTimeSeconds <= 0
     ) {
@@ -109,7 +115,7 @@ export function useCountdownTimer({
         setRemainingSeconds((prev) => {
           const newRemaining = Math.max(0, prev - elapsed);
           if (newRemaining <= 0) {
-            expiredLocallyRef.current = true;
+            expiredKeyRef.current = resetKey;
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
@@ -140,14 +146,27 @@ export function useCountdownTimer({
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  const hasRequirement = minimumTimeSeconds > 0;
+  const isCurrentTimerInitialized = initializedKey === resetKey;
+  const isExpiredLocally = expiredKeyRef.current === resetKey;
   const isTimeMet =
-    serverRequirementMet || expiredLocallyRef.current || remainingSeconds <= 0;
+    !hasRequirement ||
+    serverRequirementMet ||
+    isExpiredLocally ||
+    (isCurrentTimerInitialized && remainingSeconds <= 0);
   const isExpired =
-    (expiredLocallyRef.current || remainingSeconds <= 0) && minimumTimeSeconds > 0;
-  const formattedTime = formatMMSS(remainingSeconds);
+    hasRequirement && (
+      serverRequirementMet ||
+      isExpiredLocally ||
+      (isCurrentTimerInitialized && remainingSeconds <= 0)
+    );
+  const displayRemainingSeconds = isCurrentTimerInitialized
+    ? remainingSeconds
+    : calculateRemaining();
+  const formattedTime = formatMMSS(displayRemainingSeconds);
 
   return {
-    remainingSeconds,
+    remainingSeconds: displayRemainingSeconds,
     formattedTime,
     isTimeMet,
     isExpired,
