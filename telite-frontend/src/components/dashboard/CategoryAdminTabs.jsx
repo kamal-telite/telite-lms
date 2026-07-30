@@ -1,11 +1,17 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { Avatar, Badge, Button, EmptyState, Panel, useToast } from "../common/ui";
+import { Avatar, Badge, Button, EmptyState, Modal, Panel, useToast } from "../common/ui";
 import { TaskBoardKanban } from "./TaskBoard";
 import { ChartCanvas } from "../common/charts";
 import { Icon } from "../common/icons";
 import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent, getRankColor } from "../../utils/formatters";
+import {
+  fetchArchivedCourses,
+  getErrorMessage,
+  permanentlyDeleteArchivedCourse,
+  restoreArchivedCourse,
+} from "../../services/client";
 
 export function ActivityFeedTab({ events = [] }) {
   const [filter, setFilter] = useState("all");
@@ -590,52 +596,265 @@ export function TasksTab({ pendingTasks, completedTasks, toggleTask, setTaskModa
   );
 }
 
-export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
+function ArchivedCoursesSettings({ slug }) {
+  const { showToast } = useToast();
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [confirmCourse, setConfirmCourse] = useState(null);
+  const [busyCourseId, setBusyCourseId] = useState(null);
+  const pageSize = 8;
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, sort]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadArchivedCourses() {
+      if (!slug) return;
+      setLoading(true);
+      setError("");
+      try {
+        const payload = await fetchArchivedCourses(slug, {
+          search: search.trim() || undefined,
+          sort,
+          page,
+          page_size: pageSize,
+        });
+        if (!cancelled) {
+          setCourses(payload.courses || []);
+          setTotal(Number(payload.total || 0));
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(getErrorMessage(requestError, "Unable to load archived courses."));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadArchivedCourses();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, search, sort, page]);
+
+  async function refreshCurrentPage() {
+    const payload = await fetchArchivedCourses(slug, {
+      search: search.trim() || undefined,
+      sort,
+      page,
+      page_size: pageSize,
+    });
+    setCourses(payload.courses || []);
+    setTotal(Number(payload.total || 0));
+  }
+
+  async function handleRestore(course) {
+    try {
+      setBusyCourseId(course.id);
+      await restoreArchivedCourse(slug, course.id);
+      showToast("Course restored successfully.", "success");
+      await refreshCurrentPage();
+    } catch (requestError) {
+      showToast(getErrorMessage(requestError, "Unable to restore course."), "error");
+    } finally {
+      setBusyCourseId(null);
+    }
+  }
+
+  async function handlePermanentDelete() {
+    if (!confirmCourse) return;
+    try {
+      setBusyCourseId(confirmCourse.id);
+      await permanentlyDeleteArchivedCourse(slug, confirmCourse.id);
+      setConfirmCourse(null);
+      showToast("Course permanently deleted.", "success");
+      await refreshCurrentPage();
+    } catch (requestError) {
+      showToast(getErrorMessage(requestError, "Unable to permanently delete course."), "error");
+    } finally {
+      setBusyCourseId(null);
+    }
+  }
+
+  return (
+    <div className="profile-settings__form">
+      <div className="archived-courses-toolbar">
+        <label className="field archived-courses-toolbar__search">
+          <span className="field__label">Search archived courses</span>
+          <input
+            className="field__input"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by course name"
+          />
+        </label>
+        <label className="field archived-courses-toolbar__sort">
+          <span className="field__label">Sort</span>
+          <select className="field__input" value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="newest">Newest Archived</option>
+            <option value="oldest">Oldest Archived</option>
+          </select>
+        </label>
+      </div>
+
+      {loading ? (
+        <div className="archived-courses-list" aria-label="Loading archived courses">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div className="archived-course-row archived-course-row--loading" key={index}>
+              <div className="archived-course-row__thumb skeleton-line" />
+              <div className="archived-course-row__main">
+                <div className="skeleton-line skeleton-line--title" />
+                <div className="skeleton-line skeleton-line--text" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="profile-settings__section">
+          <div className="profile-settings__section-title">Unable to load archived courses</div>
+          <div className="profile-settings__section-subtitle">{error}</div>
+        </div>
+      ) : courses.length === 0 ? (
+        <EmptyState title="No archived courses found." body="Deleted courses will appear here after they are archived." icon="course" />
+      ) : (
+        <div className="archived-courses-list">
+          {courses.map((course) => (
+            <article className="archived-course-row" key={course.id}>
+              <div className="archived-course-row__thumb">
+                {course.cover_image_url ? (
+                  <img src={course.cover_image_url} alt="" />
+                ) : (
+                  <Icon name="course" size={20} />
+                )}
+              </div>
+              <div className="archived-course-row__main">
+                <div className="archived-course-row__title">{course.name}</div>
+                <div className="archived-course-row__meta">
+                  <span>{titleize(course.category || course.category_slug || "Category")}</span>
+                  <span>Deleted {formatDateTime(course.deleted_at)}</span>
+                  <span>Deleted by {course.deleted_by || "--"}</span>
+                </div>
+              </div>
+              <Badge tone="warning">Archived</Badge>
+              <div className="archived-course-row__actions">
+                <Button tone="ghost" disabled={busyCourseId === course.id} onClick={() => handleRestore(course)}>
+                  Restore
+                </Button>
+                <Button tone="danger" disabled={busyCourseId === course.id} onClick={() => setConfirmCourse(course)}>
+                  Delete Permanently
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && total > pageSize ? (
+        <div className="archived-courses-pagination">
+          <Button tone="ghost" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+            Previous
+          </Button>
+          <span className="profile-settings__helper">Page {page} of {totalPages}</span>
+          <Button tone="ghost" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+            Next
+          </Button>
+        </div>
+      ) : null}
+
+      <Modal
+        open={Boolean(confirmCourse)}
+        title="Delete Course Permanently?"
+        onClose={() => setConfirmCourse(null)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setConfirmCourse(null)}>Cancel</Button>
+            <Button tone="danger" disabled={busyCourseId === confirmCourse?.id} onClick={handlePermanentDelete}>
+              Delete Permanently
+            </Button>
+          </>
+        }
+      >
+        <p className="profile-settings__modal-copy">
+          This action cannot be undone.<br />
+          The course and all associated data will be permanently deleted.
+        </p>
+      </Modal>
+    </div>
+  );
+}
+
+export function ProfileSettingsTab({ session, activeTab, setActiveTab, slug, onClose }) {
   const tabs = [
     { id: "general", label: "General", icon: "profile" },
     { id: "notifications", label: "Notifications", icon: "bell" },
     { id: "personalization", label: "Personalization", icon: "dashboard" },
     { id: "security", label: "Security", icon: "shield" },
     { id: "account", label: "Account", icon: "settings" },
+    ...(slug ? [{ id: "archived_courses", label: "Archived Courses", icon: "course" }] : []),
   ];
+  const activeSettingsTab = tabs.find((tab) => tab.id === activeTab) || tabs[0];
+  const selectedTab = activeSettingsTab.id;
 
   return (
-    <div className="grid-3" style={{ gridTemplateColumns: "240px 1fr" }}>
-      <div>
-        <div className="sidebar-nav__items" style={{ padding: "0 16px" }}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`nav-item ${activeTab === tab.id ? "is-active" : ""}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span className="nav-item__left">
-                <Icon name={tab.icon} size={16} />
-                <span>{tab.label}</span>
-              </span>
-            </button>
-          ))}
+    <div className="profile-settings-modal" role="dialog" aria-modal="true" aria-labelledby="profile-settings-title">
+      <div className="profile-settings-modal__backdrop" />
+      <div className="profile-settings-modal__card">
+        <div className="profile-settings-modal__header">
+          <h2 id="profile-settings-title" className="profile-settings-modal__title">Settings</h2>
+          <button type="button" className="profile-settings-modal__close" onClick={onClose} aria-label="Close settings">
+            <Icon name="x" size={22} />
+          </button>
         </div>
-      </div>
 
-      <div className="panel" style={{ maxWidth: "600px", margin: "0 auto" }}>
-        <div className="panel-header">
-          <h2 className="panel-title">{tabs.find(t => t.id === activeTab)?.label || "Settings"}</h2>
-          <p className="panel-subtitle">Manage your profile preferences and account settings.</p>
-        </div>
-        
-        <div className="panel-body">
-          {activeTab === "general" && (
-            <div className="dashboard-stack">
-              <div style={{ display: "flex", gap: 24, alignItems: "center", marginBottom: 24 }}>
-                <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "var(--success)"]} size={80} />
-                <div>
-                  <Button tone="ghost" style={{ marginBottom: 8 }}>Upload new photo</Button>
-                  <div className="muted" style={{ fontSize: 12 }}>JPG, GIF or PNG. Max size of 800K</div>
+        <div className="profile-settings">
+          <aside className="profile-settings__nav" aria-label="Profile settings">
+            <div className="profile-settings__nav-items">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`profile-settings__nav-item ${selectedTab === tab.id ? "is-active" : ""}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <span className="profile-settings__nav-item-left">
+                    <Icon name={tab.icon} size={20} />
+                    <span>{tab.label}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="profile-settings__panel">
+            <div className="profile-settings__header">
+              <h3 className="profile-settings__title">{activeSettingsTab.label}</h3>
+              <p className="profile-settings__subtitle">Manage your profile preferences and account settings.</p>
+            </div>
+
+            <div className="profile-settings__body">
+          {selectedTab === "general" && (
+            <div className="profile-settings__form">
+              <div className="profile-settings__avatar-row">
+                <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "var(--success)"]} size={118} />
+                <div className="profile-settings__avatar-actions">
+                  <Button tone="ghost" icon="upload">Upload new photo</Button>
+                  <div className="profile-settings__helper">JPG, GIF or PNG. Max size of 800K</div>
                 </div>
               </div>
-              <div className="grid-2">
+              <div className="profile-settings__grid">
                 <label className="field">
                   <span className="field__label">Full Name</span>
                   <input className="field__input" defaultValue={session?.user?.name || "User"} />
@@ -647,57 +866,67 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
               </div>
               <label className="field">
                 <span className="field__label">Role</span>
-                <input className="field__input" defaultValue={titleize(session?.user?.role || "Category Admin")} disabled style={{ opacity: 0.7, background: "var(--surface-2)", cursor: "not-allowed" }} />
+                <input className="field__input" defaultValue={titleize(session?.user?.role || "Category Admin")} disabled />
               </label>
-              <div className="panel-footer" style={{ marginTop: 24, padding: "16px 0 0", borderTop: "1px solid var(--border)", textAlign: "right" }}>
-                <Button tone="primary">Save Changes</Button>
+              <div className="profile-settings__actions">
+                <Button tone="primary" icon="save">Save Changes</Button>
               </div>
             </div>
           )}
 
-          {activeTab === "notifications" && (
-            <div className="dashboard-stack">
+          {selectedTab === "notifications" && (
+            <div className="profile-settings__form">
               {[
                 { title: "Enrollment Requests", desc: "Get notified when a user requests enrollment to a course." },
                 { title: "Assignment Alerts", desc: "Get notified about new submission reviews and pending grade actions." },
                 { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
                 { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." }
               ].map((item, idx) => (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--border)" }}>
+                <div className="profile-settings__preference-row" key={idx}>
                   <div>
-                    <div className="row-title">{item.title}</div>
-                    <div className="row-subtitle">{item.desc}</div>
+                    <div className="profile-settings__section-title">{item.title}</div>
+                    <div className="profile-settings__section-subtitle">{item.desc}</div>
                   </div>
                   <label className="chip"><input type="checkbox" defaultChecked /> Enabled</label>
                 </div>
               ))}
-            </div>
-          )}
-
-          {activeTab === "personalization" && (
-            <div className="dashboard-stack">
-              <div className="row-title">Default Tab on Login</div>
-              <div className="toolbar">
-                <label className="chip"><input type="radio" name="default_tab" defaultChecked /> Overview</label>
-                <label className="chip"><input type="radio" name="default_tab" /> Tasks</label>
-                <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
-              </div>
-
-              <div className="row-title" style={{ marginTop: 24 }}>Dashboard Density</div>
-              <div className="toolbar">
-                <label className="chip"><input type="radio" name="density" /> Compact</label>
-                <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
+              <div className="profile-settings__actions">
+                <Button tone="primary" icon="save">Save Changes</Button>
               </div>
             </div>
           )}
 
-          {activeTab === "security" && (
-            <div className="dashboard-stack">
+          {selectedTab === "personalization" && (
+            <div className="profile-settings__form">
+              <div className="profile-settings__section">
+                <div className="profile-settings__section-title">Default Tab on Login</div>
+                <div className="profile-settings__option-group">
+                  <label className="chip"><input type="radio" name="default_tab" defaultChecked /> Overview</label>
+                  <label className="chip"><input type="radio" name="default_tab" /> Tasks</label>
+                  <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
+                </div>
+              </div>
+
+              <div className="profile-settings__section">
+                <div className="profile-settings__section-title">Dashboard Density</div>
+                <div className="profile-settings__option-group">
+                  <label className="chip"><input type="radio" name="density" /> Compact</label>
+                  <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
+                </div>
+              </div>
+              <div className="profile-settings__actions">
+                <Button tone="primary" icon="save">Save Changes</Button>
+              </div>
+            </div>
+          )}
+
+          {selectedTab === "security" && (
+            <div className="profile-settings__form">
               <label className="field">
                 <span className="field__label">Current Password</span>
                 <input type="password" className="field__input" placeholder="••••••••" />
               </label>
-              <div className="grid-2">
+              <div className="profile-settings__grid">
                 <label className="field">
                   <span className="field__label">New Password</span>
                   <input type="password" className="field__input" />
@@ -707,21 +936,28 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab }) {
                   <input type="password" className="field__input" />
                 </label>
               </div>
-              <div style={{ marginTop: 16 }}>
+              <div className="profile-settings__actions">
                 <Button tone="primary">Update Password</Button>
               </div>
             </div>
           )}
 
-          {activeTab === "account" && (
-            <div className="dashboard-stack">
-              <div className="soft-card" style={{ background: "var(--red-light)", border: "1px solid var(--red-mid)" }}>
-                <div className="row-title" style={{ color: "var(--red)" }}>Danger Zone</div>
-                <div className="row-subtitle" style={{ marginBottom: 16 }}>Permanently delete your account and all associated data.</div>
+          {selectedTab === "account" && (
+            <div className="profile-settings__form">
+              <div className="profile-settings__danger-card">
+                <div className="profile-settings__section-title">Danger Zone</div>
+                <div className="profile-settings__section-subtitle">Permanently delete your account and all associated data.</div>
                 <Button tone="danger">Delete Account</Button>
               </div>
             </div>
           )}
+
+          {selectedTab === "archived_courses" && (
+            <ArchivedCoursesSettings slug={slug} />
+          )}
+
+            </div>
+          </section>
         </div>
       </div>
     </div>

@@ -424,7 +424,7 @@ function CategoryAdminPageContent({ session, onLogout, children }) {
     activeTab = "settings";
   } else if (currentSegment === "profile") {
     activeNav = "settings";
-    activeTab = searchParams.get("tab") || "profile";
+    activeTab = searchParams.get("tab") || "general";
   } else if (currentSegment === "announcements") {
     activeNav = "announcements";
     activeTab = "overview";
@@ -551,7 +551,7 @@ function CategoryAdminPageContent({ session, onLogout, children }) {
               roleLabel: "category-admin",
             }} onLogout={onLogout} onNavigate={(path) => {
               if (path === "profile" || path === "settings") {
-                navigate(`/categories/${slug}/admin/profile?tab=${path}`);
+                navigate(`/categories/${slug}/admin/profile?tab=general`);
               }
             }} />
           </>
@@ -702,7 +702,9 @@ function CategoryAdminPageContent({ session, onLogout, children }) {
             <ProfileSettingsTab 
               session={session} 
               activeTab={activeTab} 
+              slug={slug}
               setActiveTab={(id) => navigate(`/categories/${slug}/admin/profile?tab=${id}`)} 
+              onClose={() => navigate(`/categories/${slug}/admin`)}
             />
           ) : null}
 

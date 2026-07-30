@@ -66,10 +66,6 @@ export function buildCategoryAdminNavGroups({ kpis = {}, tasks = [], assignmentQ
         { id: "reports", label: "Reports", icon: "analytics" },
       ],
     },
-    {
-      label: "Settings",
-      items: [{ id: "settings", label: "Settings", icon: "settings" }],
-    },
   ];
 }
 

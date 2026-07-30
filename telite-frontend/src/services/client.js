@@ -417,6 +417,18 @@ export async function deleteCourse(slug, courseId) {
   return unwrap(await api.delete(`/categories/${slug}/courses/${courseId}`));
 }
 
+export async function fetchArchivedCourses(slug, params = {}) {
+  return unwrap(await api.get(`/categories/${slug}/courses/archived`, { params }));
+}
+
+export async function restoreArchivedCourse(slug, courseId) {
+  return unwrap(await api.post(`/categories/${slug}/courses/${courseId}/restore`));
+}
+
+export async function permanentlyDeleteArchivedCourse(slug, courseId) {
+  return unwrap(await api.delete(`/categories/${slug}/courses/${courseId}/permanent`));
+}
+
 export async function launchCourse(courseId) {
   return unwrap(await api.get(`/courses/${courseId}/launch`));
 }

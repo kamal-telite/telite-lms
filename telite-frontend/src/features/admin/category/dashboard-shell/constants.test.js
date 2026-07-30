@@ -10,5 +10,6 @@ test('category admin navigation omits the Verifications entry', () => {
 
   const allItems = navGroups.flatMap((group) => group.items);
   assert.ok(!allItems.some((item) => item.id === 'verifications'));
+  assert.ok(!allItems.some((item) => item.id === 'settings'));
   assert.ok(allItems.some((item) => item.id === 'assignment_verification'));
 });

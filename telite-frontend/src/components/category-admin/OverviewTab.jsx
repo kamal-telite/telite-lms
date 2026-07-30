@@ -27,7 +27,7 @@ export default function OverviewTab({
   return (
     <>
       <div className="grid-4">
-        <StatCard accent="#2563EB" label="Total Courses" value={dashboard?.kpis?.total_courses || 0} meta="↑ 2 this quarter" pulse={kpiPulse?.total_courses || 0} />
+        <StatCard accent="#2563EB" label="Total Courses" value={dashboard?.kpis?.total_courses || 0} meta="↑ 2 this quarter" pulse={Boolean(kpiPulse?.total_courses)} />
         <StatCard
           label={`Active ${labels.users}`}
           value={dashboard?.kpis?.active_learners || 0}

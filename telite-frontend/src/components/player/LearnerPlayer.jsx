@@ -570,7 +570,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
 
   const handleViewCertificate = () => {
     if (certificate?.verification_token) {
-      window.open(`/public/verify/${certificate.verification_token}`, "_blank");
+      window.open(`/api/certificates/${courseId}/download?inline=true`, "_blank");
     } else {
       console.warn("Certificate or verification_token not available");
     }
