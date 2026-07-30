@@ -324,13 +324,27 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
 
           const gap = minimumTimeSeconds - spent;
           const sessionId = sessionIdRef.current;
-          if (gap > 0 && sessionId) {
-            await heartbeatLearningSession({
-              session_id: sessionId,
-              course_id: courseId,
-              module_id: activeModule?.id || null,
-              active_seconds: Math.min(gap, 90),
-            });
+          if (gap > 0) {
+            const sendSeconds = Math.min(gap, 90);
+            try {
+              if (sessionId) {
+                await heartbeatLearningSession({
+                  session_id: sessionId,
+                  course_id: courseId,
+                  module_id: activeModule?.id || null,
+                  active_seconds: sendSeconds,
+                });
+              } else {
+                throw new Error("No active learning session");
+              }
+            } catch (sessionErr) {
+              console.warn("Learning-session heartbeat failed during timer sync, falling back to learner heartbeat", sessionErr);
+              await api.post("/api/v1/learner/heartbeat", {
+                course_id: courseId,
+                module_id: activeModule?.id || null,
+                time_spent_seconds: sendSeconds,
+              });
+            }
           } else {
             break;
           }
@@ -353,6 +367,65 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     timerSyncedSectionRef.current = null;
   }, [currentSection?.id]);
 
+  const syncCurrentSectionTime = async () => {
+    if (!activeModule || !currentSection || minimumTimeSeconds <= 0) return;
+
+    await flushRef.current();
+
+    let serverSpent = timeSpentSeconds;
+    try {
+      const { data: sectionProgressData } = await api.get(
+        `/api/v1/learner/courses/${courseId}/section-progress`,
+      );
+      serverSpent =
+        sectionProgressData?.[currentSection.id]?.time_spent_seconds ??
+        sectionProgressData?.[String(currentSection.id)]?.time_spent_seconds ??
+        serverSpent;
+    } catch (syncErr) {
+      console.warn("Failed to refresh section progress before syncing time", syncErr);
+    }
+
+    let remaining = Math.max(0, minimumTimeSeconds - serverSpent);
+    const sessionId = sessionIdRef.current;
+
+    while (remaining > 0) {
+      const sendSeconds = Math.min(remaining, 90);
+      try {
+        if (sessionId) {
+          await heartbeatLearningSession({
+            session_id: sessionId,
+            course_id: courseId,
+            module_id: activeModule.id,
+            active_seconds: sendSeconds,
+          });
+        } else {
+          throw new Error("No active learning session");
+        }
+      } catch (sessionErr) {
+        console.warn("Learning-session heartbeat failed, falling back to learner heartbeat", sessionErr);
+        await api.post("/api/v1/learner/heartbeat", {
+          course_id: courseId,
+          module_id: activeModule.id,
+          time_spent_seconds: sendSeconds,
+        });
+      }
+
+      remaining -= sendSeconds;
+    }
+
+    setSectionProgress((prev) => ({
+      ...prev,
+      [currentSection.id]: {
+        ...(prev[currentSection.id] || prev[String(currentSection.id)] || {}),
+        time_spent_seconds: Math.max(
+          minimumTimeSeconds,
+          prev[currentSection.id]?.time_spent_seconds || prev[String(currentSection.id)]?.time_spent_seconds || 0,
+        ),
+        status: prev[currentSection.id]?.status || prev[String(currentSection.id)]?.status || "in_progress",
+      },
+    }));
+  };
+
   const handleModuleComplete = async () => {
     if (!activeModule || markingModuleComplete) return;
     
@@ -366,40 +439,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     setMarkingModuleComplete(true);
     try {
       if (minimumTimeSeconds > 0 && timeSpentSeconds < minimumTimeSeconds && isTimeMet) {
-        await flushRef.current();
-
-        let remaining = minimumTimeSeconds - timeSpentSeconds;
-        const sessionId = sessionIdRef.current;
-
-        while (remaining > 0 && sessionId) {
-          const sendSeconds = Math.min(remaining, 90);
-          await heartbeatLearningSession({
-            session_id: sessionId,
-            course_id: courseId,
-            module_id: activeModule.id,
-            active_seconds: sendSeconds,
-          });
-          remaining -= sendSeconds;
-
-          if (remaining > 0) {
-            try {
-              const { data: sectionProgressData } = await api.get(
-                `/api/v1/learner/courses/${courseId}/section-progress`,
-              );
-              const spent =
-                sectionProgressData?.[currentSection?.id]?.time_spent_seconds ??
-                sectionProgressData?.[String(currentSection?.id)]?.time_spent_seconds ??
-                0;
-              if (spent >= minimumTimeSeconds) {
-                break;
-              }
-              remaining = minimumTimeSeconds - spent;
-            } catch (syncErr) {
-              console.warn("Failed to refresh section progress while syncing time", syncErr);
-              break;
-            }
-          }
-        }
+        await syncCurrentSectionTime();
       }
 
       const { data: progressResponse } = await api.post("/api/v1/learner/progress", {

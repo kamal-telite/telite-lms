@@ -389,6 +389,38 @@ def heartbeat(
             mp.last_block_id = str(req.block_id)
         progress_repo.upsert_module_progress(mp)
 
+        section = db.query(CourseSection).join(
+            CourseModule,
+            CourseModule.section_id == CourseSection.id,
+        ).filter(
+            CourseModule.id == req.module_id,
+            CourseModule.org_id == current_user.org_id,
+            CourseModule.deleted_at.is_(None),
+            CourseSection.org_id == current_user.org_id,
+            CourseSection.deleted_at.is_(None),
+        ).first()
+        if section:
+            sp = progress_repo.get_section_progress(current_user.id, section.id, current_user.org_id)
+            if not sp:
+                sp = SectionProgress(
+                    user_id=current_user.id,
+                    section_id=section.id,
+                    org_id=current_user.org_id,
+                    status="in_progress",
+                    completion_percentage=0.0,
+                    time_spent_seconds=0,
+                    started_at=now,
+                    last_entered_at=now,
+                )
+            elif sp.status == "not_started":
+                sp.status = "in_progress"
+                sp.started_at = sp.started_at or now
+
+            sp.time_spent_seconds = (sp.time_spent_seconds or 0) + req.time_spent_seconds
+            sp.last_entered_at = sp.last_entered_at or now
+            sp.last_left_at = now
+            progress_repo.upsert_section_progress(sp)
+
     db.commit()
     return {"status": "success"}
 
