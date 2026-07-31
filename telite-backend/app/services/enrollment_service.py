@@ -195,6 +195,9 @@ class EnrollmentService:
         )
 
         self.db.flush()
+
+        # ── Note: Enrollment hook dispatch moved to API layer to prevent race condition ──
+
         return ManualEnrollmentResult(
             user=learner,
             enrollment_request=enrollment_request,

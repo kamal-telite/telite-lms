@@ -23,6 +23,16 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
+class UpdateProfileRequest(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    username: str | None = None
+    avatar: str | None = None
+
+class UpdatePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -307,12 +317,12 @@ def get_current_user(
 
     return TokenData(
         id=user.id,
-        username=payload.get("username") or user.username,
-        email=payload.get("email") or user.email,
-        role=payload.get("role") or user.role,
-        full_name=payload.get("name") or user.full_name,
-        category_scope=payload.get("category_scope", user.category_scope),
-        org_id=payload.get("org_id", user.org_id),
+        username=user.username,
+        email=user.email,
+        role=user.role,
+        full_name=user.full_name,
+        category_scope=user.category_scope,
+        org_id=user.org_id,
         is_platform_admin=bool(payload.get("is_platform_admin", user.is_platform_admin)),
         permissions=payload.get("permissions", []),
         theme_preference=user.theme_preference or "system",
@@ -394,7 +404,7 @@ def ensure_org_access(current_user: TokenData, target_org_id: int | None) -> int
     return target_org_id
 
 
-# ── Token helpers ─────────────────────────────────────────────────────────────
+# ── Internal logic ─────────────────────────────────────────────────────────────
 
 def _build_token_response(user: dict[str, Any], refresh_token: str, db: Session | None = None) -> TokenResponse:
     from app.core.permissions import resolve_permissions
@@ -600,7 +610,101 @@ def logout(
             clear_rls_context(db)
 
     _clear_auth_cookies(response)
-    return {"status": "logged_out", "user_id": current_user.id}
+    return {"status": "ok"}
+
+
+@auth_router.patch("/me")
+def update_profile(
+    body: UpdateProfileRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
+):
+    from app.repositories.user_repo import UserRepository, IdentifierCollisionError
+    from app.repositories.audit_repo import AuditRepository
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(current_user.id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    update_data = body.model_dump(exclude_unset=True)
+    
+    # Check uniqueness if email or username is updated
+    new_email = update_data.get("email", user.email)
+    new_username = update_data.get("username", user.username)
+    
+    if "email" in update_data or "username" in update_data:
+        try:
+            user_repo.validate_identifier_uniqueness(new_email, new_username, exclude_user_id=user.id)
+        except IdentifierCollisionError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+            
+    if "full_name" in update_data:
+        user.full_name = update_data["full_name"]
+    if "email" in update_data:
+        user.email = new_email.strip().lower()
+    if "username" in update_data:
+        user.username = new_username.strip().lower()
+    if "avatar" in update_data:
+        user.avatar_initials = update_data["avatar"]
+    
+    db.commit()
+
+    AuditRepository(db).write(
+        org_id=user.org_id,
+        actor_user_id=user.id,
+        actor_name=user.full_name,
+        action="user.update_profile",
+        target_type="user",
+        target_id=user.id,
+        message="Updated profile settings",
+    )
+    
+    return {"status": "ok", "user": user.to_dict()}
+
+
+@auth_router.post("/me/password")
+def update_password(
+    body: UpdatePasswordRequest,
+    response: Response,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(db_session),
+):
+    from app.repositories.user_repo import UserRepository
+    from app.repositories.auth_repo import AuthRepository
+    from app.repositories.audit_repo import AuditRepository
+    from app.core.password_utils import verify_password, hash_password, validate_password_strength
+    
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(current_user.id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+        
+    is_valid, error_msg = validate_password_strength(body.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+        
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+
+    # Revoke all sessions, forcing re-login after password change
+    auth_repo = AuthRepository(db)
+    auth_repo.revoke_all_for_user(user.id)
+    _clear_auth_cookies(response)
+
+    AuditRepository(db).write(
+        org_id=user.org_id,
+        actor_user_id=user.id,
+        actor_name=user.full_name,
+        action="user.update_password",
+        target_type="user",
+        target_id=user.id,
+        message="Updated account password",
+    )
+    
+    return {"status": "ok", "message": "Password updated successfully. Please log in again."}
 
 
 @auth_router.post("/forgot-password")

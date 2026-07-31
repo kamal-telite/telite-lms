@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Avatar, Badge, Button, EmptyState, Modal, Panel, useToast } from "../common/ui";
 import { TaskBoardKanban } from "./TaskBoard";
+import { AccountSettingsPanel } from "../common/AccountSettingsPanel";
 import { ChartCanvas } from "../common/charts";
 import { Icon } from "../common/icons";
 import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent, getRankColor } from "../../utils/formatters";
@@ -474,7 +475,7 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
                 <Avatar initials={learner.avatar_initials || getInitials(learner.full_name)} gradient={learner.avatar_gradient} size={30} />
                 <div>
                   <div className="row-title">{learner.full_name}</div>
-                  <div className="row-subtitle">{learner.courses_completed}/{learner.total_courses || 0} courses · {learner.enrollment_type}</div>
+                  <div className="row-subtitle">{learner.courses_completed}/${learner.total_courses || 0} courses · {learner.enrollment_type}</div>
                 </div>
               </div>
               <div className="summary-chip__value" style={{ color: getScoreColor(learner.pal_score) }}>{formatPercent(learner.pal_score)}</div>
@@ -798,11 +799,9 @@ function ArchivedCoursesSettings({ slug }) {
 
 export function ProfileSettingsTab({ session, activeTab, setActiveTab, slug, onClose }) {
   const tabs = [
-    { id: "general", label: "General", icon: "profile" },
+    { id: "account", label: "Account Settings", icon: "settings" },
     { id: "notifications", label: "Notifications", icon: "bell" },
     { id: "personalization", label: "Personalization", icon: "dashboard" },
-    { id: "security", label: "Security", icon: "shield" },
-    { id: "account", label: "Account", icon: "settings" },
     ...(slug ? [{ id: "archived_courses", label: "Archived Courses", icon: "course" }] : []),
   ];
   const activeSettingsTab = tabs.find((tab) => tab.id === activeTab) || tabs[0];
@@ -845,33 +844,8 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab, slug, onC
             </div>
 
             <div className="profile-settings__body">
-          {selectedTab === "general" && (
-            <div className="profile-settings__form">
-              <div className="profile-settings__avatar-row">
-                <Avatar initials={getInitials(session?.user?.name || "User")} gradient={["#2563EB", "var(--success)"]} size={118} />
-                <div className="profile-settings__avatar-actions">
-                  <Button tone="ghost" icon="upload">Upload new photo</Button>
-                  <div className="profile-settings__helper">JPG, GIF or PNG. Max size of 800K</div>
-                </div>
-              </div>
-              <div className="profile-settings__grid">
-                <label className="field">
-                  <span className="field__label">Full Name</span>
-                  <input className="field__input" defaultValue={session?.user?.name || "User"} />
-                </label>
-                <label className="field">
-                  <span className="field__label">Email Address</span>
-                  <input className="field__input" defaultValue={session?.user?.email || "admin@telite.io"} disabled />
-                </label>
-              </div>
-              <label className="field">
-                <span className="field__label">Role</span>
-                <input className="field__input" defaultValue={titleize(session?.user?.role || "Category Admin")} disabled />
-              </label>
-              <div className="profile-settings__actions">
-                <Button tone="primary" icon="save">Save Changes</Button>
-              </div>
-            </div>
+          {selectedTab === "account" && (
+            <AccountSettingsPanel />
           )}
 
           {selectedTab === "notifications" && (
@@ -920,37 +894,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab, slug, onC
             </div>
           )}
 
-          {selectedTab === "security" && (
-            <div className="profile-settings__form">
-              <label className="field">
-                <span className="field__label">Current Password</span>
-                <input type="password" className="field__input" placeholder="••••••••" />
-              </label>
-              <div className="profile-settings__grid">
-                <label className="field">
-                  <span className="field__label">New Password</span>
-                  <input type="password" className="field__input" />
-                </label>
-                <label className="field">
-                  <span className="field__label">Confirm New Password</span>
-                  <input type="password" className="field__input" />
-                </label>
-              </div>
-              <div className="profile-settings__actions">
-                <Button tone="primary">Update Password</Button>
-              </div>
-            </div>
-          )}
 
-          {selectedTab === "account" && (
-            <div className="profile-settings__form">
-              <div className="profile-settings__danger-card">
-                <div className="profile-settings__section-title">Danger Zone</div>
-                <div className="profile-settings__section-subtitle">Permanently delete your account and all associated data.</div>
-                <Button tone="danger">Delete Account</Button>
-              </div>
-            </div>
-          )}
 
           {selectedTab === "archived_courses" && (
             <ArchivedCoursesSettings slug={slug} />

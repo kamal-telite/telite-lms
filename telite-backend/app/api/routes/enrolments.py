@@ -182,6 +182,17 @@ def manual_enrollment(
             note=body.note,
         )
         db.commit()
+
+        # Dispatch Celery hook after transaction commits
+        try:
+            from app.workers.task_assignment_tasks import generate_enrollment_assignments
+            generate_enrollment_assignments.delay(result.user.id, current_user.org_id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to dispatch global task assignment for learner %s", result.user.id
+            )
+
         return result.to_dict()
     except EnrollmentPermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc

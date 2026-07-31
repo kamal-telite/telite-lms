@@ -116,20 +116,19 @@ function TaskColumn({ id, title, tasks, onEdit, onDelete }) {
 
 export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete }) {
   const [columns, setColumns] = useState({
-    assigned: [],
+    pending: [],
     in_progress: [],
     submitted: [],
-    approved: []
+    completed: []
   });
 
   useEffect(() => {
+    const tasks = allTasks || [];
     setColumns({
-      assigned: allTasks.filter(t => !t.status || t.status === "assigned" || t.status === "pending" || t.status === "revision_requested"),
-      in_progress: allTasks.filter(t => t.status === "in_progress"),
-      submitted: allTasks.filter(t => t.status === "submitted"),
-      approved: allTasks.filter(t => t.status === "approved" || t.status === "completed"),
-      pending: allTasks.filter(t => !t.status || t.status === "assigned" || t.status === "pending" || t.status === "revision_requested"),
-      completed: allTasks.filter(t => t.status === "approved" || t.status === "completed")
+      pending: tasks.filter(t => !t.status || t.status === "assigned" || t.status === "pending" || t.status === "revision_requested"),
+      in_progress: tasks.filter(t => t.status === "in_progress"),
+      submitted: tasks.filter(t => t.status === "submitted"),
+      completed: tasks.filter(t => t.status === "approved" || t.status === "completed")
     });
   }, [allTasks]);
 
@@ -152,6 +151,15 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
 
     if (!activeContainer || !overContainer || activeContainer === overContainer) {
       return;
+    }
+
+    // Backend rule: Admins can ONLY review tasks that are 'submitted'.
+    if (activeContainer !== "submitted") {
+      return; // UI rollback (won't update state)
+    }
+    // Also, admins can only move to 'approved' (completed) or 'revision_requested' (pending).
+    if (overContainer !== "completed" && overContainer !== "pending") {
+      return; // Disallow dragging to in_progress
     }
 
     setColumns((prev) => {
@@ -185,6 +193,12 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
     const overContainer = over.data.current?.sortable?.containerId || over.id;
 
     if (activeContainer && overContainer && activeContainer !== overContainer) {
+       // Validate again on drop
+       if (activeContainer !== "submitted" || (overContainer !== "completed" && overContainer !== "pending")) {
+         // showToast("Admins can only evaluate submitted tasks.", "error"); // Toast handled by parent if needed, but here we just revert
+         setColumns((prev) => ({ ...prev })); // Force re-render to snap back
+         return;
+       }
        onTaskStatusChange(active.id, overContainer);
     } else if (activeContainer && overContainer && activeContainer === overContainer) {
        const activeIndex = columns[activeContainer].findIndex(t => t.id === active.id);
@@ -208,6 +222,7 @@ export function TaskBoardKanban({ allTasks, onTaskStatusChange, onEdit, onDelete
       <div className="task-kanban-grid">
         <TaskColumn id="pending" title="To Do" tasks={columns.pending} onEdit={onEdit} onDelete={onDelete} />
         <TaskColumn id="in_progress" title="In Progress" tasks={columns.in_progress} onEdit={onEdit} onDelete={onDelete} />
+        <TaskColumn id="submitted" title="Submitted" tasks={columns.submitted} onEdit={onEdit} onDelete={onDelete} />
         <TaskColumn id="completed" title="Done" tasks={columns.completed} onEdit={onEdit} onDelete={onDelete} />
       </div>
     </DndContext>

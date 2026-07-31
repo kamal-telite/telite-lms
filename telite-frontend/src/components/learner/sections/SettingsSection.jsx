@@ -1,17 +1,12 @@
-import { Panel, EmptyState } from "../../common/ui";
+import { AccountSettingsPanel } from "../../common/AccountSettingsPanel";
 
 /**
- * SettingsSection - Account settings (placeholder for future features)
+ * SettingsSection - Account settings
  */
 export function SettingsSection() {
   return (
     <section id="section-settings">
-      <Panel title="Account Settings" subtitle="Personalize your workspace">
-        <EmptyState
-          title="Settings coming soon"
-          body="Theme toggles, notifications, and privacy options will be available here."
-        />
-      </Panel>
+      <AccountSettingsPanel />
     </section>
   );
 }

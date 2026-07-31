@@ -147,7 +147,7 @@ export default function AcceptInvitePage({ onAuthenticated }) {
           </div>
         </section>
 
-        <section className="login-card">
+        <section className="login-card" style={{ width: "100%", maxWidth: "28rem", margin: "0 auto" }}>
           <div className="login-card__header">
             <h2>Create your password</h2>
             <p>We’ll verify the secure invitation link and activate your admin account.</p>

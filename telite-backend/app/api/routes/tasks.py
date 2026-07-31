@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.api.auth import TokenData, get_current_user, require_admin, resolve_org_scope
@@ -128,7 +129,12 @@ def post_task(
             **body.model_dump()
         )
         assignment = None
-        if body.assigned_to_user_id:
+        is_global = body.assignment_scope == "all"
+
+        if is_global:
+            # Mark generation as pending; Celery will handle bulk creation
+            task.assignment_generation_status = "pending"
+        elif body.assigned_to_user_id:
             assignment = task_repo.create_assignment(task=task, learner_id=body.assigned_to_user_id)
             NotificationRepository(db).create(
                 user_id=body.assigned_to_user_id,
@@ -140,8 +146,14 @@ def post_task(
                 source_id=task.id,
                 metadata=task_notification_metadata(task.id, assignment.id),
             )
-        response = task_repo.task_payload(task, assignment)
+        response_payload = task_repo.task_payload(task, assignment)
         db.commit()
+
+        # Dispatch background job AFTER commit so the task row is visible
+        if is_global:
+            from app.workers.task_assignment_tasks import generate_bulk_assignments
+            generate_bulk_assignments.delay(task.id, actor.org_id)
+
         _write_audit_safely(
             db,
             org_id=actor.org_id,
@@ -152,7 +164,16 @@ def post_task(
             target_id=task.id,
             message=f"Created task: {task.title}",
         )
-        return response
+
+        if is_global:
+            return JSONResponse(
+                status_code=202,
+                content={
+                    **response_payload,
+                    "message": "Task created. Assignments are being generated in the background.",
+                },
+            )
+        return response_payload
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -288,9 +309,22 @@ def start_task(
         raise HTTPException(status_code=403, detail="Active learner session required")
     task_repo = TaskRepository(db)
     task = task_repo.get_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
     assignment = task_repo.get_assignment(task_id, actor.id)
-    if not task or not assignment:
-        raise HTTPException(status_code=404, detail="Task assignment not found")
+    if not assignment:
+        if task.assignment_scope == "all":
+            # Ensure the learner has access to the category before creating the assignment
+            validate_task_access(current_user, task.org_id, task.category_slug)
+            assignment = task_repo.create_assignment(
+                task=task,
+                learner_id=actor.id,
+                status="assigned"
+            )
+        else:
+            raise HTTPException(status_code=404, detail="Task assignment not found")
+
     assignment = task_repo.start_assignment(assignment)
     task.status = task_repo.task_status(assignment.status)
     response = task_repo.task_payload(task, assignment)
@@ -311,9 +345,22 @@ def submit_task_work(
         raise HTTPException(status_code=403, detail="Active learner session required")
     task_repo = TaskRepository(db)
     task = task_repo.get_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
     assignment = task_repo.get_assignment(task_id, actor.id)
-    if not task or not assignment:
-        raise HTTPException(status_code=404, detail="Task assignment not found")
+    if not assignment:
+        if task.assignment_scope == "all":
+            # Ensure the learner has access to the category before creating the assignment
+            validate_task_access(current_user, task.org_id, task.category_slug)
+            assignment = task_repo.create_assignment(
+                task=task,
+                learner_id=actor.id,
+                status="assigned"
+            )
+        else:
+            raise HTTPException(status_code=404, detail="Task assignment not found")
+
     task_repo.submit_assignment(
         assignment,
         submission_notes=body.submission_notes,

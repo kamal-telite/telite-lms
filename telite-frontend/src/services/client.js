@@ -128,12 +128,22 @@ function unwrap(response) {
 }
 
 export function getErrorMessage(error, fallback = "Something went wrong.") {
-  return (
-    error?.response?.data?.detail ||
-    error?.response?.data?.message ||
-    error?.message ||
-    fallback
-  );
+  const detail = error?.response?.data?.detail;
+  const message = error?.response?.data?.message;
+
+  if (Array.isArray(detail)) {
+    return detail.map(d => d.msg || "Validation error").join(", ");
+  }
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (typeof message === "string") {
+    return message;
+  }
+
+  return error?.message || fallback;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -549,6 +559,14 @@ export async function fetchMyAnnouncements() {
 
 export async function markAnnouncementRead(id) {
   return unwrap(await api.patch(`/api/v1/announcements/${id}/read`));
+}
+
+export async function updateProfile(payload) {
+  return unwrap(await api.patch("/auth/me", payload));
+}
+
+export async function updatePassword(payload) {
+  return unwrap(await api.post("/auth/me/password", payload));
 }
 
 export async function fetchAnnouncements() {

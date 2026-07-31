@@ -229,6 +229,7 @@ def create_app() -> FastAPI:
     from app.api.routes.quiz_execution import quiz_execution_router
     from app.api.routes.quiz_grading import quiz_grading_router
     from app.api.routes.notifications import notifications_router
+    from app.api.routes.notification_preferences import router as notification_preferences_router
     from app.api.routes.certificates import cert_router, public_cert_router
     from app.api.routes.gradebook import gradebook_router
     
@@ -243,6 +244,7 @@ def create_app() -> FastAPI:
     app.include_router(quiz_execution_router)
     app.include_router(quiz_grading_router)
     app.include_router(notifications_router, prefix="/api/v1")
+    app.include_router(notification_preferences_router, prefix="/api/v1")
     app.include_router(cert_router, prefix="/api")
     app.include_router(public_cert_router)
     app.include_router(gradebook_router, prefix="/api/v1")

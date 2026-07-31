@@ -61,13 +61,7 @@ export default function LearnerPage({ session, onLogout }) {
     error: "",
   });
 
-  // Profile editing state
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    full_name: "",
-    email: "",
-    organization_id: "1",
-  });
+
 
   // Grading state
   const [gradingAnalytics, setGradingAnalytics] = useState(null);
@@ -86,16 +80,6 @@ export default function LearnerPage({ session, onLogout }) {
     activeNav = `section-${currentTab}`;
   }
 
-  // Initialize profile form when data loads
-  useEffect(() => {
-    if (data?.profile) {
-      setProfileForm({
-        full_name: data.profile.full_name || "",
-        email: data.profile.email || "",
-        organization_id: data.profile.organization_id || data.profile.org_id || "1",
-      });
-    }
-  }, [data]);
 
   // Load initial data
   useEffect(() => {
@@ -267,14 +251,6 @@ export default function LearnerPage({ session, onLogout }) {
     }));
   }
 
-  function handleProfileFormChange(newForm) {
-    setProfileForm(newForm);
-  }
-
-  function handleProfileSave() {
-    showToast("Profile updated successfully.", "success");
-    setIsEditingProfile(false);
-  }
 
   // Loading and error states
   if (loading) {
@@ -518,15 +494,7 @@ export default function LearnerPage({ session, onLogout }) {
         )}
 
         {activeNav === "section-profile" && (
-          <ProfileSection
-            profile={data.profile}
-            isEditing={isEditingProfile}
-            profileForm={profileForm}
-            onFormChange={handleProfileFormChange}
-            onEditStart={() => setIsEditingProfile(true)}
-            onEditCancel={() => setIsEditingProfile(false)}
-            onSave={handleProfileSave}
-          />
+          <ProfileSection profile={data.profile} />
         )}
 
         {activeNav === "section-settings" && <SettingsSection />}

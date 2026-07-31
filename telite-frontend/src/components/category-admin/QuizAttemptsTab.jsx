@@ -14,10 +14,11 @@ export default function QuizAttemptsTab({
         <StatCard accent="#059669" label="Highest Score" value={`${Math.round(Math.max(0, ...(quizStatistics.rows || []).map((row) => Number(row.highest_score || 0))))}%`} meta="Best learner score" />
         <StatCard accent="#D97706" label="Avg Score" value={`${Math.round((quizStatistics.rows || []).reduce((sum, row) => sum + Number(row.average_score || 0), 0) / Math.max(1, (quizStatistics.rows || []).filter((row) => Number(row.attempts_used || 0) > 0).length))}%`} meta="Attempted learners" />
       </div>
-      <Panel title="Quiz Attempts" subtitle="Attempts used, remaining, best score, and status for every learner">
-        <div className="toolbar" style={{ marginBottom: 16 }}>
-          <Button tone="ghost" onClick={loadQuizStatistics} disabled={quizStatsLoading}>{quizStatsLoading ? "Loading..." : "Refresh"}</Button>
-        </div>
+      <Panel 
+        title="Quiz Attempts" 
+        subtitle="Attempts used, remaining, best score, and status for every learner"
+        action={<Button tone="ghost" onClick={loadQuizStatistics} disabled={quizStatsLoading}>{quizStatsLoading ? "Loading..." : "Refresh"}</Button>}
+      >
         {quizStatsLoading ? (
           <LoadingState title="Loading quiz attempts..." body="Fetching learner attempt history." />
         ) : (quizStatistics.rows || []).length === 0 ? (
