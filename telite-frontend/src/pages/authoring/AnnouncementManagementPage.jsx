@@ -235,12 +235,6 @@ export default function AnnouncementManagementPage({ session, onLogout, embedded
       onNavClick={(item) => {
         if (item.id === "dashboard") navigate(`/categories/${slug}/admin`);
       }}
-      profile={{
-        initials: getInitials(session?.user?.name || "Admin User"),
-        gradient: ["#2563EB", "#7C3AED"],
-        name: session?.user?.name || "Admin User",
-        roleLabel: "category admin",
-      }}
       title="Announcement Center"
       subtitle="Create and manage organization announcements"
       topbarActions={

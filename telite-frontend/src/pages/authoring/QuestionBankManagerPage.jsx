@@ -611,12 +611,6 @@ export default function QuestionBankManagerPage({ session, onLogout, embedded = 
           navigate(`/categories/${slug}/admin`);
         }
       }}
-      profile={{
-        initials: getInitials(session?.user?.name || "Admin User"),
-        gradient: ["#2563EB", "#059669"],
-        name: session?.user?.name || "Admin User",
-        roleLabel: "category-admin",
-      }}
       onLogout={onLogout}
       title="Question Bank Manager"
       subtitle="Manage reusable questions and assessments"

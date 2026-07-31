@@ -500,12 +500,6 @@ function CategoryAdminPageContent({ session, onLogout, children }) {
              navigate(`/categories/${slug}/admin?tab=${targetTab}`);
           }
         }}
-        profile={{
-          initials: getInitials(session?.user?.name || "Admin User"),
-          gradient: ["#2563EB", "#7C3AED"],
-          name: session?.user?.name || "Admin User",
-          roleLabel: `${dashboard.category?.slug || slug}-admin`,
-        }}
         title={`${dashboard.category?.name || "Category"} Admin Dashboard`}
         subtitle={`${dashboard.category?.name || "Category"} Learning Category · Telite Systems`}
         topbarActions={

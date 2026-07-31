@@ -184,12 +184,6 @@ export default function CategoryStatsPage({ session, onLogout }) {
         navGroups={navGroups}
         activeNav={activeNav}
         onNavClick={scrollToSection}
-        profile={{
-          initials: "AK",
-          gradient: ["#0891B2", "#2563EB"],
-          name: session?.user?.name || "Anika Kapoor",
-          roleLabel: "ats-stats",
-        }}
         title="ATS Stats Dashboard"
         subtitle="ATS Learning Category · Apr 2026"
         topbarActions={

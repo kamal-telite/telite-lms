@@ -29,8 +29,6 @@ import { TasksSection } from "../../components/learner/sections/TasksSection";
 import { LeaderboardSection } from "../../components/learner/sections/LeaderboardSection";
 import { CertificatesSection } from "../../components/learner/sections/CertificatesSection";
 import { AnnouncementsSection } from "../../components/learner/sections/AnnouncementsSection";
-import { ProfileSection } from "../../components/learner/sections/ProfileSection";
-import { SettingsSection } from "../../components/learner/sections/SettingsSection";
 
 export default function LearnerPage({ session, onLogout }) {
   const navigate = useNavigate();
@@ -328,13 +326,6 @@ export default function LearnerPage({ session, onLogout }) {
         { id: "section-leaderboard", label: "Leaderboard", icon: "leaderboard" },
       ],
     },
-    {
-      label: "Account",
-      items: [
-        { id: "section-profile", label: "Profile", icon: "profile" },
-        { id: "section-settings", label: "Settings", icon: "settings" },
-      ],
-    },
   ];
 
   return (
@@ -349,14 +340,6 @@ export default function LearnerPage({ session, onLogout }) {
       navGroups={navGroups}
       activeNav={activeNav}
       onNavClick={changeSection}
-      profile={{
-        initials:
-          data.profile.avatar_initials ||
-          getInitials(data.profile.full_name),
-        gradient: data.profile.avatar_gradient || ["#7C3AED", "#2563EB"],
-        name: data.profile.full_name,
-        roleLabel: "learner",
-      }}
       title={
         navGroups.flatMap((g) => g.items).find((i) => i.id === activeNav)
           ?.label ||
@@ -492,12 +475,6 @@ export default function LearnerPage({ session, onLogout }) {
             onMarkRead={handleReadAnnouncement}
           />
         )}
-
-        {activeNav === "section-profile" && (
-          <ProfileSection profile={data.profile} />
-        )}
-
-        {activeNav === "section-settings" && <SettingsSection />}
       </div>
     </DashboardShell>
   );

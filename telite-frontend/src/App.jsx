@@ -1,5 +1,5 @@
 import React, { useEffect, useState, lazy, Suspense } from "react";
-import Lenis from "lenis";
+
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ToastProvider } from "./components/common/ui";
 import { fetchMe, logoutRequest } from "./services/client";
@@ -17,6 +17,7 @@ import { offlineSyncManager } from "./lib/offlineSyncManager";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { BrandingProvider } from "./providers/BrandingProvider";
 import { ThemeEngine } from "./utils/ThemeEngine";
+import { ScrollProvider } from "./components/common/scroll";
 
 // Modular Domain Routers
 import PlatformRouter from "./routes/platform_router";
@@ -250,6 +251,8 @@ function RouterNavigationBridge({ setSession }) {
   return null;
 }
 
+import { FocusManager } from "./components/common/a11y/FocusManager";
+
 function AppShell({ session, setSession, onLogout, booting }) {
   const location = useLocation();
   const locationKey = `${location.pathname}${location.search}`;
@@ -258,6 +261,7 @@ function AppShell({ session, setSession, onLogout, booting }) {
     <BrandingProvider session={session} locationKey={locationKey}>
       <ToastProvider>
         <RouterNavigationBridge setSession={setSession} />
+        <FocusManager />
         <LazyChunkErrorBoundary key={session?.user?.user_id || "anonymous"}>
           <AppRoutes
             session={session}
@@ -302,29 +306,7 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    // Initialize smooth scrolling
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      direction: "vertical",
-      gestureDirection: "vertical",
-      smooth: true,
-      mouseMultiplier: 1,
-      smoothTouch: false,
-      touchMultiplier: 2,
-      infinite: false,
-    });
-    function raf(time) {
-      lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
-    requestAnimationFrame(raf);
 
-    return () => {
-      lenis.destroy();
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -373,14 +355,16 @@ export default function App() {
 
   return (
     <ThemeProvider session={session} onSessionChange={setSession}>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppShell
-          session={session}
-          setSession={setSession}
-          onLogout={onLogout}
-          booting={booting}
-        />
-      </BrowserRouter>
+      <ScrollProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AppShell
+            session={session}
+            setSession={setSession}
+            onLogout={onLogout}
+            booting={booting}
+          />
+        </BrowserRouter>
+      </ScrollProvider>
     </ThemeProvider>
   );
 }

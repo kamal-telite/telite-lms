@@ -1,0 +1,116 @@
+/* 
+  Telite LMS - Global Scroll System
+  Framework-independent — no Tailwind dependency.
+  All overflow and layout behavior is defined here via semantic classes.
+*/
+
+:root {
+  /* Scrollbar configuration */
+  --scrollbar-width: 8px;
+  --scrollbar-radius: 4px;
+  
+  /* Light mode colors */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(156, 163, 175, 0.4); /* Gray 400 with opacity */
+  --scrollbar-thumb-hover: rgba(107, 114, 128, 0.7); /* Gray 500 */
+}
+
+/* Dark mode colors - assuming .dark is applied to html/body */
+.dark, [data-theme="dark"] {
+  --scrollbar-thumb: rgba(156, 163, 175, 0.3);
+  --scrollbar-thumb-hover: rgba(156, 163, 175, 0.6);
+}
+
+/* ─── Base scroll container ─── */
+
+.telite-scroll-container {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Orientation modifiers ─── */
+
+.telite-scroll-container--vertical {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.telite-scroll-container--horizontal {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.telite-scroll-container--both {
+  overflow: auto;
+}
+
+/* ─── Semantic wrappers ─── */
+
+.telite-page-scroll {
+  flex: 1;
+  width: 100%;
+}
+
+/* Panel, modal, and table scrolls inherit from the base container;
+   add specific overrides here as needed. */
+.telite-panel-scroll { /* inherits base */ }
+.telite-modal-scroll { /* inherits base */ }
+.telite-table-scroll { /* inherits base */ }
+
+/* ─── Firefox scrollbar styling ─── */
+
+.telite-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* ─── Webkit (Chrome, Edge, Safari) Scrollbars ─── */
+
+.telite-scroll-container::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+.telite-scroll-container::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--scrollbar-radius);
+}
+
+/* The thumb defaults to completely transparent */
+.telite-scroll-container::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: var(--scrollbar-radius);
+}
+
+/* Show thumb on container hover OR when actively scrolling */
+.telite-scroll-container:hover::-webkit-scrollbar-thumb,
+.telite-scroll-container[data-scrolling="true"]::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+}
+
+/* Active thumb interaction */
+.telite-scroll-container::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* ─── Accessibility ─── */
+
+/* High Contrast mode media query */
+@media (forced-colors: active) {
+  .telite-scroll-container::-webkit-scrollbar-thumb {
+    background-color: CanvasText;
+  }
+}
+
+/* Reduce Motion: always show scrollbar so users don't need hover to find it */
+[data-reduced-motion="true"] .telite-scroll-container::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+}
+
+/* ─── Utilities ─── */
+
+/* Lock body scrolling when modals are open */
+body.scroll-locked {
+  overflow: hidden !important;
+}

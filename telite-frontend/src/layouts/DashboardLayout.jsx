@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import PropTypes from "prop-types";
-import { Badge, Avatar } from "../components/common/ui";
+import { Badge } from "../components/common/ui";
 import { Icon } from "../components/common/icons";
 import AccountSwitcher from "../components/common/AccountSwitcher";
 import ThemeSelector from "../components/common/ThemeSelector";
 import NotificationBell from "../components/common/NotificationBell";
+import { PageScroll, PanelScroll } from "../components/common/scroll";
 
 export function DashboardShell({
   theme = "brand",
@@ -15,7 +16,6 @@ export function DashboardShell({
   navGroups,
   activeNav,
   onNavClick,
-  profile,
   title,
   subtitle,
   topbarBadge,
@@ -52,7 +52,7 @@ export function DashboardShell({
   return (
     <div className={`dashboard-shell ${sidebarCollapsed ? 'is-collapsed' : ''}`} data-dashboard-variant={dashboardVariant}>
       <div className={`dashboard-sidebar__overlay ${mobileOpen ? 'is-visible' : ''}`} onClick={() => setMobileOpen(false)} />
-      <aside data-lenis-prevent className={`dashboard-sidebar ${sidebarCollapsed ? 'dashboard-sidebar--collapsed' : ''} ${isCompact ? 'dashboard-sidebar--mobile' : ''} ${mobileOpen ? 'is-open' : ''}`}>
+      <PanelScroll autoHide={false} as="aside" data-lenis-prevent className={`dashboard-sidebar ${sidebarCollapsed ? 'dashboard-sidebar--collapsed' : ''} ${isCompact ? 'dashboard-sidebar--mobile' : ''} ${mobileOpen ? 'is-open' : ''}`}>
         <div className="sidebar-brand">
           <div className="sidebar-brand__mark" style={{ background: brandMark.background }}>
             {brandMark.label}
@@ -96,15 +96,6 @@ export function DashboardShell({
         </div>
 
         <div className="sidebar-bottom">
-          <div className="sidebar-profile" style={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
-            <Avatar initials={profile.initials} gradient={profile.gradient} size={30} />
-            {!sidebarCollapsed && (
-              <div>
-                <div className="sidebar-profile__name">{profile.name}</div>
-                <div className="sidebar-profile__role">{profile.roleLabel}</div>
-              </div>
-            )}
-          </div>
           <button 
             type="button" 
             className="sidebar-collapse-btn"
@@ -121,7 +112,7 @@ export function DashboardShell({
             {!sidebarCollapsed && <span>Collapse</span>}
           </button>
         </div>
-      </aside>
+      </PanelScroll>
 
       <div className="dashboard-main">
         <header className="topbar">
@@ -149,9 +140,9 @@ export function DashboardShell({
           </div>
         </header>
         {tabBar ? <div className="tabbar">{tabBar}</div> : null}
-        <main className="dashboard-content" ref={scrollRef}>
+        <PageScroll as="main" className="dashboard-content" ref={scrollRef}>
           {children}
-        </main>
+        </PageScroll>
       </div>
     </div>
   );
@@ -288,12 +279,6 @@ DashboardShell.propTypes = {
   ).isRequired,
   activeNav: PropTypes.string,
   onNavClick: PropTypes.func.isRequired,
-  profile: PropTypes.shape({
-    initials: PropTypes.string.isRequired,
-    gradient: PropTypes.arrayOf(PropTypes.string),
-    name: PropTypes.string.isRequired,
-    roleLabel: PropTypes.string,
-  }).isRequired,
   title: PropTypes.node.isRequired,
   subtitle: PropTypes.node,
   topbarBadge: PropTypes.shape({
