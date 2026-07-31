@@ -127,6 +127,25 @@ def get_session_factory() -> sessionmaker:
     return _SessionLocal
 
 
+# ── SQLAlchemy Events for After-Commit Callbacks ──────────────────────────────
+
+@event.listens_for(Session, "after_commit")
+def receive_after_commit(session: Session) -> None:
+    """Execute all registered after_commit callbacks for this session."""
+    callbacks = session.info.pop("after_commit_callbacks", [])
+    for cb in callbacks:
+        try:
+            cb()
+        except Exception:
+            logger.exception("Error executing after_commit callback")
+
+
+@event.listens_for(Session, "after_rollback")
+def receive_after_rollback(session: Session) -> None:
+    """Clear registered after_commit callbacks on rollback."""
+    session.info.pop("after_commit_callbacks", [])
+
+
 # ── Session context managers ──────────────────────────────────────────────────
 
 @contextmanager
