@@ -55,7 +55,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "agentation": "^3.0.2",
     "autoprefixer": "^10.5.0",
-    "eslint": "^9.15.0",
+    "eslint": "^10.8.0",
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.0.0",
     "globals": "^15.12.0",
