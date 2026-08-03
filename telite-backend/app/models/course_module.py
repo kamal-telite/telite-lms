@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -20,12 +20,15 @@ def _serialize_datetime(value) -> str | None:
 
 class CourseModule(Base, TenantMixin, TimestampMixin):
     __tablename__ = "course_modules"
+    __table_args__ = (
+        Index('ix_course_modules_org_course_deleted_sort', 'org_id', 'course_id', 'deleted_at', 'sort_order'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     course_id: Mapped[str] = mapped_column(String(50), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     
     section: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    section_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("course_sections.id", ondelete="SET NULL"), nullable=True)
+    section_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("course_sections.id", ondelete="SET NULL"), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     module_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="e.g. page, url, quiz, scorm")
@@ -35,7 +38,7 @@ class CourseModule(Base, TenantMixin, TimestampMixin):
     content_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    deleted_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True)
+    deleted_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True, index=True)
 
     # Relationships
     course: Mapped[Course] = relationship("Course")

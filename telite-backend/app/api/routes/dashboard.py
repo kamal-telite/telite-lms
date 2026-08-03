@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.auth import TokenData, ensure_org_access, get_current_user, require_admin, require_super_admin, resolve_org_scope
 from sqlalchemy.orm import Session
 from app.db.engine import db_session
-from app.repositories.analytics_repo import AnalyticsRepository
+from app.repositories.analytics import AnalyticsRepository
 from app.core.rbac import ROLE_PERMISSIONS, Permission
 
 

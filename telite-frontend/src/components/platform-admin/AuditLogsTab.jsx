@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useToast } from "../../components/common/ui";
 import { downloadCSV } from "../../utils/csvExport";
 
@@ -138,7 +138,7 @@ export default function AuditLogsTab({ searchQuery }) {
             {filteredLogs.map((l, i) => {
               const isExpanded = expandedRow === i;
               return (
-                <React.Fragment key={i}>
+                <Fragment key={i}>
                   <tr style={{ borderTop: '1px solid var(--border2)' }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'var(--fm)', fontSize: '12px', color: 'var(--primary)' }}>{l.ts}</td>
                     <td style={{ padding: '12px 14px' }}>
@@ -184,7 +184,7 @@ export default function AuditLogsTab({ searchQuery }) {
                       </td>
                     </tr>
                   )}
-                </React.Fragment>
+                </Fragment>
               );
             })}
           </tbody>

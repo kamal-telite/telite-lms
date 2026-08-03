@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { platformApi } from "../../services/platform";
 import { getDefaultRoute, buildSessionFromAuth, getSession } from "../../context/session";
-import { getErrorMessage } from "../../services/client";
+import { getErrorMessage, fetchMe } from "../../services/client";
 import { useToast } from "../../components/common/ui";
 
 function useInviteToken() {
@@ -86,16 +86,37 @@ export default function AcceptInvitePage({ onAuthenticated }) {
 
     setSubmitting(true);
     try {
+      console.log("[ACCEPT_INVITE] handleAccept - accepting invitation");
       const payload = await platformApi.acceptInvitation({
         token,
         full_name: fullName.trim(),
         password,
       });
-      const session = buildSessionFromAuth(payload.data);
+      console.log("[ACCEPT_INVITE] handleAccept - acceptInvitation response:", payload);
+      
+      const latestUser = await fetchMe();
+      console.log("[ACCEPT_INVITE] handleAccept - fetchMe latestUser:", latestUser);
+      
+      // Ensure proper session building - fetchMe data takes precedence for latest values
+      const mergedPayload = {
+        ...(payload.data || payload),
+        user: {
+          ...((payload.data?.user) || (payload.data) || payload),
+          ...(latestUser.user || latestUser),
+        }
+      };
+      console.log("[ACCEPT_INVITE] handleAccept - merged payload:", mergedPayload);
+      
+      const session = buildSessionFromAuth(mergedPayload);
+      console.log("[ACCEPT_INVITE] handleAccept - built session:", session);
+      console.log("[ACCEPT_INVITE] handleAccept - session.user.role:", session.user.role);
       onAuthenticated?.(session);
       showToast("Invitation accepted. Welcome!", "success");
-      window.location.replace(getDefaultRoute(session.user));
+      const redirectRoute = getDefaultRoute(session.user);
+      console.log("[ACCEPT_INVITE] handleAccept - redirecting to:", redirectRoute);
+      window.location.replace(redirectRoute);
     } catch (error) {
+      console.error("[ACCEPT_INVITE] handleAccept - error:", error);
       setInviteError(getErrorMessage(error, "Failed to accept invitation."));
     } finally {
       setSubmitting(false);
@@ -126,7 +147,7 @@ export default function AcceptInvitePage({ onAuthenticated }) {
           </div>
         </section>
 
-        <section className="login-card">
+        <section className="login-card login-card--auth">
           <div className="login-card__header">
             <h2>Create your password</h2>
             <p>We’ll verify the secure invitation link and activate your admin account.</p>

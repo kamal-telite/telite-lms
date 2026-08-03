@@ -93,7 +93,7 @@ class PalTopicPerformance(Base, TenantMixin, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     enrollment_number: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    user_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     topic: Mapped[str] = mapped_column(String(100), nullable=False)
     avg_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

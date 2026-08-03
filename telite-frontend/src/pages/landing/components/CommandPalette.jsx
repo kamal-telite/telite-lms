@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useFocusTrap } from "../../../hooks/useFocusTrap";
+import { useBodyScrollLock } from "../../../hooks/useBodyScrollLock";
 import "../../../styles/landing-sections/palette.css";
 
 const COMMANDS = [
@@ -20,6 +21,7 @@ export default function CommandPalette({ isOpen, onClose, context }) {
   const modalRef = useRef(null);
 
   useFocusTrap(isOpen, modalRef);
+  useBodyScrollLock(isOpen);
 
   const filteredCommands = COMMANDS.filter((cmd) =>
     cmd.label.toLowerCase().includes(search.toLowerCase())

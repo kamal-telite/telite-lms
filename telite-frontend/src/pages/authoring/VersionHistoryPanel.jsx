@@ -47,7 +47,7 @@ export function VersionHistoryPanel({ courseId, onVersionChanged }) {
   const handleRollback = async (versionId) => {
     setRollingBack(true);
     try {
-      const { data } = await api.post(`/authoring/publishing/courses/${courseId}/versions/${versionId}/rollback`);
+      const { data } = await api.post(`/authoring/publishing/courses/${courseId}/versions/${versionId}/restore`);
       showToast(data.message, "warning");
       setRollbackTarget(null);
       fetchVersions();
@@ -180,7 +180,9 @@ export function VersionHistoryPanel({ courseId, onVersionChanged }) {
           </div>
         ))}
         {versions.length === 0 && (
-          <div style={{ color: "var(--text-secondary)", fontSize: "14px" }}>No versions tracked yet.</div>
+          <div style={{ color: "var(--text-secondary)", fontSize: "14px", lineHeight: 1.5 }}>
+            No snapshots tracked yet. Select <strong>Snapshot Current</strong> to save the current course structure as version 1.
+          </div>
         )}
       </div>
 

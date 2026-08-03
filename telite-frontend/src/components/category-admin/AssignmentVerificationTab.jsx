@@ -46,7 +46,11 @@ export default function AssignmentVerificationTab({
             <span className="field__label">Search</span>
             <input className="field__input" value={assignmentFilters.search} onChange={(event) => setAssignmentFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Learner or course" />
           </label>
-          <Button tone="ghost" onClick={loadAssignmentQueue} disabled={assignmentLoading}>{assignmentLoading ? "Loading..." : "Refresh"}</Button>
+          <label className="field">
+            <span className="field__label">&nbsp;</span>
+            <Button tone="ghost" onClick={loadAssignmentQueue} disabled={assignmentLoading}>{assignmentLoading ? "Loading..." : "Refresh"}</Button>
+          </label>
+          {/* <Button tone="ghost" onClick={loadAssignmentQueue} disabled={assignmentLoading}>{assignmentLoading ? "Loading..." : "Refresh"}</Button> */}
         </div>
 
         {assignmentLoading ? (

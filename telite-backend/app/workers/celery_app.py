@@ -39,6 +39,7 @@ celery_app = Celery(
         "app.workers.notification_tasks",
         "app.workers.reminder_tasks",
         "app.workers.analytics_tasks",
+        "app.workers.task_assignment_tasks",
     ],
 )
 
@@ -48,12 +49,14 @@ default_exchange = Exchange("default", type="direct")
 reconcile_exchange = Exchange("reconcile", type="direct")
 notifications_exchange = Exchange("notifications", type="direct")
 reminders_exchange = Exchange("reminders", type="direct")
+tasks_exchange = Exchange("tasks", type="direct")
 
 celery_app.conf.task_queues = (
     Queue("default", default_exchange, routing_key="default"),
     Queue("reconcile", reconcile_exchange, routing_key="reconcile"),
     Queue("notifications", notifications_exchange, routing_key="notifications"),
     Queue("reminders", reminders_exchange, routing_key="reminders"),
+    Queue("tasks", tasks_exchange, routing_key="tasks"),
 )
 
 celery_app.conf.task_default_queue = "default"
@@ -64,6 +67,7 @@ celery_app.conf.task_routes = {
     "app.workers.reconciliation.*": {"queue": "reconcile"},
     "app.workers.notification_tasks.*": {"queue": "notifications"},
     "app.workers.reminder_tasks.*": {"queue": "reminders"},
+    "app.workers.task_assignment_tasks.*": {"queue": "tasks"},
 }
 
 # ── Retry / reliability settings ──────────────────────────────────────────────

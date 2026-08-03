@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import PropTypes from "prop-types";
 import { Icon } from "./icons";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 export { Icon };
 
 const ToastContext = createContext({ showToast: () => {} });
@@ -136,6 +137,8 @@ export function StatCard({ accent, label, value, meta, pulse = false, suffix, de
 }
 
 export function Modal({ open, title, description, children, footer, onClose, width = 480 }) {
+  useBodyScrollLock(open);
+
   useEffect(() => {
     if (!open) {
       return undefined;

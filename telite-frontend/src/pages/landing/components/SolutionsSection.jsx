@@ -37,9 +37,11 @@ export default function SolutionsSection({ activeTab, setActiveTab }) {
   return (
     <section id="solutions">
       <div className="inner">
-        <span className="section-eyebrow">Solutions</span>
-        <h2 className="section-title">Built for your context</h2>
-        <p className="section-sub">Whether managing students across departments or training employees at scale.</p>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <span className="section-eyebrow" style={{ textAlign: 'center' }}>Solutions</span>
+          <h2 className="section-title" style={{ textAlign: 'center' }}>Built for your context</h2>
+          <p className="section-sub" style={{ textAlign: 'center', margin: '0 auto' }}>Whether managing students across departments or training employees at scale.</p>
+        </div>
         <div className="solutions-grid">
           <div className="sol-left">
             <div className="sol-tabs">

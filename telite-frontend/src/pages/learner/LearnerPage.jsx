@@ -29,7 +29,6 @@ import { TasksSection } from "../../components/learner/sections/TasksSection";
 import { LeaderboardSection } from "../../components/learner/sections/LeaderboardSection";
 import { CertificatesSection } from "../../components/learner/sections/CertificatesSection";
 import { AnnouncementsSection } from "../../components/learner/sections/AnnouncementsSection";
-import { ProfileSection } from "../../components/learner/sections/ProfileSection";
 import { SettingsSection } from "../../components/learner/sections/SettingsSection";
 
 export default function LearnerPage({ session, onLogout }) {
@@ -39,6 +38,7 @@ export default function LearnerPage({ session, onLogout }) {
   const scrollRef = useRef(null);
 
   const { data, loading, error, fetchData: load } = useLearnerStore();
+  console.log("[LEARNER_PAGE] LearnerPage rendering - session:", session, "location:", location.pathname);
 
   // State management
   const [submittingTaskId, setSubmittingTaskId] = useState(null);
@@ -60,13 +60,7 @@ export default function LearnerPage({ session, onLogout }) {
     error: "",
   });
 
-  // Profile editing state
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    full_name: "",
-    email: "",
-    organization_id: "1",
-  });
+
 
   // Grading state
   const [gradingAnalytics, setGradingAnalytics] = useState(null);
@@ -85,16 +79,6 @@ export default function LearnerPage({ session, onLogout }) {
     activeNav = `section-${currentTab}`;
   }
 
-  // Initialize profile form when data loads
-  useEffect(() => {
-    if (data?.profile) {
-      setProfileForm({
-        full_name: data.profile.full_name || "",
-        email: data.profile.email || "",
-        organization_id: data.profile.organization_id || data.profile.org_id || "1",
-      });
-    }
-  }, [data]);
 
   // Load initial data
   useEffect(() => {
@@ -266,14 +250,6 @@ export default function LearnerPage({ session, onLogout }) {
     }));
   }
 
-  function handleProfileFormChange(newForm) {
-    setProfileForm(newForm);
-  }
-
-  function handleProfileSave() {
-    showToast("Profile updated successfully.", "success");
-    setIsEditingProfile(false);
-  }
 
   // Loading and error states
   if (loading) {
@@ -308,9 +284,11 @@ export default function LearnerPage({ session, onLogout }) {
   const notifications = Array.isArray(data.notifications)
     ? data.notifications
     : [];
-  const leaderboard = Array.isArray(data.recommendation?.leaderboard)
-    ? data.recommendation.leaderboard
-    : [];
+  const leaderboard = Array.isArray(data.leaderboard)
+    ? data.leaderboard
+    : Array.isArray(data.recommendation?.leaderboard)
+      ? data.recommendation.leaderboard
+      : [];
 
   const navGroups = [
     {
@@ -349,13 +327,6 @@ export default function LearnerPage({ session, onLogout }) {
         { id: "section-leaderboard", label: "Leaderboard", icon: "leaderboard" },
       ],
     },
-    {
-      label: "Account",
-      items: [
-        { id: "section-profile", label: "Profile", icon: "profile" },
-        { id: "section-settings", label: "Settings", icon: "settings" },
-      ],
-    },
   ];
 
   return (
@@ -370,14 +341,6 @@ export default function LearnerPage({ session, onLogout }) {
       navGroups={navGroups}
       activeNav={activeNav}
       onNavClick={changeSection}
-      profile={{
-        initials:
-          data.profile.avatar_initials ||
-          getInitials(data.profile.full_name),
-        gradient: data.profile.avatar_gradient || ["#7C3AED", "#2563EB"],
-        name: data.profile.full_name,
-        roleLabel: "learner",
-      }}
       title={
         navGroups.flatMap((g) => g.items).find((i) => i.id === activeNav)
           ?.label ||
@@ -514,19 +477,9 @@ export default function LearnerPage({ session, onLogout }) {
           />
         )}
 
-        {activeNav === "section-profile" && (
-          <ProfileSection
-            profile={data.profile}
-            isEditing={isEditingProfile}
-            profileForm={profileForm}
-            onFormChange={handleProfileFormChange}
-            onEditStart={() => setIsEditingProfile(true)}
-            onEditCancel={() => setIsEditingProfile(false)}
-            onSave={handleProfileSave}
-          />
+        {activeNav === "section-settings" && (
+          <SettingsSection />
         )}
-
-        {activeNav === "section-settings" && <SettingsSection />}
       </div>
     </DashboardShell>
   );

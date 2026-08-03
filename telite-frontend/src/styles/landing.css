@@ -99,7 +99,7 @@ html { scroll-behavior: smooth; }
   font-family: var(--font-body);
   background: var(--surface);
   color: var(--text);
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

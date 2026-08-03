@@ -15,6 +15,18 @@ from app.core.permissions import check_capability, require_capability
 
 publishing_router = APIRouter(prefix="/authoring/publishing", tags=["Publishing Gateway"])
 
+
+def _get_authorized_course(pub_repo: PublishingRepository, course_id: str, current_user: TokenData):
+    course = pub_repo.get_course(course_id, current_user.org_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if (
+        current_user.role == "category_admin"
+        and course.category_slug != current_user.category_scope
+    ):
+        raise HTTPException(status_code=404, detail="Course not found")
+    return course
+
 # -----------------------------------------------------------------------------
 # 1. Publishing Workflow Engine
 # -----------------------------------------------------------------------------
@@ -119,7 +131,8 @@ def execute_workflow_action(
         parent_version_id = existing[0].id if existing else None
         snapshot = pub_repo.build_snapshot(course_id, current_user.org_id)
         version = pub_repo.create_version(
-            course_id, current_user.org_id, next_number, parent_version_id, snapshot
+            course_id, current_user.org_id, next_number, parent_version_id, snapshot,
+            created_by=current_user.id,
         )
         pub_repo.update_version_status(version, "published", current_user.id)
     
@@ -229,11 +242,12 @@ def list_versions(
     current_user: TokenData = Depends(get_current_user)
 ):
     pub_repo = PublishingRepository(db)
+    _get_authorized_course(pub_repo, course_id, current_user)
     versions = pub_repo.get_versions(course_id, current_user.org_id)
     return {"versions": [v.to_dict() for v in versions]}
 
 class CreateVersionRequest(BaseModel):
-    parent_version_id: Optional[int] = None
+    parent_version_id: Optional[str] = None
 
 @publishing_router.post("/courses/{course_id}/versions", dependencies=[Depends(require_admin)])
 def create_version(
@@ -244,16 +258,15 @@ def create_version(
 ):
     check_capability(db, current_user, "version.create")
     pub_repo = PublishingRepository(db)
-    course = pub_repo.get_course(course_id, current_user.org_id)
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
+    _get_authorized_course(pub_repo, course_id, current_user)
 
     existing = pub_repo.get_versions(course_id, current_user.org_id)
     next_number = existing[0].version_number + 1 if existing else 1
     
     snapshot = pub_repo.build_snapshot(course_id, current_user.org_id)
     version = pub_repo.create_version(
-        course_id, current_user.org_id, next_number, request.parent_version_id, snapshot
+        course_id, current_user.org_id, next_number, request.parent_version_id, snapshot,
+        created_by=current_user.id,
     )
     
     pub_repo.log_activity(
@@ -269,13 +282,14 @@ def create_version(
 @publishing_router.post("/courses/{course_id}/versions/{version_id}/restore", dependencies=[Depends(require_admin)])
 def restore_course_version(
     course_id: str,
-    version_id: int,
+    version_id: str,
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
     check_capability(db, current_user, "version.rollback")
     
     pub_repo = PublishingRepository(db)
+    _get_authorized_course(pub_repo, course_id, current_user)
     target_version = pub_repo.get_version(version_id, current_user.org_id)
     if not target_version:
         raise HTTPException(status_code=404, detail="Version not found")
@@ -320,12 +334,13 @@ def compare_versions(
 ):
     from app.services.diff_service import DiffService
     pub_repo = PublishingRepository(db)
+    _get_authorized_course(pub_repo, course_id, current_user)
 
     if left_version_id == "current":
         left_snapshot = pub_repo.build_snapshot(course_id, current_user.org_id)
         left_dict = {"version_number": "Draft"}
     else:
-        left = pub_repo.get_version(int(left_version_id), current_user.org_id)
+        left = pub_repo.get_version(left_version_id, current_user.org_id)
         if not left or left.course_id != course_id:
             raise HTTPException(status_code=404, detail="Version not found")
         left_snapshot = left.snapshot_json
@@ -335,7 +350,7 @@ def compare_versions(
         right_snapshot = pub_repo.build_snapshot(course_id, current_user.org_id)
         right_dict = {"version_number": "Draft"}
     else:
-        right = pub_repo.get_version(int(right_version_id), current_user.org_id)
+        right = pub_repo.get_version(right_version_id, current_user.org_id)
         if not right or right.course_id != course_id:
             raise HTTPException(status_code=404, detail="Version not found")
         right_snapshot = right.snapshot_json

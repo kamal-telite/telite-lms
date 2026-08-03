@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -12,6 +12,9 @@ from app.models.base import Base, TenantMixin, TimestampMixin
 
 class Announcement(Base, TenantMixin, TimestampMixin):
     __tablename__ = "announcements"
+    __table_args__ = (
+        Index('ix_announcements_org_created', 'org_id', 'created_at'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

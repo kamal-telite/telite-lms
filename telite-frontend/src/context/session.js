@@ -34,6 +34,67 @@ const SESSION_LOCAL_STORAGE_KEYS = [
   "telite_last_dashboard",
 ];
 
+const ROLE_ALIASES = {
+  "category admin": "category_admin",
+  "category-admin": "category_admin",
+  categoryadmin: "category_admin",
+  cat_admin: "category_admin",
+  "super admin": "super_admin",
+  "super-admin": "super_admin",
+  superadmin: "super_admin",
+  "platform admin": "platform_admin",
+  "platform-admin": "platform_admin",
+  platformadmin: "platform_admin",
+};
+
+export function normalizeRole(role) {
+  console.log("[SESSION] normalizeRole - input role:", role, "type:", typeof role);
+  if (role == null || String(role).trim() === "") {
+    console.log("[SESSION] normalizeRole - role is null/empty, returning empty string");
+    return "";
+  }
+  const normalized = String(role).trim().toLowerCase();
+  const aliased = ROLE_ALIASES[normalized] || normalized;
+  console.log("[SESSION] normalizeRole - normalized:", normalized, "aliased:", aliased);
+  return aliased;
+}
+
+function resolveRole(source, fallbackRole = "") {
+  const candidate = normalizeRole(source?.role ?? source?.user_type ?? source?.type);
+  if (candidate && candidate !== "learner") {
+    return candidate;
+  }
+
+  const fallback = normalizeRole(fallbackRole);
+  if (fallback && fallback !== "learner") {
+    return fallback;
+  }
+
+  return candidate || fallback;
+}
+
+function normalizeUser(user) {
+  if (!user) return null;
+  console.log("[SESSION] normalizeUser - input user:", user);
+  const role = resolveRole(user, user?.role ?? user?.user_type ?? user?.type);
+  const normalized = {
+    ...user,
+    role,
+    category_scope:
+      user.category_scope ??
+      user.categoryScope ??
+      user.category_slug ??
+      user.categorySlug ??
+      null,
+    is_platform_admin:
+      user.is_platform_admin ??
+      user.isPlatformAdmin ??
+      role === "platform_admin",
+  };
+  console.log("[SESSION] normalizeUser - output normalized user:", normalized);
+  return normalized;
+}
+
 // ── CSRF helpers ──────────────────────────────────────────────────────────────
 
 /**
@@ -90,8 +151,8 @@ export function getSession() {
   if (!rawUser) return null;
 
   try {
-    const user = JSON.parse(rawUser);
-    return { user };
+    const user = normalizeUser(JSON.parse(rawUser));
+    return user ? { user } : null;
   } catch {
     return null;
   }
@@ -103,10 +164,11 @@ export function getSession() {
  */
 export function persistSession(session) {
   if (!session?.user) return;
-  writeStorage(USER_KEY, JSON.stringify(session.user));
+  const user = normalizeUser(session.user);
+  writeStorage(USER_KEY, JSON.stringify(user));
 
   // Also update the multi-account list
-  _upsertAccount(session.user);
+  _upsertAccount(user);
 }
 
 /**
@@ -163,19 +225,22 @@ export function clearClientSessionState() {
  * Tokens are NOT stored here — they arrive as HttpOnly cookies.
  */
 export function buildSessionFromAuth(payload) {
+  const source = payload?.user || payload || {};
+  const user = normalizeUser({
+    user_id: source.user_id ?? source.id ?? source.sub,
+    role: resolveRole(source),
+    name: source.name ?? source.full_name,
+    email: source.email,
+    category_scope: source.category_scope ?? source.categoryScope ?? source.category_slug,
+    org_id: source.org_id ?? source.organization_id,
+    is_platform_admin: source.is_platform_admin ?? source.isPlatformAdmin,
+    permissions: source.permissions ?? [],
+    theme_preference: source.theme_preference ?? "system",
+  });
+
   return {
     authenticated: true,
-    user: {
-      user_id: payload.user_id,
-      role: payload.role,
-      name: payload.name,
-      email: payload.email,
-      category_scope: payload.category_scope ?? null,
-      org_id: payload.org_id ?? null,
-      is_platform_admin: payload.is_platform_admin ?? false,
-      permissions: payload.permissions ?? [],
-      theme_preference: payload.theme_preference ?? "system",
-    },
+    user,
   };
 }
 
@@ -183,20 +248,31 @@ export function buildSessionFromAuth(payload) {
  * Merge an updated auth payload into an existing session.
  */
 export function mergeAuthPayload(session, payload) {
+  const source = payload?.user || payload || {};
+  const user = normalizeUser({
+    ...session?.user,
+    user_id: source.user_id ?? source.id ?? source.sub ?? session?.user?.user_id,
+    role: resolveRole(source, session?.user?.role),
+    name: source.name ?? source.full_name ?? session?.user?.name,
+    email: source.email ?? session?.user?.email,
+    category_scope:
+      source.category_scope ??
+      source.categoryScope ??
+      source.category_slug ??
+      session?.user?.category_scope,
+    org_id: source.org_id ?? source.organization_id ?? session?.user?.org_id,
+    is_platform_admin:
+      source.is_platform_admin ??
+      source.isPlatformAdmin ??
+      session?.user?.is_platform_admin,
+    permissions: source.permissions ?? session?.user?.permissions ?? [],
+    theme_preference:
+      source.theme_preference ?? session?.user?.theme_preference ?? "system",
+  });
+
   return {
     authenticated: true,
-    user: {
-      ...session?.user,
-      user_id: payload.user_id || session?.user?.user_id,
-      role: payload.role || session?.user?.role,
-      name: payload.name || session?.user?.name,
-      email: payload.email || session?.user?.email,
-      category_scope: payload.category_scope ?? session?.user?.category_scope ?? null,
-      org_id: payload.org_id ?? session?.user?.org_id ?? null,
-      is_platform_admin: payload.is_platform_admin ?? session?.user?.is_platform_admin ?? false,
-      permissions: payload.permissions ?? session?.user?.permissions ?? [],
-      theme_preference: payload.theme_preference ?? session?.user?.theme_preference ?? "system",
-    },
+    user,
   };
 }
 
@@ -204,9 +280,18 @@ export function mergeAuthPayload(session, payload) {
  * Merge updated user fields into an existing session.
  */
 export function mergeSessionUser(session, user) {
+  console.log("[SESSION] mergeSessionUser called with session.user:", session?.user);
+  console.log("[SESSION] mergeSessionUser called with user:", user);
+  const merged = { ...session?.user, ...user };
+  console.log("[SESSION] mergeSessionUser - merged object before normalize:", merged);
+  const normalizedUser = normalizeUser({
+    ...merged,
+    role: resolveRole(merged, session?.user?.role),
+  });
+  console.log("[SESSION] mergeSessionUser - normalizedUser after normalize:", normalizedUser);
   return {
     ...session,
-    user: { ...session?.user, ...user },
+    user: normalizedUser,
   };
 }
 
@@ -214,18 +299,44 @@ export function mergeSessionUser(session, user) {
  * Determine the default route for a user based on their role.
  */
 export function getDefaultRoute(user) {
-  if (!user) return "/login";
+  console.log("[SESSION] getDefaultRoute called with user:", user);
+  if (!user) {
+    console.log("[SESSION] getDefaultRoute - user is null/undefined, returning /login");
+    return "/login";
+  }
 
-  if (user.is_platform_admin === true) {
+  const normalizedUser = normalizeUser(user);
+  console.log("[SESSION] getDefaultRoute - normalizedUser:", normalizedUser);
+  if (!normalizedUser) {
+    console.log("[SESSION] getDefaultRoute - normalizedUser is null, returning /login");
+    return "/login";
+  }
+
+  if (normalizedUser.is_platform_admin === true) {
+    console.log("[SESSION] getDefaultRoute - is_platform_admin=true, returning /platform-admin");
     return "/platform-admin";
   }
-  if (user.role === "super_admin") {
+  const role = normalizeRole(normalizedUser.role);
+  console.log("[SESSION] getDefaultRoute - normalized role:", role);
+  if (role === "platform_admin") {
+    console.log("[SESSION] getDefaultRoute - role is platform_admin, returning /platform-admin");
+    return "/platform-admin";
+  }
+  if (role === "super_admin") {
+    console.log("[SESSION] getDefaultRoute - role is super_admin, returning /super-admin");
     return "/super-admin";
   }
-  if (user.role === "category_admin") {
-    return `/categories/${user.category_scope || "ats"}/admin`;
+  if (role === "category_admin") {
+    const route = `/categories/${normalizedUser.category_scope || "ats"}/admin`;
+    console.log("[SESSION] getDefaultRoute - role is category_admin, returning:", route);
+    return route;
   }
-  return "/learner";
+  if (role === "learner") {
+    console.log("[SESSION] getDefaultRoute - role is learner, returning /learner");
+    return "/learner";
+  }
+  console.log("[SESSION] getDefaultRoute - role not recognized, returning /login");
+  return "/login";
 }
 
 // ── Multi-account switcher ────────────────────────────────────────────────────

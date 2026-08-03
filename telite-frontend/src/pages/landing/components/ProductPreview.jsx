@@ -77,10 +77,10 @@ function ProductPreview({ activePreviewTab, activeIntegrationTab, setActivePrevi
   return (
     <section id="product-preview">
       <div className="inner">
-        <div className="preview-header">
-          <span className="section-eyebrow">Interactive Sandbox</span>
-          <h2 className="section-title">See Telite LMS in Action</h2>
-          <p className="section-sub">Experience our lightning-fast analytical layers, operational queues, and curriculum building tools.</p>
+        <div className="preview-header" style={{ textAlign: 'center' }}>
+          <span className="section-eyebrow" style={{ textAlign: 'center' }}>Interactive Sandbox</span>
+          <h2 className="section-title" style={{ textAlign: 'center' }}>See Telite LMS in Action</h2>
+          <p className="section-sub" style={{ textAlign: 'center', margin: '0 auto' }}>Experience our lightning-fast analytical layers, operational queues, and curriculum building tools.</p>
         </div>
 
         <div className="preview-container">

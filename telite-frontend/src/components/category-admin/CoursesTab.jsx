@@ -1,5 +1,4 @@
-import { Panel, Button, Badge } from "../../components/common/ui";
-import { formatPercent, titleize } from "../../utils/formatters";
+import { Panel, Button } from "../../components/common/ui";
 import FragmentCourseRow from "./FragmentCourseRow";
 
 export default function CoursesTab({ 

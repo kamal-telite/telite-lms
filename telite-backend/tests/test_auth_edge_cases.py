@@ -2,9 +2,12 @@ import pytest
 from sqlalchemy import text
 from app.repositories.user_repo import UserRepository, IdentifierCollisionError
 from app.api.auth import authenticate_user
+from app.api.auth import issue_login_response
 from fastapi import HTTPException
+from starlette.responses import Response
 from app.core.password_utils import hash_password
 from app.models.user import User
+from app.models.membership import Membership
 
 @pytest.fixture
 def auth_test_db(db_session):
@@ -150,6 +153,32 @@ def test_multi_tenant_login(auth_test_db):
     auth_u2 = authenticate_user(auth_test_db, "org2user", "PW")
     assert auth_u2.id == u2.id
     assert auth_u2.org_id == 2
+
+def test_login_response_prefers_active_membership_role(auth_test_db):
+    repo = UserRepository(auth_test_db)
+    user = repo.create_user(
+        email="scoped-admin@test.com",
+        username="scoped-admin",
+        full_name="Scoped Admin",
+        role="learner",
+        org_id=1,
+        password="Password123!",
+    )
+    auth_test_db.add(
+        Membership(
+            user_id=user.id,
+            org_id=1,
+            role="category_admin",
+            category_scope="backend-development",
+            status="active",
+        )
+    )
+    auth_test_db.commit()
+
+    token_response = issue_login_response(auth_test_db, user, Response())
+
+    assert token_response.role == "category_admin"
+    assert token_response.category_scope == "backend-development"
 
 def test_get_by_identifier_for_auth_translates_multiple_results(auth_test_db):
     from app.repositories.user_repo import UserRepository, IdentifierCollisionError

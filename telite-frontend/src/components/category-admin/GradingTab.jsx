@@ -31,14 +31,54 @@ export default function GradingTab({
 
           <Panel title="Filters" subtitle="Refine learner grades and assessment details" style={{ marginTop: 18 }}>
             <div className="grid-4">
-              <label className="field"><span>Course</span><select value={gradingFilters.course} onChange={(e) => setGradingFilters((v) => ({ ...v, course: e.target.value }))}><option value="">All courses</option>{(gradingAnalytics.filters?.courses || []).map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select></label>
-              <label className="field"><span>Learner</span><select value={gradingFilters.learner} onChange={(e) => setGradingFilters((v) => ({ ...v, learner: e.target.value }))}><option value="">All learners</option>{(gradingAnalytics.filters?.learners || []).map((learner) => <option key={learner.id} value={learner.id}>{learner.name}</option>)}</select></label>
-              <label className="field"><span>Assessment Type</span><select value={gradingFilters.type} onChange={(e) => setGradingFilters((v) => ({ ...v, type: e.target.value }))}><option value="">All types</option><option value="quiz">Quiz</option><option value="assignment">Assignment</option></select></label>
-              <label className="field"><span>Status</span><select value={gradingFilters.status} onChange={(e) => setGradingFilters((v) => ({ ...v, status: e.target.value }))}><option value="">All statuses</option>{(gradingAnalytics.filters?.statuses || []).map((status) => <option key={status} value={status}>{titleize(status)}</option>)}</select></label>
-              <label className="field"><span>Grade</span><select value={gradingFilters.grade} onChange={(e) => setGradingFilters((v) => ({ ...v, grade: e.target.value }))}><option value="">All grades</option>{(gradingAnalytics.filters?.grades || []).map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></label>
-              <label className="field"><span>From</span><input type="date" value={gradingFilters.from} onChange={(e) => setGradingFilters((v) => ({ ...v, from: e.target.value }))} /></label>
-              <label className="field"><span>To</span><input type="date" value={gradingFilters.to} onChange={(e) => setGradingFilters((v) => ({ ...v, to: e.target.value }))} /></label>
-              <label className="field"><span>Search</span><input value={gradingFilters.search} onChange={(e) => setGradingFilters((v) => ({ ...v, search: e.target.value }))} placeholder="Learner or course" /></label>
+              <label className="field">
+                <span className="field__label">Course</span>
+                <select className="field__select" value={gradingFilters.course} onChange={(e) => setGradingFilters((v) => ({ ...v, course: e.target.value }))}>
+                  <option value="">All courses</option>
+                  {(gradingAnalytics.filters?.courses || []).map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">Learner</span>
+                <select className="field__select" value={gradingFilters.learner} onChange={(e) => setGradingFilters((v) => ({ ...v, learner: e.target.value }))}>
+                  <option value="">All learners</option>
+                  {(gradingAnalytics.filters?.learners || []).map((learner) => <option key={learner.id} value={learner.id}>{learner.name}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">Assessment Type</span>
+                <select className="field__select" value={gradingFilters.type} onChange={(e) => setGradingFilters((v) => ({ ...v, type: e.target.value }))}>
+                  <option value="">All types</option>
+                  <option value="quiz">Quiz</option>
+                  <option value="assignment">Assignment</option>
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">Status</span>
+                <select className="field__select" value={gradingFilters.status} onChange={(e) => setGradingFilters((v) => ({ ...v, status: e.target.value }))}>
+                  <option value="">All statuses</option>
+                  {(gradingAnalytics.filters?.statuses || []).map((status) => <option key={status} value={status}>{titleize(status)}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">Grade</span>
+                <select className="field__select" value={gradingFilters.grade} onChange={(e) => setGradingFilters((v) => ({ ...v, grade: e.target.value }))}>
+                  <option value="">All grades</option>
+                  {(gradingAnalytics.filters?.grades || []).map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">From</span>
+                <input className="field__input" type="date" value={gradingFilters.from} onChange={(e) => setGradingFilters((v) => ({ ...v, from: e.target.value }))} />
+              </label>
+              <label className="field">
+                <span className="field__label">To</span>
+                <input className="field__input" type="date" value={gradingFilters.to} onChange={(e) => setGradingFilters((v) => ({ ...v, to: e.target.value }))} />
+              </label>
+              <label className="field">
+                <span className="field__label">Search</span>
+                <input className="field__input" value={gradingFilters.search} onChange={(e) => setGradingFilters((v) => ({ ...v, search: e.target.value }))} placeholder="Learner or course" />
+              </label>
             </div>
           </Panel>
 

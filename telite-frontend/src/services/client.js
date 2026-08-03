@@ -17,9 +17,9 @@ import {
   getSession,
   mergeAuthPayload,
   persistSession,
-} from "../context/session";
+} from "../context/session.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -55,15 +55,31 @@ function _processQueue(error) {
   _refreshQueue = [];
 }
 
+export function shouldAttemptRefresh(config = {}, error) {
+  if (!error?.response || error.response.status !== 401 || config?._retry) {
+    return false;
+  }
+
+  if (config?._skipRefresh) {
+    return false;
+  }
+
+  const url = String(config.url || "").toLowerCase();
+  const isAuthEndpoint =
+    url.includes("/auth/login") ||
+    url.includes("/auth/refresh") ||
+    url.includes("/auth/me") ||
+    url.includes("/auth/logout");
+
+  return !isAuthEndpoint;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config || {};
-    const isAuthEndpoint =
-      String(original.url || "").includes("/auth/login") ||
-      String(original.url || "").includes("/auth/refresh");
 
-    if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
+    if (error.response?.status === 401 && !original._retry && shouldAttemptRefresh(original, error)) {
       if (_refreshing) {
         // Queue this request until the refresh completes
         return new Promise((resolve, reject) => {
@@ -112,12 +128,22 @@ function unwrap(response) {
 }
 
 export function getErrorMessage(error, fallback = "Something went wrong.") {
-  return (
-    error?.response?.data?.detail ||
-    error?.response?.data?.message ||
-    error?.message ||
-    fallback
-  );
+  const detail = error?.response?.data?.detail;
+  const message = error?.response?.data?.message;
+
+  if (Array.isArray(detail)) {
+    return detail.map(d => d.msg || "Validation error").join(", ");
+  }
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (typeof message === "string") {
+    return message;
+  }
+
+  return error?.message || fallback;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -127,19 +153,26 @@ export async function loginRequest(username, password) {
   form.append("username", username);
   form.append("password", password);
   // Backend sets HttpOnly cookies in the response — we only read the body for user profile
+  console.log("[CLIENT] loginRequest - sending login request for user:", username);
   const response = await api.post("/auth/login", form, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    _skipRefresh: true,
   });
+  console.log("[CLIENT] loginRequest - response:", response.data);
   return response.data;
 }
 
 export async function logoutRequest() {
   // Backend clears HttpOnly cookies; we clear sessionStorage
-  return unwrap(await api.post("/auth/logout", {}));
+  console.log("[CLIENT] logoutRequest - logging out");
+  return unwrap(await api.post("/auth/logout", {}, { _skipRefresh: true }));
 }
 
 export async function fetchMe() {
-  return unwrap(await api.get("/auth/me"));
+  console.log("[CLIENT] fetchMe - calling /auth/me");
+  const result = unwrap(await api.get("/auth/me", { _skipRefresh: true }));
+  console.log("[CLIENT] fetchMe - response:", result);
+  return result;
 }
 
 export async function updateThemePreference(themePreference) {
@@ -259,7 +292,10 @@ export async function fetchCategoryGradingAnalytics(slug) {
 }
 
 export async function fetchLearnerDashboard() {
-  return unwrap(await api.get("/dashboard/learner"));
+  console.log("[CLIENT] fetchLearnerDashboard - making GET /dashboard/learner request");
+  const result = unwrap(await api.get("/dashboard/learner"));
+  console.log("[CLIENT] fetchLearnerDashboard - received response:", result);
+  return result;
 }
 
 export async function fetchAssignmentVerifications(slug, params = {}) {
@@ -391,6 +427,18 @@ export async function deleteCourse(slug, courseId) {
   return unwrap(await api.delete(`/categories/${slug}/courses/${courseId}`));
 }
 
+export async function fetchArchivedCourses(slug, params = {}) {
+  return unwrap(await api.get(`/categories/${slug}/courses/archived`, { params }));
+}
+
+export async function restoreArchivedCourse(slug, courseId) {
+  return unwrap(await api.post(`/categories/${slug}/courses/${courseId}/restore`));
+}
+
+export async function permanentlyDeleteArchivedCourse(slug, courseId) {
+  return unwrap(await api.delete(`/categories/${slug}/courses/${courseId}/permanent`));
+}
+
 export async function launchCourse(courseId) {
   return unwrap(await api.get(`/courses/${courseId}/launch`));
 }
@@ -513,6 +561,14 @@ export async function markAnnouncementRead(id) {
   return unwrap(await api.patch(`/api/v1/announcements/${id}/read`));
 }
 
+export async function updateProfile(payload) {
+  return unwrap(await api.patch("/auth/me", payload));
+}
+
+export async function updatePassword(payload) {
+  return unwrap(await api.post("/auth/me/password", payload));
+}
+
 export async function fetchAnnouncements() {
   return unwrap(await api.get("/api/v1/announcements"));
 }
@@ -530,7 +586,16 @@ export async function deleteAnnouncement(id) {
 }
 
 export async function fetchSettings() {
-  return unwrap(await api.get("/settings/system"));
+  try {
+    return unwrap(await api.get("/settings/system"));
+  } catch (error) {
+    // The native backend no longer exposes this legacy settings endpoint.
+    // It must not prevent the super-admin dashboard from loading.
+    if (error?.response?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function addAllowedDomain(payload) {

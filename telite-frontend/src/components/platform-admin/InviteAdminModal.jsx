@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "../../components/common/ui";
 import { platformApi } from "../../services/platform";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 export default function InviteAdminModal({ open, onClose, onInvited }) {
   const { showToast } = useToast();
+  useBodyScrollLock(open);
   const [orgs, setOrgs] = useState([]);
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [submitting, setSubmitting] = useState(false);

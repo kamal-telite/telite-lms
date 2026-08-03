@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, CheckConstraint, Float, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -19,6 +19,7 @@ class User(Base, TenantMixin, TimestampMixin):
             "theme_preference IN ('light', 'dark', 'system')",
             name="chk_users_theme_preference",
         ),
+        Index('ix_users_org_role_active', 'org_id', 'role', 'is_active'),
     )
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)

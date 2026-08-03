@@ -1,10 +1,13 @@
 import os
 import smtplib
+import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 from urllib.parse import urlencode
+
+from app.core.observability import log_background_task_failure
 
 load_dotenv()
 
@@ -14,6 +17,10 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 FROM_NAME = os.getenv("FROM_NAME", "Telite LMS")
 APP_URL = os.getenv("TELITE_APP_URL", "http://localhost:5173").rstrip("/")
+
+logger = logging.getLogger("telite.email")
+
+logger = logging.getLogger("telite.email")
 
 
 def _build_frontend_url(path: str, params: dict[str, str] | None = None) -> str:
@@ -56,20 +63,41 @@ def send_welcome_email(
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, to_email, message.as_string())
 
-        print(f"[EMAIL SENT] Welcome email sent to {to_email}")
+        logger.info(f"Welcome email sent successfully to {to_email}")
         return True
-    except smtplib.SMTPAuthenticationError:
-        print("[EMAIL ERROR] Gmail authentication failed. Check SMTP_USER and SMTP_PASSWORD in .env")
-        print("[EMAIL HINT] Use an App Password, not your Gmail password.")
-        print("[EMAIL HINT] Go to myaccount.google.com > Security > App passwords")
+    except smtplib.SMTPAuthenticationError as exc:
+        log_background_task_failure(
+            task_name="welcome_email",
+            exception=exc,
+            context={
+                "to_email": to_email,
+                "username": username,
+                "role": role,
+            },
+        )
+        logger.error("Gmail authentication failed. Check SMTP_USER and SMTP_PASSWORD in .env")
+        logger.error("Use an App Password, not your Gmail password. Go to myaccount.google.com > Security > App passwords")
         return False
     except Exception as exc:
-        print(f"[EMAIL ERROR] {exc}")
+        log_background_task_failure(
+            task_name="welcome_email",
+            exception=exc,
+            context={
+                "to_email": to_email,
+                "username": username,
+                "role": role,
+            },
+        )
         return False
 
 
-def send_password_reset_email(to_email: str, name: str, token: str, expires_at: str) -> bool:
-    reset_url = _build_frontend_url("reset-password", {"token": token})
+def send_password_reset_email(
+    *,
+    to_email: str,
+    name: str,
+    reset_url: str,
+    expires_at: str,
+) -> bool:
     if not SMTP_USER or not SMTP_PASSWORD:
         print(
             "\n".join(
@@ -77,7 +105,7 @@ def send_password_reset_email(to_email: str, name: str, token: str, expires_at: 
                     "-" * 48,
                     "[EMAIL NOT SENT - SMTP not configured]",
                     f"To: {to_email}",
-                    "Subject: Reset your Telite LMS password",
+                    "Subject: Password reset request",
                     f"Name: {name}",
                     f"Reset URL: {reset_url}",
                     f"Expires At: {expires_at}",
@@ -87,7 +115,7 @@ def send_password_reset_email(to_email: str, name: str, token: str, expires_at: 
         )
         return False
 
-    subject = "Reset your Telite LMS password"
+    subject = "Password reset request for Telite LMS"
     plain_body = f"""
 Hello {name},
 
@@ -148,14 +176,18 @@ If you did not request a reset, you can ignore this email.
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, to_email, message.as_string())
-        print(f"[EMAIL SENT] Password reset email sent to {to_email}")
+
+        logger.info(f"Password reset email sent successfully to {to_email}")
         return True
-    except smtplib.SMTPAuthenticationError:
-        print("[EMAIL ERROR] Gmail authentication failed. Check SMTP_USER and SMTP_PASSWORD in .env")
-        print("[EMAIL HINT] Use an App Password, not your Gmail password.")
-        return False
     except Exception as exc:
-        print(f"[EMAIL ERROR] {exc}")
+        log_background_task_failure(
+            task_name="password_reset_email",
+            exception=exc,
+            context={
+                "to_email": to_email,
+                "name": name,
+            },
+        )
         return False
 
 
@@ -202,7 +234,7 @@ Set your password:
 
 This invitation expires at {expires_at}.
     """.strip()
-    html_body = f"""
+    html_body = f'''
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
@@ -242,7 +274,7 @@ This invitation expires at {expires_at}.
   </table>
 </body>
 </html>
-    """.strip()
+    '''.strip()
 
     try:
         message = MIMEMultipart("alternative")
@@ -256,14 +288,19 @@ This invitation expires at {expires_at}.
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, to_email, message.as_string())
-        print(f"[EMAIL SENT] Invitation email sent to {to_email}")
+        
+        logger.info(f"Invitation email sent successfully to {to_email}")
         return True
-    except smtplib.SMTPAuthenticationError:
-        print("[EMAIL ERROR] Gmail authentication failed. Check SMTP_USER and SMTP_PASSWORD in .env")
-        print("[EMAIL HINT] Use an App Password, not your Gmail password.")
-        return False
     except Exception as exc:
-        print(f"[EMAIL ERROR] {exc}")
+        log_background_task_failure(
+            task_name="invitation_email",
+            exception=exc,
+            context={
+                "to_email": to_email,
+                "org_name": org_name,
+                "role": role,
+            },
+        )
         return False
 
 

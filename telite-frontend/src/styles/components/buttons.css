@@ -24,6 +24,14 @@
   line-height: 1.2;
 }
 
+@media (max-width: 768px) {
+  .btn {
+    font-size: 16px;
+    padding: 12px 16px;
+    min-height: 48px;
+  }
+}
+
 .btn--ghost {
   background: var(--surface);
 }

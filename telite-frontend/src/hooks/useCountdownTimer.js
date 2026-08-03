@@ -2,38 +2,41 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
  * Custom hook for managing a synchronized countdown timer
- * 
+ *
  * @param {Object} params - Timer parameters
  * @param {number} params.minimumTimeSeconds - Minimum time requirement in seconds
  * @param {number} params.timeSpentSeconds - Time already spent in seconds
  * @param {boolean} params.isActive - Whether the timer should be running
  * @param {boolean} params.isCompleted - Whether the requirement is already met
- * 
+ * @param {string|number|null} params.resetKey - Changes when switching section/module (resets local expiry)
+ *
  * @returns {Object} Timer state and utilities
- * @returns {number} remainingSeconds - Remaining time in seconds
- * @returns {string} formattedTime - MM:SS formatted remaining time
- * @returns {boolean} isTimeMet - Whether time requirement is met
- * @returns {boolean} isExpired - Whether timer has reached 00:00
  */
-export function useCountdownTimer({ 
-  minimumTimeSeconds = 0, 
-  timeSpentSeconds = 0, 
+export function useCountdownTimer({
+  minimumTimeSeconds = 0,
+  timeSpentSeconds = 0,
   isActive = true,
-  isCompleted = false 
+  isCompleted = false,
+  resetKey = null,
 }) {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const intervalRef = useRef(null);
   const lastUpdateTimeRef = useRef(null);
   const isInitializedRef = useRef(false);
+  const [initializedKey, setInitializedKey] = useState(null);
+  const expiredKeyRef = useRef(null);
+  const prevResetKeyRef = useRef(resetKey);
 
-  // Calculate initial remaining time
+  const serverRequirementMet =
+    isCompleted ||
+    (minimumTimeSeconds > 0 && timeSpentSeconds >= minimumTimeSeconds);
+
   const calculateRemaining = useCallback(() => {
     if (!minimumTimeSeconds || minimumTimeSeconds <= 0) return 0;
-    if (isCompleted) return 0;
+    if (serverRequirementMet) return 0;
     return Math.max(0, minimumTimeSeconds - timeSpentSeconds);
-  }, [minimumTimeSeconds, timeSpentSeconds, isCompleted]);
+  }, [minimumTimeSeconds, timeSpentSeconds, serverRequirementMet]);
 
-  // Format seconds to MM:SS
   const formatMMSS = useCallback((seconds) => {
     const total = Math.max(0, Number(seconds) || 0);
     const minutes = Math.floor(total / 60);
@@ -41,44 +44,78 @@ export function useCountdownTimer({
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }, []);
 
-  // Initialize or reset timer when parameters change
   useEffect(() => {
+    const resetKeyChanged = prevResetKeyRef.current !== resetKey;
+    prevResetKeyRef.current = resetKey;
+
+    if (resetKeyChanged) {
+      expiredKeyRef.current = null;
+    }
+
+    // Only expire immediately if the section is already marked as completed
+    // Don't expire just because time requirement is met - let the timer count down naturally
+    if (isCompleted) {
+      expiredKeyRef.current = resetKey;
+      setRemainingSeconds(0);
+      lastUpdateTimeRef.current = Date.now();
+      isInitializedRef.current = true;
+      setInitializedKey(resetKey);
+      return;
+    }
+
+    if (expiredKeyRef.current === resetKey) {
+      setRemainingSeconds(0);
+      lastUpdateTimeRef.current = Date.now();
+      setInitializedKey(resetKey);
+      return;
+    }
+
     const newRemaining = calculateRemaining();
-    setRemainingSeconds(newRemaining);
+
+    if (resetKeyChanged || !isInitializedRef.current) {
+      setRemainingSeconds(newRemaining);
+    } else {
+      setRemainingSeconds((prev) => {
+        if (prev <= 0) return 0;
+        return Math.min(prev, newRemaining);
+      });
+    }
+
     lastUpdateTimeRef.current = Date.now();
     isInitializedRef.current = true;
-  }, [calculateRemaining]);
+    setInitializedKey(resetKey);
+  }, [resetKey, calculateRemaining, isCompleted]);
 
-  // Countdown interval - only depends on activation state, not remainingSeconds
   useEffect(() => {
-    // Clear any existing interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
 
-    // Don't start if not active, already completed, or no time requirement
-    if (!isActive || isCompleted || !minimumTimeSeconds || minimumTimeSeconds <= 0) {
+    if (
+      !isActive ||
+      serverRequirementMet ||
+      expiredKeyRef.current === resetKey ||
+      !minimumTimeSeconds ||
+      minimumTimeSeconds <= 0
+    ) {
       return;
     }
 
-    // Don't start if not yet initialized
     if (!isInitializedRef.current) {
       return;
     }
 
-    // Start countdown
     intervalRef.current = setInterval(() => {
       const now = Date.now();
       const elapsed = (now - lastUpdateTimeRef.current) / 1000;
       lastUpdateTimeRef.current = now;
 
-      // Only decrement if tab is visible and focused
       if (document.visibilityState === 'visible' && document.hasFocus()) {
-        setRemainingSeconds(prev => {
+        setRemainingSeconds((prev) => {
           const newRemaining = Math.max(0, prev - elapsed);
           if (newRemaining <= 0) {
-            // Clear interval when reaching zero
+            expiredKeyRef.current = resetKey;
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
@@ -88,7 +125,7 @@ export function useCountdownTimer({
           return newRemaining;
         });
       }
-    }, 1000); // Update every second
+    }, 1000);
 
     return () => {
       if (intervalRef.current) {
@@ -96,9 +133,8 @@ export function useCountdownTimer({
         intervalRef.current = null;
       }
     };
-  }, [isActive, isCompleted, minimumTimeSeconds]);
+  }, [isActive, serverRequirementMet, minimumTimeSeconds, resetKey]);
 
-  // Handle visibility change - pause when tab is hidden, resume when visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -110,14 +146,29 @@ export function useCountdownTimer({
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  const isTimeMet = isCompleted || remainingSeconds <= 0;
-  const isExpired = remainingSeconds <= 0 && minimumTimeSeconds > 0;
-  const formattedTime = formatMMSS(remainingSeconds);
+  const hasRequirement = minimumTimeSeconds > 0;
+  const isCurrentTimerInitialized = initializedKey === resetKey;
+  const isExpiredLocally = expiredKeyRef.current === resetKey;
+  const isTimeMet =
+    !hasRequirement ||
+    serverRequirementMet ||
+    isExpiredLocally ||
+    (isCurrentTimerInitialized && remainingSeconds <= 0);
+  const isExpired =
+    hasRequirement && (
+      serverRequirementMet ||
+      isExpiredLocally ||
+      (isCurrentTimerInitialized && remainingSeconds <= 0)
+    );
+  const displayRemainingSeconds = isCurrentTimerInitialized
+    ? remainingSeconds
+    : calculateRemaining();
+  const formattedTime = formatMMSS(displayRemainingSeconds);
 
   return {
-    remainingSeconds,
+    remainingSeconds: displayRemainingSeconds,
     formattedTime,
     isTimeMet,
-    isExpired
+    isExpired,
   };
 }

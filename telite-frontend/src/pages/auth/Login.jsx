@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { loginRequest, forgotPassword, getErrorMessage } from "../../services/client";
-import { buildSessionFromAuth, getDefaultRoute } from "../../context/session";
+import { loginRequest, forgotPassword, getErrorMessage, fetchMe } from "../../services/client";
+import { buildSessionFromAuth, clearClientSessionState, getDefaultRoute } from "../../context/session";
 import { canUseWebGL, loadVantaDependencies } from "../../utils/scriptLoader";
 import "./Login.css";
 
@@ -167,11 +167,35 @@ export default function Login({ onAuthenticated }) {
     setLoginLoading(true);
     setLoginError("");
     try {
+      console.log("[LOGIN] handleLoginSubmit - starting login for:", username);
+      clearClientSessionState();
       const payload = await loginRequest(username, password);
-      const session = buildSessionFromAuth(payload);
+      console.log("[LOGIN] handleLoginSubmit - loginRequest payload:", payload);
+      const latestUser = await fetchMe();
+      console.log("[LOGIN] handleLoginSubmit - fetchMe latestUser:", latestUser);
+      
+      // Ensure proper session building - fetchMe data takes precedence for latest values
+      // but preserve login payload structure
+      const mergedPayload = {
+        ...payload,
+        user: {
+          ...(payload.user || payload),  // Start with login payload (could be wrapped or direct)
+          ...(latestUser.user || latestUser),  // Merge in fetchMe data
+          role: latestUser?.user?.role || latestUser?.role || payload?.user?.role || payload?.role,
+        }
+      };
+      console.log("[LOGIN] handleLoginSubmit - merged payload:", mergedPayload);
+      
+      const session = buildSessionFromAuth(mergedPayload);
+      console.log("[LOGIN] handleLoginSubmit - built session:", session);
+      console.log("[LOGIN] handleLoginSubmit - session.user.role:", session.user.role);
+      
       onAuthenticated(session);
-      window.location.replace(getDefaultRoute(session.user));
+      const redirectRoute = getDefaultRoute(session.user);
+      console.log("[LOGIN] handleLoginSubmit - redirecting to:", redirectRoute);
+      window.location.replace(redirectRoute);
     } catch (requestError) {
+      console.error("[LOGIN] handleLoginSubmit - error:", requestError);
       setLoginError(getErrorMessage(requestError, "Invalid username or password."));
     } finally {
       setLoginLoading(false);

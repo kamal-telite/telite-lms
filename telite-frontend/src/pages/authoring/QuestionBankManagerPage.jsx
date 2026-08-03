@@ -59,7 +59,7 @@ function formatFieldLabel(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function QuestionBankManagerPage({ session, onLogout }) {
+export default function QuestionBankManagerPage({ session, onLogout, embedded = false }) {
   const { slug } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -313,54 +313,33 @@ export default function QuestionBankManagerPage({ session, onLogout }) {
     }
   ];
 
-  return (
-    <DashboardShell
-      variant={slug}
-      brandMark={{ label: (dashboard?.category?.name || "LMS").substring(0, 3).toUpperCase(), background: dashboard?.category?.accent_color || "#2563EB" }}
-      brandTitle="Telite LMS"
-      brandSubtitle={`${dashboard?.category?.name || slug} · Authoring`}
-      navGroups={navGroups}
-      activeNav="banks"
-      onNavClick={(item) => {
-        if (item.id === "back") {
-          navigate(`/categories/${slug}/admin`);
-        }
-      }}
-      profile={{
-        initials: getInitials(session?.user?.name || "Admin User"),
-        gradient: ["#2563EB", "#059669"],
-        name: session?.user?.name || "Admin User",
-        roleLabel: "category-admin",
-      }}
-      onLogout={onLogout}
-      title="Question Bank Manager"
-      subtitle="Manage reusable questions and assessments"
-    >
+  const pageContent = (
+    <>
       <div className="dashboard-stack">
         <Panel
           title="Question Bank"
-          subtitle={activeBank ? activeBank.name : "Select a bank to manage questions"}
-          action={
-            <div className="split-actions question-bank-header-actions">
-              <select
-                className="field__input question-bank-select"
-                value={activeBankId || ""}
-                onChange={handleBankChange}
-                disabled={loadingBanks || banks.length === 0}
-              >
-                {banks.length === 0 ? <option value="">No banks</option> : null}
-                {banks.map((bank) => (
-                  <option key={bank.id} value={bank.id}>{bank.name}</option>
-                ))}
-              </select>
-              <Button tone="ghost" icon="plus" onClick={() => setBankModalOpen(true)}>New Bank</Button>
-              <Button tone="ghost" icon="upload" disabled={!activeBankId} onClick={() => setImportModalOpen(true)}>Import Questions</Button>
-              <Button tone="primary" icon="plus" disabled={!activeBankId} onClick={() => setQuestionModal({ open: true, item: null })}>
-                Create Question
-              </Button>
-            </div>
-          }
-        >
+        subtitle={activeBank ? activeBank.name : "Select a bank to manage questions"}
+        action={
+          <div className="split-actions question-bank-header-actions">
+            <select
+              className="field__input question-bank-select"
+              value={activeBankId || ""}
+              onChange={handleBankChange}
+              disabled={loadingBanks || banks.length === 0}
+            >
+              {banks.length === 0 ? <option value="">No banks</option> : null}
+              {banks.map((bank) => (
+                <option key={bank.id} value={bank.id}>{bank.name}</option>
+              ))}
+            </select>
+            <Button tone="ghost" icon="plus" onClick={() => setBankModalOpen(true)}>New Bank</Button>
+            <Button tone="ghost" icon="upload" disabled={!activeBankId} onClick={() => setImportModalOpen(true)}>Import Questions</Button>
+            <Button tone="primary" icon="plus" disabled={!activeBankId} onClick={() => setQuestionModal({ open: true, item: null })}>
+              Create Question
+            </Button>
+          </div>
+        }
+      >
           {loadingBanks ? (
             <div className="question-bank-loading">Loading question banks...</div>
           ) : banks.length === 0 ? (
@@ -612,6 +591,31 @@ export default function QuestionBankManagerPage({ session, onLogout }) {
           </div>
         </div>
       </Modal>
+    </>
+  );
+
+  if (embedded) {
+    return pageContent;
+  }
+
+  return (
+    <DashboardShell
+      variant={slug}
+      brandMark={{ label: (dashboard?.category?.name || "LMS").substring(0, 3).toUpperCase(), background: dashboard?.category?.accent_color || "#2563EB" }}
+      brandTitle="Telite LMS"
+      brandSubtitle={`${dashboard?.category?.name || slug} · Authoring`}
+      navGroups={navGroups}
+      activeNav="banks"
+      onNavClick={(item) => {
+        if (item.id === "back") {
+          navigate(`/categories/${slug}/admin`);
+        }
+      }}
+      onLogout={onLogout}
+      title="Question Bank Manager"
+      subtitle="Manage reusable questions and assessments"
+    >
+      {pageContent}
     </DashboardShell>
   );
 }

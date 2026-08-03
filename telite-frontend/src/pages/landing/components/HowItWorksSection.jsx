@@ -10,10 +10,10 @@ export default function HowItWorksSection() {
   return (
     <section id="howitworks">
       <div className="inner">
-        <div className="steps-header">
-          <span className="section-eyebrow">How it works</span>
-          <h2 className="section-title">Up and running in three steps</h2>
-          <p className="section-sub">No complex setup. Your team can be learning within hours.</p>
+        <div className="steps-header" style={{ textAlign: 'center' }}>
+          <span className="section-eyebrow" style={{ textAlign: 'center' }}>How it works</span>
+          <h2 className="section-title" style={{ textAlign: 'center' }}>Up and running in three steps</h2>
+          <p className="section-sub" style={{ textAlign: 'center', margin: '0 auto' }}>No complex setup. Your team can be learning within hours.</p>
         </div>
         <div className="steps-row">
           <div className="step-connector" />

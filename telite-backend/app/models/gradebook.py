@@ -33,7 +33,7 @@ class GradingScheme(Base, TenantMixin, TimestampMixin):
     rounding_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="nearest")
     is_org_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_by: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"), nullable=False, index=True)
-    updated_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
@@ -67,7 +67,7 @@ class GradeCategory(Base, TenantMixin, TimestampMixin):
     drop_lowest_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"), nullable=False, index=True)
-    updated_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
@@ -125,7 +125,7 @@ class GradeItem(Base, TenantMixin, TimestampMixin):
     )
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"), nullable=False, index=True)
-    updated_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id"), nullable=True, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
@@ -180,7 +180,7 @@ class GradeResult(Base, TenantMixin, TimestampMixin):
     percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="graded", index=True)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
-    graded_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    graded_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -240,7 +240,7 @@ class CourseGrade(Base, TenantMixin, TimestampMixin):
     calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    override_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    override_by: Mapped[str | None] = mapped_column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 

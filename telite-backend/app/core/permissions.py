@@ -114,7 +114,9 @@ def check_capability(db: Session, current_user: TokenData, permission_key: str) 
     Synchronously check capability when the required permission depends on the request payload.
     Raises 403 Forbidden if the user lacks the capability.
     """
-    if current_user.role == "super_admin":
+    from app.core.rbac import has_permission
+
+    if has_permission(current_user, permission_key):
         return True
 
     capability = db.query(RolePermission).filter(

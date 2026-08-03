@@ -4,9 +4,9 @@ import { TESTIMONIALS } from '../constants/testimonials';
 export default function TestimonialsSection() {
   return (
     <section id="testimonials">
-      <div className="header-wrap">
-        <span className="section-eyebrow">Testimonials</span>
-        <h2 className="section-title">Trusted by learning teams</h2>
+      <div className="header-wrap" style={{ textAlign: 'center' }}>
+        <span className="section-eyebrow" style={{ textAlign: 'center' }}>Testimonials</span>
+        <h2 className="section-title" style={{ textAlign: 'center' }}>Trusted by learning teams</h2>
       </div>
       <div className="marquee-outer">
         <div className="marquee-track">

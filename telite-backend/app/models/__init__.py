@@ -42,6 +42,7 @@ from app.models.media_asset_usage import MediaAssetUsage
 from app.models.membership import Membership
 from app.models.module_progress import ModuleProgress
 from app.models.notification import Notification
+from app.models.notification_preference import NotificationPreference, OrganizationNotificationDefault, NotificationCategory
 from app.models.organization import Organization
 from app.models.organization_branding import OrganizationBranding
 from app.models.pal import PalQuizScore, PalRecommendation, PalTopicPerformance
@@ -84,6 +85,8 @@ __all__ = [
     "TaskReview",
     "AuthSession",
     "Notification",
+    "NotificationPreference",
+    "OrganizationNotificationDefault",
     "Announcement",
     "AnnouncementAudience",
     "AnnouncementReadState",

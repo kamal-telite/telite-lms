@@ -58,6 +58,10 @@ def learner_certificates_route() -> NotificationRoute:
     return NotificationRoute(route="/learner/certificates", route_name="learner_certificates")
 
 
+def learner_announcements_route() -> NotificationRoute:
+    return NotificationRoute(route="/learner/announcements", route_name="learner_announcements")
+
+
 def category_course_builder_route(category_slug: str, course_id: str) -> NotificationRoute:
     if not category_slug:
         raise ValueError("category_slug is required for course authoring routes")

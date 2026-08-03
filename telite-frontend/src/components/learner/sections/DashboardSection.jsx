@@ -6,6 +6,25 @@ import {
   titleize,
 } from "../../../utils/formatters";
 
+const formatLoggedHours = (hero) => {
+  const seconds = hero.total_time_seconds !== undefined 
+    ? hero.total_time_seconds 
+    : (hero.pal_time_spent_hours || hero.time_spent_hours || 0) * 3600;
+
+  if (!seconds || seconds < 60) return "0h";
+  const totalMinutes = Math.floor(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (hours > 0) {
+    return `${hours}h`;
+  } else {
+    return `${minutes}m`;
+  }
+};
+
 /**
  * DashboardSection - Main dashboard view with hero banner and recent courses
  */
@@ -69,9 +88,7 @@ export function DashboardSection({
           </div>
           <div className="hero-metric">
             <span>Hours logged</span>
-            <strong>
-              {Math.round(hero.pal_time_spent_hours || hero.time_spent_hours || 0)}h
-            </strong>
+            <strong>{formatLoggedHours(hero)}</strong>
           </div>
         </div>
         <div className="hero-actions" style={{ marginTop: 18 }}>

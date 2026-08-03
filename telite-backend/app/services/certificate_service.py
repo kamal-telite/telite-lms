@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.storage_paths import certificate_upload_root
+from app.core.observability import log_background_task_failure
 
 # Try importing WeasyPrint and qrcode, but don't fail hard if not installed locally
 try:
@@ -29,7 +30,7 @@ class CertificateService:
     def __init__(self, db: Session):
         self.db = db
 
-    def generate_certificate(self, user: User, course: Course, org_id: int) -> tuple[Certificate, bool]:
+    def generate_certificate(self, user: User, course: Course, org_id: int, *, commit: bool = False) -> tuple[Certificate, bool]:
         """
         Generate a new certificate for the user and course.
         1. Generates verification token and hash
@@ -38,53 +39,67 @@ class CertificateService:
         4. Converts to PDF via WeasyPrint
         5. Saves to S3 and database
         """
-        # Check if already issued
-        existing_cert = self.db.query(Certificate).filter(
-            Certificate.user_id == user.id,
-            Certificate.course_id == course.id,
-            Certificate.org_id == org_id
-        ).first()
-        
-        if existing_cert:
-            return existing_cert, False
+        try:
+            # Check if already issued
+            existing_cert = self.db.query(Certificate).filter(
+                Certificate.user_id == user.id,
+                Certificate.course_id == course.id,
+                Certificate.org_id == org_id
+            ).first()
             
-        # 1. Generate token and hash
-        token = uuid.uuid4().hex
-        cert_hash = self._generate_hash(user, course, token)
-        
-        # 2. Fetch branding
-        branding = self.db.query(OrganizationBranding).filter(
-            OrganizationBranding.organization_id == org_id
-        ).first()
-        
-        # 3. Generate QR code
-        qr_url = f"https://telite.io/verify/{token}"
-        
-        # 4. Generate PDF
-        pdf_bytes = self._generate_pdf(user, course, branding, qr_url, cert_hash)
-        
-        # 5. Save to local disk storage
-        pdf_storage_key = f"org_{org_id}/certificates/{course.id}/{user.id}_{token}.pdf"
-        self._save_to_disk(pdf_storage_key, pdf_bytes)
-        
-        # 6. Save to DB
-        cert = Certificate(
-            id=str(uuid.uuid4()),
-            user_id=user.id,
-            course_id=course.id,
-            org_id=org_id,
-            pdf_s3_key=pdf_storage_key,
-            certificate_hash=cert_hash,
-            verification_token=token,
-            qr_code_url=qr_url,
-            issued_version=1,
-            issued_at=datetime.now(timezone.utc)
-        )
-        self.db.add(cert)
-        self.db.commit()
-        self.db.refresh(cert)
-        
-        return cert, True
+            if existing_cert:
+                return existing_cert, False
+                
+            # 1. Generate token and hash
+            token = uuid.uuid4().hex
+            cert_hash = self._generate_hash(user, course, token)
+            
+            # 2. Fetch branding
+            branding = self.db.query(OrganizationBranding).filter(
+                OrganizationBranding.organization_id == org_id
+            ).first()
+            
+            # 3. Generate QR code
+            qr_url = f"https://telite.io/verify/{token}"
+            
+            # 4. Generate PDF
+            pdf_bytes = self._generate_pdf(user, course, branding, qr_url, cert_hash)
+            
+            # 5. Save to local disk storage
+            pdf_storage_key = f"org_{org_id}/certificates/{course.id}/{user.id}_{token}.pdf"
+            self._save_to_disk(pdf_storage_key, pdf_bytes)
+            
+            # 6. Save to DB
+            cert = Certificate(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                course_id=course.id,
+                org_id=org_id,
+                pdf_s3_key=pdf_storage_key,
+                certificate_hash=cert_hash,
+                verification_token=token,
+                qr_code_url=qr_url,
+                issued_version=1,
+                issued_at=datetime.now(timezone.utc)
+            )
+            self.db.add(cert)
+            self.db.flush()
+            if commit:
+                self.db.commit()
+            self.db.refresh(cert)
+            
+            return cert, True
+        except Exception as e:
+            log_background_task_failure(
+                task_name="certificate_generation",
+                exception=e,
+                context={
+                    "user_id": user.id,
+                    "course_id": course.id,
+                    "org_id": org_id,
+                },
+            )
+            raise
 
     def verify_certificate(self, token: str) -> dict[str, Any] | None:
         """Verify a certificate by token."""

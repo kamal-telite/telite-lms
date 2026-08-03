@@ -1,6 +1,9 @@
 import { createPortal } from "react-dom";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 export default function ConfirmDialog({ open, title, description, confirmLabel, variant = "primary", onConfirm, onCancel }) {
+  useBodyScrollLock(open);
+
   if (!open) return null;
 
   return createPortal(

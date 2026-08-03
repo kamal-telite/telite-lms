@@ -63,7 +63,6 @@ export default function LandingPage({ session }) {
   // Phase 3 states
   const [activeIntegrationTab, setActiveIntegrationTab] = useState("All");
   const [activePreviewTab, setActivePreviewTab] = useState("analytics");
-  const [showStickyCTA, setShowStickyCTA] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
   const [contactForm, setContactForm] = useState({ name: "", email: "", org: "", type: "College / University", msg: "" });
   const [contactError, setContactError] = useState("");
@@ -212,11 +211,6 @@ export default function LandingPage({ session }) {
     const nav = document.getElementById("lp-nav");
     const handleScroll = () => {
       if (nav) nav.classList.toggle("scrolled", window.scrollY > 10);
-      const hero = document.getElementById("hero");
-      if (hero) {
-        const rect = hero.getBoundingClientRect();
-        setShowStickyCTA(rect.bottom < 0);
-      }
     };
     handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -420,17 +414,6 @@ export default function LandingPage({ session }) {
 
   return (
     <div className="landing-wrapper">
-      {/* ── STICKY CTA BANNER ── */}
-      <div className={`sticky-cta-banner ${showStickyCTA ? "visible" : ""}`}>
-        <div className="sticky-cta-inner">
-          <span className="sticky-cta-text">Transform your learning operations with Telite LMS.</span>
-          <div className="sticky-cta-actions">
-            <button className="btn-sticky-contact magnetic" onClick={() => setShowContactModal(true)}>Book a Demo</button>
-            <Link to="/login" className="btn-sticky-primary magnetic">Get Started Free</Link>
-          </div>
-        </div>
-      </div>
-
       <div className="loader">
         <div className="loader-logo">Telite <span>LMS</span></div>
         <div className="loader-bar-wrap"><div className="loader-bar"></div></div>
@@ -493,24 +476,26 @@ export default function LandingPage({ session }) {
         handleContactSubmit={handleContactSubmit}
       />
 
-      <button
-        className={`support-widget-badge magnetic ${showSupportWidget ? "active" : ""}`}
-        onClick={() => setShowSupportWidget(!showSupportWidget)}
-        aria-label="Toggle Support Options"
-        aria-expanded={showSupportWidget}
-      >
-        {showSupportWidget ? (
-          <svg className="widget-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        ) : (
-          <svg className="widget-chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-        )}
-      </button>
-      <SupportWidget isOpen={showSupportWidget} onClose={() => setShowSupportWidget(false)} />
+      <div className="support-widget-container">
+        <button
+          className={`support-widget-badge magnetic ${showSupportWidget ? "active" : ""}`}
+          onClick={() => setShowSupportWidget(!showSupportWidget)}
+          aria-label="Toggle Support Options"
+          aria-expanded={showSupportWidget}
+        >
+          {showSupportWidget ? (
+            <svg className="widget-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          ) : (
+            <svg className="widget-chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          )}
+        </button>
+        <SupportWidget isOpen={showSupportWidget} onClose={() => setShowSupportWidget(false)} />
+      </div>
 
       {/* ── COMMAND PALETTE ── */}
       <CommandPalette

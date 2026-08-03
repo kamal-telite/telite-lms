@@ -5,7 +5,7 @@ from __future__ import annotations
 import enum
 import json
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -24,11 +24,16 @@ class NotificationType(str, enum.Enum):
     LEARNING_PATH_ASSIGNED = "learning_path_assigned"
     LEARNING_PATH_UNLOCKED = "learning_path_unlocked"
     LEARNING_PATH_COMPLETED = "learning_path_completed"
+    ANNOUNCEMENT_PUBLISHED = "announcement_published"
     INFO = "info"
 
 
 class Notification(Base, TenantMixin, TimestampMixin):
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index('ix_notifications_org_user_created', 'org_id', 'user_id', 'created_at'),
+        Index('ix_notifications_org_user_read_created', 'org_id', 'user_id', 'is_read', 'created_at'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

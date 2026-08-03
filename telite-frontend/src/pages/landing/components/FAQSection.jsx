@@ -28,10 +28,10 @@ function FAQSection() {
   return (
     <section id="faq">
       <div className="inner">
-        <div className="faq-header">
-          <span className="section-eyebrow">FAQ</span>
-          <h2 className="section-title">Frequently asked questions</h2>
-          <p className="section-sub">Have questions about Telite LMS? Find quick answers right here.</p>
+        <div className="faq-header" style={{ textAlign: 'center' }}>
+          <span className="section-eyebrow" style={{ textAlign: 'center' }}>FAQ</span>
+          <h2 className="section-title" style={{ textAlign: 'center' }}>Frequently asked questions</h2>
+          <p className="section-sub" style={{ textAlign: 'center', margin: '0 auto' }}>Have questions about Telite LMS? Find quick answers right here.</p>
         </div>
         <div className="faq-list">
           {FAQS.map((faq, index) => (

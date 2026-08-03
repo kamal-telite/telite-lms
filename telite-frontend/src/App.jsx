@@ -1,5 +1,5 @@
 import React, { useEffect, useState, lazy, Suspense } from "react";
-import Lenis from "lenis";
+
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ToastProvider } from "./components/common/ui";
 import { fetchMe, logoutRequest } from "./services/client";
@@ -17,6 +17,7 @@ import { offlineSyncManager } from "./lib/offlineSyncManager";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { BrandingProvider } from "./providers/BrandingProvider";
 import { ThemeEngine } from "./utils/ThemeEngine";
+import { ScrollProvider } from "./components/common/scroll";
 
 // Modular Domain Routers
 import PlatformRouter from "./routes/platform_router";
@@ -114,7 +115,9 @@ function FullPageMessage({ title, body }) {
 }
 
 function AppRoutes({ session, setSession, onLogout, booting }) {
+  console.log("[APP] AppRoutes - session:", session, "booting:", booting);
   if (booting) {
+    console.log("[APP] AppRoutes - still booting, showing loader");
     return (
       <FullPageMessage
         title="Loading Telite Systems LMS"
@@ -130,7 +133,10 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
           path="/login"
           element={
             session?.user ? (
-              <Navigate to={getDefaultRoute(session.user)} replace />
+              <>
+                {console.log("[APP] AppRoutes /login - user logged in, redirecting to:", getDefaultRoute(session.user))}
+                <Navigate to={getDefaultRoute(session.user)} replace />
+              </>
             ) : (
               <Login onAuthenticated={setSession} />
             )
@@ -181,7 +187,7 @@ function AppRoutes({ session, setSession, onLogout, booting }) {
         />
         
         <Route
-          path="/dashboard"
+          path="/dashboard/*"
           element={
             session?.user ? (
               <Navigate to={getDefaultRoute(session.user)} replace />
@@ -245,6 +251,8 @@ function RouterNavigationBridge({ setSession }) {
   return null;
 }
 
+import { FocusManager } from "./components/common/a11y/FocusManager";
+
 function AppShell({ session, setSession, onLogout, booting }) {
   const location = useLocation();
   const locationKey = `${location.pathname}${location.search}`;
@@ -253,6 +261,7 @@ function AppShell({ session, setSession, onLogout, booting }) {
     <BrandingProvider session={session} locationKey={locationKey}>
       <ToastProvider>
         <RouterNavigationBridge setSession={setSession} />
+        <FocusManager />
         <LazyChunkErrorBoundary key={session?.user?.user_id || "anonymous"}>
           <AppRoutes
             session={session}
@@ -297,55 +306,41 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    // Initialize smooth scrolling
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      direction: "vertical",
-      gestureDirection: "vertical",
-      smooth: true,
-      mouseMultiplier: 1,
-      smoothTouch: false,
-      touchMultiplier: 2,
-      infinite: false,
-    });
-    function raf(time) {
-      lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
-    requestAnimationFrame(raf);
 
-    return () => {
-      lenis.destroy();
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function restoreSession() {
       const stored = getSession();
+      console.log("[APP] restoreSession - stored session:", stored);
       if (!stored?.user) {
+        console.log("[APP] restoreSession - no stored user, setting boot to false");
         setBooting(false);
         return;
       }
 
       try {
+        console.log("[APP] restoreSession - calling fetchMe for user:", stored.user.user_id);
         const me = await fetchMe();
+        console.log("[APP] restoreSession - /auth/me response:", me);
         if (cancelled) {
+          console.log("[APP] restoreSession - cancelled");
           return;
         }
         const merged = mergeSessionUser(stored, me);
+        console.log("[APP] restoreSession - merged session:", merged);
         persistSession(merged);
         setSessionState(merged);
-      } catch {
+      } catch (error) {
+        console.error("[APP] restoreSession - error:", error);
         if (!cancelled) {
           clearSession();
           setSessionState(null);
         }
       } finally {
         if (!cancelled) {
+          console.log("[APP] restoreSession - setting boot to false");
           setBooting(false);
         }
       }
@@ -360,14 +355,16 @@ export default function App() {
 
   return (
     <ThemeProvider session={session} onSessionChange={setSession}>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppShell
-          session={session}
-          setSession={setSession}
-          onLogout={onLogout}
-          booting={booting}
-        />
-      </BrowserRouter>
+      <ScrollProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AppShell
+            session={session}
+            setSession={setSession}
+            onLogout={onLogout}
+            booting={booting}
+          />
+        </BrowserRouter>
+      </ScrollProvider>
     </ThemeProvider>
   );
 }

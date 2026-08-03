@@ -88,12 +88,9 @@ function normalizeSuperAdminDashboard(payload = {}, usersPayload = []) {
 
 export const useDashboardStore = create((set) => ({
   dashboard: null,
-  verifications: [],
   learners: [],
   dashboardLoading: true,
   dashboardError: null,
-  verifLoading: true,
-  verifError: null,
 
   fetchDashboardData: async (slug) => {
     set({ dashboardLoading: true, dashboardError: null });
@@ -109,19 +106,6 @@ export const useDashboardStore = create((set) => ({
     }
   },
 
-  fetchVerificationsData: async (slug) => {
-    set({ verifLoading: true, verifError: null });
-    try {
-      const data = await fetchVerifications(slug);
-      set({
-        verifications: data.verifications || [],
-        verifLoading: false,
-      });
-    } catch (err) {
-      set({ verifError: err.message, verifLoading: false });
-    }
-  },
-  
   updateTaskState: (taskId, newStatus) => set((state) => {
     if (!state.dashboard) return state;
     const updatedTasks = (state.dashboard.tasks || []).map(t => 
@@ -178,7 +162,7 @@ export const useSuperAdminStore = create((set) => ({
       set({
         dashboard: normalizeSuperAdminDashboard(dashboardPayload, users),
         users,
-        settings: settingsPayload || {},
+        settings: settingsPayload,
         verifications: asArray(verifPayload?.verifications),
         organizations: isolatedOrgs,
         loading: false

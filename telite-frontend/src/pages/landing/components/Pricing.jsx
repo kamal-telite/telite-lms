@@ -6,11 +6,11 @@ function Pricing({ dashboardLink, isAnnual, selectedPlan, setSelectedPlan, handl
   return (
     <section id="pricing">
       <div className="inner">
-        <div className="pricing-header">
-          <span className="section-eyebrow">Pricing</span>
-          <h2 className="section-title">Simple, transparent pricing</h2>
-          <div className="pricing-trust-line">Trusted by 120+ institutions globally</div>
-          <p className="section-sub">Start free. Scale as you grow. No hidden fees.</p>
+        <div className="pricing-header" style={{ textAlign: 'center' }}>
+          <span className="section-eyebrow" style={{ textAlign: 'center' }}>Pricing</span>
+          <h2 className="section-title" style={{ textAlign: 'center' }}>Simple, transparent pricing</h2>
+          <div className="pricing-trust-line" style={{ textAlign: 'center' }}>Trusted by 120+ institutions globally</div>
+          <p className="section-sub" style={{ textAlign: 'center', margin: '0 auto' }}>Start free. Scale as you grow. No hidden fees.</p>
         </div>
         <div className="pricing-toggle">
           <span className={`toggle-label ${!isAnnual ? 'active' : ''}`} onClick={handleToggle}>Monthly</span>
@@ -32,7 +32,7 @@ function Pricing({ dashboardLink, isAnnual, selectedPlan, setSelectedPlan, handl
               {p.highlight && <span className="pro-badge">Most popular</span>}
               <div className="plan-name">{p.name}</div>
               <div className="plan-tag">{p.tag}</div>
-              <div className="plan-price price-number">{isAnnual ? p.price.annual : p.price.monthly}</div>
+              <div className="plan-price price-number">Coming Soon</div>
               <div className="plan-period">{isAnnual && p.name === 'Pro' ? 'per month, billed annually' : p.period}</div>
               <ul className="plan-features">
                 {p.features.map((feature) => (

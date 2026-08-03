@@ -1,6 +1,9 @@
 import { createPortal } from "react-dom";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 export default function ViewOrganizationModal({ org, onClose }) {
+  useBodyScrollLock(Boolean(org));
+
   if (!org) return null;
   const isCollege = org.type?.toLowerCase() === 'college';
   const isActive = org.status === 'active';

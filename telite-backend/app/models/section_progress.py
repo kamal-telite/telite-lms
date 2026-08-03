@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -12,6 +12,9 @@ from app.models.base import Base, TenantMixin, TimestampMixin
 
 class SectionProgress(Base, TenantMixin, TimestampMixin):
     __tablename__ = "section_progress"
+    __table_args__ = (
+        Index('ix_section_progress_org_user_section_created', 'org_id', 'user_id', 'section_id', 'created_at'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

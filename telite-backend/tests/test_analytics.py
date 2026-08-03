@@ -1,5 +1,5 @@
 import pytest
-from app.repositories.analytics_repo import AnalyticsRepository
+from app.repositories.analytics import AnalyticsRepository
 from app.models.organization import Organization
 from app.models.user import User
 from app.models.course import Course

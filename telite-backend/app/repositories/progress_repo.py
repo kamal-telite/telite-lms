@@ -20,32 +20,36 @@ class ProgressRepository:
             CourseProgress.user_id == user_id,
             CourseProgress.course_id == course_id,
             CourseProgress.org_id == org_id
-        )
-        return self.session.execute(stmt).scalar_one_or_none()
+        ).order_by(CourseProgress.created_at.desc())
+        result = self.session.execute(stmt).first()
+        return result[0] if result else None
 
     def get_module_progress(self, user_id: str, module_id: int, org_id: int) -> Optional[ModuleProgress]:
         stmt = select(ModuleProgress).where(
             ModuleProgress.user_id == user_id,
             ModuleProgress.module_id == module_id,
             ModuleProgress.org_id == org_id
-        )
-        return self.session.execute(stmt).scalar_one_or_none()
+        ).order_by(ModuleProgress.created_at.desc())
+        result = self.session.execute(stmt).first()
+        return result[0] if result else None
 
     def get_section_progress(self, user_id: str, section_id: int, org_id: int) -> Optional[SectionProgress]:
         stmt = select(SectionProgress).where(
             SectionProgress.user_id == user_id,
             SectionProgress.section_id == section_id,
             SectionProgress.org_id == org_id
-        )
-        return self.session.execute(stmt).scalar_one_or_none()
+        ).order_by(SectionProgress.created_at.desc())
+        result = self.session.execute(stmt).first()
+        return result[0] if result else None
 
     def get_block_progress(self, user_id: str, block_id: str, org_id: int) -> Optional[LessonBlockProgress]:
         stmt = select(LessonBlockProgress).where(
             LessonBlockProgress.user_id == user_id,
             LessonBlockProgress.block_id == block_id,
             LessonBlockProgress.org_id == org_id
-        )
-        return self.session.execute(stmt).scalar_one_or_none()
+        ).order_by(LessonBlockProgress.created_at.desc())
+        result = self.session.execute(stmt).first()
+        return result[0] if result else None
 
     def upsert_course_progress(self, cp: CourseProgress) -> CourseProgress:
         self.session.add(cp)

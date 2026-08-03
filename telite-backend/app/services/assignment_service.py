@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import TokenData
 from app.db.rls import set_platform_context, set_rls_context
@@ -45,6 +47,9 @@ def set_assignment_actor_context(db: Session, user: TokenData) -> None:
 
 
 class AssignmentService:
+    # Idempotency window: submissions with identical content within this window are considered duplicates
+    IDEMPOTENCY_WINDOW_SECONDS = 5
+    
     def __init__(self, db: Session, storage: StorageProvider | None = None):
         self.db = db
         self.repo = AssignmentRepository(db)
@@ -162,16 +167,54 @@ class AssignmentService:
         if existing and existing.submission_files_json:
             kept_files = self._filter_kept_files(existing.submission_files_json, existing_file_paths)
             self._cleanup_removed_files(existing.submission_files_json, kept_files)
-        submission = self.repo.save_submission(
-            block_id=block_id,
-            learner_id=user.id,
-            org_id=user.org_id,
-            submission_text=submission_text,
-            files=[*kept_files, *uploaded],
-            status="draft",
-        )
-        self.db.commit()
-        return {"message": "Assignment draft saved", "submission": submission.to_dict()}
+        
+        try:
+            submission = self.repo.save_submission(
+                block_id=block_id,
+                learner_id=user.id,
+                org_id=user.org_id,
+                submission_text=submission_text,
+                files=[*kept_files, *uploaded],
+                status="draft",
+            )
+            self.db.commit()
+            return {"message": "Assignment draft saved", "submission": submission.to_dict()}
+        except IntegrityError as e:
+            # Handle race condition where concurrent requests try to create/update the same submission
+            self.db.rollback()
+            
+            # Clean up any files that were uploaded in this request to prevent orphaned files
+            for file_dict in uploaded:
+                file_path = file_dict.get("file_path")
+                if file_path:
+                    try:
+                        self.storage.delete(file_path)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to cleanup file {file_path} after IntegrityError: {cleanup_error}")
+            
+            # Fetch the existing submission that was created by the concurrent request
+            existing_after_race = self.repo.get_submission_for_learner(block_id, user.id, user.org_id)
+            if existing_after_race:
+                # Return the existing submission to maintain idempotency
+                logger.info(
+                    "Idempotent draft save detected - returning existing submission",
+                    extra={
+                        "block_id": block_id,
+                        "user_id": user.id,
+                        "existing_submission_id": existing_after_race.id,
+                        "existing_status": existing_after_race.status,
+                    }
+                )
+                return {"message": "Assignment draft saved", "submission": existing_after_race.to_dict()}
+            else:
+                logger.error(
+                    "IntegrityError but no existing submission found",
+                    extra={"block_id": block_id, "user_id": user.id, "error": str(e)}
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to save draft due to a race condition. Please try again."
+                ) from e
 
     async def submit(self, block_id: int, user: TokenData, submission_text: str | None, files: list[UploadFile] | None, *, resubmit: bool = False, existing_file_paths: list[str] | None = None) -> dict:
         block, module, course = self._require_learner_access(block_id, user)
@@ -191,28 +234,69 @@ class AssignmentService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submission text or file is required")
 
         progress = ProgressRepository(self.db).get_course_progress(user.id, course.id, user.org_id)
-        submission = self.repo.save_submission(
-            block_id=block_id,
-            learner_id=user.id,
-            org_id=user.org_id,
-            submission_text=submission_text,
-            files=all_files,
-            status="pending_verification",
-            course_time_seconds_at_submission=progress.time_spent_seconds if progress else 0,
-            course_progress_pct_at_submission=progress.completion_percentage if progress else 0.0,
-        )
-        self._mark_assignment_complete(user=user, block_id=block_id, module_id=module.id, course_id=course.id, files_count=len(all_files))
-        NotificationRepository(self.db).create(
-            user_id=user.id,
-            org_id=user.org_id,
-            title="Assignment Submitted",
-            body="Your assignment is pending verification.",
-            notif_type=NotificationType.INFO,
-            source_type="assignment",
-            source_id=str(submission.id),
-        )
-        self.db.commit()
-        return {"message": "Assignment submitted successfully", "submission": submission.to_dict()}
+        
+        try:
+            submission = self.repo.save_submission(
+                block_id=block_id,
+                learner_id=user.id,
+                org_id=user.org_id,
+                submission_text=submission_text,
+                files=all_files,
+                status="pending_verification",
+                course_time_seconds_at_submission=progress.time_spent_seconds if progress else 0,
+                course_progress_pct_at_submission=progress.completion_percentage if progress else 0.0,
+            )
+            self._mark_assignment_complete(user=user, block_id=block_id, module_id=module.id, course_id=course.id, files_count=len(all_files))
+            NotificationRepository(self.db).create(
+                user_id=user.id,
+                org_id=user.org_id,
+                title="Assignment Submitted",
+                body="Your assignment is pending verification.",
+                notif_type=NotificationType.INFO,
+                source_type="assignment",
+                source_id=str(submission.id),
+            )
+            self.db.commit()
+            return {"message": "Assignment submitted successfully", "submission": submission.to_dict()}
+        except IntegrityError as e:
+            # Handle race condition where concurrent requests try to create/update the same submission
+            # This is caused by the unique constraint on (block_id, user_id)
+            self.db.rollback()
+            
+            # Clean up any files that were uploaded in this request to prevent orphaned files
+            for file_dict in uploaded:
+                file_path = file_dict.get("file_path")
+                if file_path:
+                    try:
+                        self.storage.delete(file_path)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to cleanup file {file_path} after IntegrityError: {cleanup_error}")
+            
+            # Fetch the existing submission that was created by the concurrent request
+            existing_after_race = self.repo.get_submission_for_learner(block_id, user.id, user.org_id)
+            if existing_after_race:
+                # Return the existing submission to maintain idempotency
+                # This ensures that duplicate requests return the same response
+                logger.info(
+                    "Idempotent submission detected - returning existing submission",
+                    extra={
+                        "block_id": block_id,
+                        "user_id": user.id,
+                        "existing_submission_id": existing_after_race.id,
+                        "existing_status": existing_after_race.status,
+                    }
+                )
+                return {"message": "Assignment submitted successfully", "submission": existing_after_race.to_dict()}
+            else:
+                # If we can't find the existing submission, something went wrong
+                logger.error(
+                    "IntegrityError but no existing submission found",
+                    extra={"block_id": block_id, "user_id": user.id, "error": str(e)}
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to process submission due to a race condition. Please try again."
+                ) from e
 
     def _mark_assignment_complete(self, *, user: TokenData, block_id: int, module_id: int, course_id: str, files_count: int) -> None:
         now = datetime.now(timezone.utc)

@@ -1,4 +1,5 @@
 import { Button, Panel, EmptyState, LoadingState } from "../../common/ui";
+import { buildCertificateDownloadUrl } from "../../../utils/certificateUrls";
 
 /**
  * CertificatesSection - View and download earned certificates
@@ -133,12 +134,13 @@ export function CertificatesSection({
                     <Button
                       tone="primary"
                       size="sm"
-                      onClick={() =>
-                        window.open(
-                          `/api/certificates/${courseId}/download?inline=true`,
-                          "_blank"
-                        )
-                      }
+                      onClick={() => {
+                        const url = buildCertificateDownloadUrl(courseId, {
+                          inline: true,
+                          baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
+                        });
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      }}
                       style={{ flex: 1 }}
                     >
                       View
@@ -146,12 +148,13 @@ export function CertificatesSection({
                     <Button
                       tone="ghost"
                       size="sm"
-                      onClick={() =>
-                        window.open(
-                          `/api/certificates/${courseId}/download`,
-                          "_blank"
-                        )
-                      }
+                      onClick={() => {
+                        const url = buildCertificateDownloadUrl(courseId, {
+                          inline: false,
+                          baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
+                        });
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      }}
                       style={{ flex: 1 }}
                     >
                       Download

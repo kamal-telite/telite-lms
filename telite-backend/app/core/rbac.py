@@ -66,6 +66,13 @@ class Permission:
     AUTHORING_ROLLBACK = "authoring.rollback"
     AUTHORING_VIEW_AUDIT_LOG = "authoring.view_audit_log"
 
+    # Course builder workflow (legacy route keys still used by the API).
+    AUDIT_VIEW = "audit.view"
+    AUDIT_EXPORT = "audit.export"
+    VERSION_VIEW = "version.view"
+    VERSION_CREATE = "version.create"
+    VERSION_ROLLBACK = "version.rollback"
+
     # Media-level
     MEDIA_UPLOAD = "media.upload"
     MEDIA_REPLACE = "media.replace"
@@ -160,6 +167,11 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.AUTHORING_PUBLISH,
         Permission.AUTHORING_ROLLBACK,
         Permission.AUTHORING_VIEW_AUDIT_LOG,
+        Permission.AUDIT_VIEW,
+        Permission.AUDIT_EXPORT,
+        Permission.VERSION_VIEW,
+        Permission.VERSION_CREATE,
+        Permission.VERSION_ROLLBACK,
         Permission.ORG_MANAGE_PERMISSIONS,
         Permission.H5P_UPLOAD,
         Permission.H5P_EDIT,
@@ -191,6 +203,11 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.MEDIA_DELETE,
         Permission.AUTHORING_SUBMIT_REVIEW,
         Permission.AUTHORING_VIEW_AUDIT_LOG,
+        Permission.AUDIT_VIEW,
+        Permission.AUDIT_EXPORT,
+        Permission.VERSION_VIEW,
+        Permission.VERSION_CREATE,
+        Permission.VERSION_ROLLBACK,
         Permission.H5P_UPLOAD,
         Permission.H5P_EDIT,
         Permission.H5P_DELETE,
@@ -213,6 +230,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.MEDIA_REPLACE,
         Permission.MEDIA_DELETE,
         Permission.AUTHORING_SUBMIT_REVIEW,
+        Permission.VERSION_VIEW,
+        Permission.VERSION_CREATE,
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,
@@ -225,6 +244,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     "reviewer": {
         Permission.AUTHORING_APPROVE_REJECT,
         Permission.AUTHORING_VIEW_AUDIT_LOG,
+        Permission.AUDIT_VIEW,
+        Permission.VERSION_VIEW,
         Permission.LEARNER_VIEW_COURSES,
         Permission.LEARNER_ENROL,
         Permission.LEARNER_VIEW_PROGRESS,

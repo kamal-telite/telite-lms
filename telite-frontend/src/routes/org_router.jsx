@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react";
-import { Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoutes";
 
 const SuperAdminPage = lazy(() => import("../pages/super-admin/SuperAdminPage"));
@@ -9,7 +9,6 @@ const CourseBuilderPage = lazy(() => import("../pages/authoring/CourseBuilderPag
 const LearningPathBuilder = lazy(() => import('../pages/authoring/LearningPathBuilder'));
 const QuestionBankManagerPage = lazy(() => import('../pages/authoring/QuestionBankManagerPage'));
 const AnnouncementManagementPage = lazy(() => import('../pages/authoring/AnnouncementManagementPage'));
-const BulkEnrollmentPage = lazy(() => import('../pages/super-admin/BulkEnrollmentPage'));
 
 export default function OrgRouter({ session, onLogout }) {
   const location = useLocation();
@@ -57,7 +56,9 @@ export default function OrgRouter({ session, onLogout }) {
               path="question-banks/*"
               element={
                 <ProtectedRoute session={session} allowRoles={["category_admin"]}>
-                  <QuestionBankManagerPage session={session} onLogout={onLogout} />
+                  <CategoryAdminPage session={session} onLogout={onLogout}>
+                    <QuestionBankManagerPage session={session} onLogout={onLogout} embedded />
+                  </CategoryAdminPage>
                 </ProtectedRoute>
               }
             />
@@ -65,7 +66,9 @@ export default function OrgRouter({ session, onLogout }) {
               path="announcements"
               element={
                 <ProtectedRoute session={session} allowRoles={["category_admin"]}>
-                  <AnnouncementManagementPage session={session} onLogout={onLogout} />
+                  <CategoryAdminPage session={session} onLogout={onLogout}>
+                    <AnnouncementManagementPage session={session} onLogout={onLogout} embedded />
+                  </CategoryAdminPage>
                 </ProtectedRoute>
               }
             />

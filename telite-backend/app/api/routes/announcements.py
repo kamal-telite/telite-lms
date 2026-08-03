@@ -7,10 +7,15 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.api.auth import TokenData, get_current_user, require_admin
 from app.db.engine import db_session
 from app.repositories.announcement_repo import AnnouncementRepository
+from app.repositories.notification_repo import NotificationRepository
+from app.repositories.user_repo import UserRepository
+from app.core.notification_payloads import announcement_notification_metadata
+from app.models.notification import NotificationType
 
 
 announcements_router = APIRouter(prefix="/announcements", tags=["Announcements"])
@@ -36,6 +41,73 @@ def _require_org(current_user: TokenData) -> int:
     if current_user.org_id is None:
         raise HTTPException(status_code=403, detail="Organization context is required")
     return current_user.org_id
+
+
+def _create_announcement_notifications(db: Session, announcement, org_id: int) -> None:
+    """Create notifications for all users targeted by the announcement."""
+    from app.models.user import User
+    from app.models.announcement import AnnouncementAudience
+    
+    user_repo = UserRepository(db)
+    notification_repo = NotificationRepository(db)
+    
+    # Get the audience for this announcement
+    audience_stmt = select(AnnouncementAudience).where(
+        AnnouncementAudience.announcement_id == announcement.id
+    )
+    audience_rows = db.execute(audience_stmt).scalars().all()
+    
+    for audience in audience_rows:
+        # Determine target users based on audience type
+        if audience.audience_type == "all":
+            # Notify all active users in the org
+            users_stmt = select(User).where(
+                User.org_id == org_id,
+                User.is_active == True
+            )
+            users = db.execute(users_stmt).scalars().all()
+        elif audience.audience_type == "role":
+            # Notify all users with this role in the org
+            users_stmt = select(User).where(
+                User.org_id == org_id,
+                User.role == audience.audience_value,
+                User.is_active == True
+            )
+            users = db.execute(users_stmt).scalars().all()
+        elif audience.audience_type == "category":
+            # Notify all users with this category scope in the org
+            users_stmt = select(User).where(
+                User.org_id == org_id,
+                User.category_scope == audience.audience_value,
+                User.is_active == True
+            )
+            users = db.execute(users_stmt).scalars().all()
+        elif audience.audience_type == "user":
+            # Notify specific user
+            user = user_repo.get_by_id(audience.audience_value)
+            users = [user] if user and user.is_active else []
+        else:
+            continue
+        
+        # Create notification for each target user
+        for user in users:
+            try:
+                notification_repo.create(
+                    user_id=user.id,
+                    org_id=org_id,
+                    title=f"New Announcement: {announcement.title}",
+                    body=announcement.body[:200] + "..." if len(announcement.body) > 200 else announcement.body,
+                    notif_type=NotificationType.ANNOUNCEMENT_PUBLISHED,
+                    source_type="announcement",
+                    source_id=str(announcement.id),
+                    metadata=announcement_notification_metadata(announcement_id=announcement.id),
+                )
+            except Exception as e:
+                # Log but continue with other users
+                import logging
+                logging.getLogger(__name__).error(
+                    f"Failed to create notification for user {user.id} for announcement {announcement.id}: {e}"
+                )
 
 
 @announcements_router.get("/my")
@@ -110,6 +182,18 @@ def create_announcement(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
+    # Create notifications if announcement is published
+    if announcement.status == "published":
+        try:
+            _create_announcement_notifications(db, announcement, org_id)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(
+                f"Failed to create notifications for announcement {announcement.id}: {e}",
+                exc_info=True
+            )
+    
     db.commit()
     return announcement.to_dict()
 
@@ -134,8 +218,14 @@ def update_announcement(
     db: Session = Depends(db_session),
 ) -> dict:
     org_id = _require_org(current_user)
+    
+    # Get current announcement to check if status is changing to published
+    repo = AnnouncementRepository(db)
+    current_announcement = repo.get_for_admin(announcement_id, org_id)
+    was_published = current_announcement and current_announcement.status == "published"
+    
     try:
-        announcement = AnnouncementRepository(db).update(
+        announcement = repo.update(
             announcement_id=announcement_id,
             org_id=org_id,
             title=payload.title,
@@ -148,6 +238,11 @@ def update_announcement(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
+    
+    # Create notifications if announcement is being published now (wasn't published before)
+    if announcement.status == "published" and not was_published:
+        _create_announcement_notifications(db, announcement, org_id)
+    
     db.commit()
     return announcement.to_dict()
 

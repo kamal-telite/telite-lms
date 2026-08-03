@@ -74,6 +74,7 @@ class PALScoreService:
             "weights": PAL_WEIGHTS,
             "strengths": strengths,
             "weak_areas": weak_areas,
+            "improvements": weak_areas,
             "progress_trend": self._progress_trend(user_id, org_id),
             "completion_timeline": self._completion_timeline(user_id, org_id),
         }
@@ -90,13 +91,16 @@ class PALScoreService:
             "weights": PAL_WEIGHTS,
             "strengths": [],
             "weak_areas": ["Course completion", "Quiz average", "Assignment average", "Task completion"],
+            "improvements": ["Course completion", "Quiz average", "Assignment average", "Task completion"],
             "progress_trend": [],
             "completion_timeline": [],
         }
 
     def recompute_user(self, user_id: str, org_id: int, *, commit: bool = False) -> dict[str, Any]:
+        # Use SELECT FOR UPDATE to lock the user row for the duration of the transaction
+        # This prevents concurrent recomputations for the same learner
         user = self.session.execute(
-            select(User).where(User.id == user_id, User.org_id == org_id)
+            select(User).where(User.id == user_id, User.org_id == org_id).with_for_update()
         ).scalar_one_or_none()
         if not user:
             return self.empty_metrics()

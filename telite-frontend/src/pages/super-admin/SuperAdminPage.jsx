@@ -36,9 +36,7 @@ import GradingSection from "../../components/super-admin/GradingSection";
 import AuditSection from "../../components/super-admin/AuditSection";
 import UsersSection from "../../components/super-admin/UsersSection";
 import AnalyticsSection from "../../components/super-admin/AnalyticsSection";
-import SettingsSection from "../../components/super-admin/SettingsSection";
 import {
-  Avatar,
   Badge,
   Button,
   EmptyState,
@@ -186,7 +184,6 @@ export default function SuperAdminPage({ session, onLogout }) {
     {
       label: "System",
       items: [
-        { id: "section-settings", label: "Settings", icon: "settings" },
         { id: "section-branding", label: "Branding", icon: "brush" }
       ],
     },
@@ -439,12 +436,6 @@ export default function SuperAdminPage({ session, onLogout }) {
         navGroups={navGroups}
         activeNav={activeNav}
         onNavClick={changeSection}
-        profile={{
-          initials: getInitials(session?.user?.name || "Rajan Mehra"),
-          gradient: ["#7C3AED", "#2563EB"],
-          name: session?.user?.name || "Rajan Mehra",
-          roleLabel: "super-admin",
-        }}
         title="Super Admin Dashboard"
         subtitle="Telite Systems · All categories"
         topbarBadge={{ tone: "accent", label: "super-admin access" }}
@@ -645,19 +636,6 @@ export default function SuperAdminPage({ session, onLogout }) {
             <AnalyticsSection 
               dashboard={dashboard}
               isMoodleSource={isMoodleSource}
-            />
-          )}
-
-          {activeNav === "section-settings" && (
-            <SettingsSection 
-              settings={settings}
-              isMoodleSource={isMoodleSource}
-              newDomain={newDomain}
-              newDomainLabel={newDomainLabel}
-              setNewDomain={setNewDomain}
-              setNewDomainLabel={setNewDomainLabel}
-              handleAddDomain={handleAddDomain}
-              handleDeleteDomain={handleDeleteDomain}
             />
           )}
 

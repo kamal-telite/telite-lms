@@ -122,7 +122,9 @@ class BulkEnrollmentService:
         actor_token: TokenData
     ) -> dict[str, Any]:
         """
-        Executes a batch of validated rows.
+        Executes a batch of validated rows using best-effort batch processing.
+        Each learner enrollment executes in its own isolated transaction.
+        Failure for one learner never affects another learner.
         rows should be a list of dictionaries with 'email', 'full_name', and 'course_id'.
         Returns execution summary.
         """
@@ -138,32 +140,39 @@ class BulkEnrollmentService:
             full_name = row.get('full_name', '').strip()
             course_id = row.get('course_id', '').strip()
 
+            # Each enrollment gets its own transaction for best-effort processing
             try:
-                # We reuse the manual_enroll service which perfectly handles
-                # duplicate prevention, missing user provisioning, and RBAC.
-                self.enrollment_service.manual_enroll(
-                    actor_token=actor_token,
-                    full_name=full_name,
-                    email=email,
-                    course_ids=[course_id],
-                    enrollment_type="bulk",
-                    note="Enrolled via Bulk Upload"
-                )
-                success_count += 1
+                # Start a new transaction for this enrollment
+                nested = self.db.begin_nested()
+                
+                try:
+                    # We reuse the manual_enroll service which perfectly handles
+                    # duplicate prevention, missing user provisioning, and RBAC.
+                    self.enrollment_service.manual_enroll(
+                        actor_token=actor_token,
+                        full_name=full_name,
+                        email=email,
+                        course_ids=[course_id],
+                        enrollment_type="bulk",
+                        note="Enrolled via Bulk Upload"
+                    )
+                    # Commit this individual enrollment
+                    nested.commit()
+                    success_count += 1
+                except Exception as e:
+                    # Rollback only this enrollment, not the entire batch
+                    nested.rollback()
+                    raise
+                    
             except EnrollmentPermissionError as e:
-                self.db.rollback()
                 failure_count += 1
                 errors.append({"row": idx + 1, "email": email, "course_id": course_id, "error": str(e)})
             except EnrollmentServiceError as e:
-                self.db.rollback()
                 failure_count += 1
                 errors.append({"row": idx + 1, "email": email, "course_id": course_id, "error": str(e)})
             except Exception as e:
-                self.db.rollback()
                 failure_count += 1
                 errors.append({"row": idx + 1, "email": email, "course_id": course_id, "error": "Internal server error"})
-        
-        self.db.commit()
 
         return {
             "success_count": success_count,

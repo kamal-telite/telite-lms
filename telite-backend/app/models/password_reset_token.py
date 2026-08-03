@@ -10,8 +10,8 @@ class PasswordResetToken(Base, TimestampMixin):
     __tablename__ = "password_reset_tokens"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    org_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, default=1)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, default=1, index=True)
     token: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     expires_at: Mapped[str] = mapped_column(String, nullable=False)
     used_at: Mapped[str | None] = mapped_column(String, nullable=True)

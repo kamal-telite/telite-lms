@@ -117,10 +117,12 @@ def test_execute_batch_success():
     service = BulkEnrollmentService(db=None)
     mock_enrol = MockEnrollmentService()
     service.enrollment_service = mock_enrol
-    # Add a mock db with commit/rollback
-    class MockDB:
+    # Add a mock db with commit/rollback and begin_nested
+    class MockNestedTransaction:
         def commit(self): pass
         def rollback(self): pass
+    class MockDB:
+        def begin_nested(self): return MockNestedTransaction()
     service.db = MockDB()
 
     rows = [{"email": "u1@example.com", "full_name": "U 1", "course_id": "c1"}]
@@ -132,3 +134,32 @@ def test_execute_batch_success():
     assert result["failure_count"] == 0
     assert len(mock_enrol.calls) == 1
     assert mock_enrol.calls[0]["email"] == "u1@example.com"
+
+def test_execute_batch_best_effort():
+    """Test that individual enrollment failures don't affect other enrollments."""
+    service = BulkEnrollmentService(db=None)
+    mock_enrol = MockEnrollmentService()
+    service.enrollment_service = mock_enrol
+    # Add a mock db with commit/rollback and begin_nested
+    class MockNestedTransaction:
+        def commit(self): pass
+        def rollback(self): pass
+    class MockDB:
+        def begin_nested(self): return MockNestedTransaction()
+    service.db = MockDB()
+
+    rows = [
+        {"email": "u1@example.com", "full_name": "U 1", "course_id": "c1"},
+        {"email": "fail@example.com", "full_name": "U Fail", "course_id": "c1"},  # This will fail
+        {"email": "u2@example.com", "full_name": "U 2", "course_id": "c1"}
+    ]
+    token = DummyTokenData(id="1", role="platform_admin", is_platform_admin=True, org_id=1, email="admin@example.com", full_name="Admin")
+    
+    result = service.execute_batch(rows, token)
+    
+    # Best-effort: 2 succeed, 1 fails
+    assert result["success_count"] == 2
+    assert result["failure_count"] == 1
+    assert len(mock_enrol.calls) == 2  # Only successful enrollments called
+    assert len(result["errors"]) == 1
+    assert result["errors"][0]["email"] == "fail@example.com"

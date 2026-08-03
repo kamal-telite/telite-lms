@@ -9,6 +9,7 @@ from app.models.course import Course
 from app.models.course_module import CourseModule
 from app.models.course_section import CourseSection
 from app.models.module_progress import ModuleProgress
+from app.models.section_progress import SectionProgress
 from app.models.organization import Organization
 from app.repositories.progression_rule_repo import ProgressionRuleRepository
 from app.services.progression_rule_engine import ProgressionRuleEngine
@@ -395,4 +396,136 @@ def test_get_all_rules_for_course(db_session: Session):
     
     assert len(rules) == 2
     
+    db_session.rollback()
+
+
+def test_module_access_evaluates_parent_section_rules(db_session: Session):
+    """A module inside a locked section must be denied by the section rule."""
+    org_id = _setup_env(db_session)
+
+    section2 = CourseSection(
+        id=2,
+        course_id="test_course",
+        title="Locked Section",
+        sort_order=1,
+        org_id=org_id,
+    )
+    previous_module = CourseModule(
+        id=1,
+        course_id="test_course",
+        section_id=1,
+        title="Unfinished Previous Module",
+        module_type="lesson",
+        sort_order=0,
+        org_id=org_id,
+    )
+    module = CourseModule(
+        id=2,
+        course_id="test_course",
+        section_id=2,
+        title="Locked Section Module",
+        module_type="lesson",
+        sort_order=0,
+        org_id=org_id,
+    )
+    rule = ProgressionRule(
+        target_type="section",
+        target_id=2,
+        rule_type="previous_section_completed",
+        rule_value={},
+        org_id=org_id,
+        is_active=True,
+    )
+    db_session.add(section2)
+    db_session.flush()
+    db_session.add_all([previous_module, module, rule])
+    db_session.flush()
+
+    result = ProgressionRuleEngine(db_session).validate_access(
+        user_id="test_user",
+        target_type="module",
+        target_id=2,
+        org_id=org_id,
+    )
+
+    assert result.allowed is False
+    assert "Complete" in result.reason
+
+    db_session.rollback()
+
+
+def test_minimum_section_time_rule_allows_child_module_after_previous_section_time_met(db_session: Session):
+    """Section delay rules configured on a section must unlock its child module."""
+    org_id = _setup_env(db_session)
+
+    section1_module = CourseModule(
+        id=1,
+        course_id="test_course",
+        section_id=1,
+        title="First Section Module",
+        module_type="lesson",
+        sort_order=0,
+        org_id=org_id,
+    )
+    section2 = CourseSection(
+        id=2,
+        course_id="test_course",
+        title="Delayed Section",
+        sort_order=1,
+        org_id=org_id,
+    )
+    section2_module = CourseModule(
+        id=2,
+        course_id="test_course",
+        section_id=2,
+        title="Delayed Section Module",
+        module_type="lesson",
+        sort_order=0,
+        org_id=org_id,
+    )
+    db_session.add(section2)
+    db_session.flush()
+    db_session.add_all([section1_module, section2_module])
+    db_session.flush()
+
+    previous_section = db_session.query(CourseSection).filter(CourseSection.id == 1).first()
+    previous_section.minimum_time_seconds = 120
+    db_session.add_all([
+        ModuleProgress(user_id="test_user", module_id=1, org_id=org_id, status="completed"),
+        SectionProgress(
+            user_id="test_user",
+            section_id=1,
+            org_id=org_id,
+            status="completed",
+            completion_percentage=100.0,
+            time_spent_seconds=120,
+        ),
+        ProgressionRule(
+            target_type="section",
+            target_id=2,
+            rule_type="previous_section_completed",
+            rule_value={},
+            org_id=org_id,
+            is_active=True,
+        ),
+        ProgressionRule(
+            target_type="section",
+            target_id=2,
+            rule_type="minimum_section_time",
+            rule_value={},
+            org_id=org_id,
+            is_active=True,
+        ),
+    ])
+    db_session.flush()
+
+    result = ProgressionRuleEngine(db_session).validate_access(
+        user_id="test_user",
+        target_type="module",
+        target_id=2,
+        org_id=org_id,
+    )
+
+    assert result.allowed is True
+
     db_session.rollback()

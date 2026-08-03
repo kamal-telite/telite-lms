@@ -15,7 +15,7 @@ class LearningPath(Base):
     settings = Column(Text, nullable=False, default="{}") # Completion rules, prereqs
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True)
+    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True, index=True)
 
     def to_dict(self):
         return {
