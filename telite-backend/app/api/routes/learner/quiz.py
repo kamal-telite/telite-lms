@@ -131,19 +131,23 @@ def get_category_quiz_statistics(
         CourseModule.deleted_at.is_(None),
     ).all()
 
-    # Collect all learner IDs, block IDs, and course IDs for batch query
+    # Collect all learner IDs, block IDs, and course IDs for batch query.
+    # Keep the block/course tuples only for the response builder below; the SQL
+    # filter itself must use scalar columns so PostgreSQL can compare them
+    # correctly instead of treating a tuple as a single `block_id` value.
     learner_ids = [learner.id for learner in learners]
+    block_ids = [block.id for block, _, _ in quiz_blocks]
     block_info = {(block.id, course.id): (block, module, course) for block, module, course in quiz_blocks}
     course_ids = {course.id for _, _, course in quiz_blocks}
-    
-    # Batch fetch all LearnerEvent records for all (learner, block, course) combinations
-    # This preserves all original filters: user_id, org_id, course_id, block_id, event_type
+
+    # Batch fetch all LearnerEvent records for all (learner, block, course)
+    # combinations while keeping the original safety filters.
     all_events = db.query(LearnerEvent).filter(
         LearnerEvent.user_id.in_(learner_ids),
         LearnerEvent.org_id == current_user.org_id,
         LearnerEvent.course_id.in_(course_ids),
         LearnerEvent.event_type == "QUIZ_SUBMITTED",
-        LearnerEvent.block_id.in_(block_info.keys())
+        LearnerEvent.block_id.in_(block_ids),
     ).order_by(LearnerEvent.created_at.asc(), LearnerEvent.id.asc()).all()
     
     # Group events by (user_id, block_id, course_id) to preserve course boundaries
