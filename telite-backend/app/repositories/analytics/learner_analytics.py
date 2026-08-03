@@ -137,16 +137,18 @@ def get_learner_summary(session: Session, user_id: str) -> dict[str, Any]:
     course_rows = [course_progress_payload(course) for course in courses]
     course_by_id = {course.id: course for course in courses}
     current_course = None
-    if user.current_course_id and user.current_course_id in course_by_id:
-        current_course = course_progress_payload(course_by_id[user.current_course_id])
-    elif progress:
+    if progress:
         latest_progress = max(
             progress,
             key=lambda row: row.last_viewed_at or row.updated_at or row.created_at
         )
         if latest_progress.course_id in course_by_id:
             current_course = course_progress_payload(course_by_id[latest_progress.course_id])
-    elif course_rows:
+    
+    if not current_course and user.current_course_id and user.current_course_id in course_by_id:
+        current_course = course_progress_payload(course_by_id[user.current_course_id])
+        
+    if not current_course and course_rows:
         current_course = course_rows[0]
     
     # Determine stats from events and session ledger
