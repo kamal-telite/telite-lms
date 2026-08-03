@@ -80,7 +80,15 @@ class CertificateService:
                 verification_token=token,
                 qr_code_url=qr_url,
                 issued_version=1,
-                issued_at=datetime.now(timezone.utc)
+                issued_at=datetime.now(timezone.utc),
+                metadata_json={
+                    "issued_to": user.full_name,
+                    "course_name": course.name,
+                    "course_id": course.id,
+                    "user_id": user.id,
+                    "verification_token": token,
+                    "issued_at": datetime.now(timezone.utc).isoformat(),
+                },
             )
             self.db.add(cert)
             self.db.flush()
@@ -106,17 +114,20 @@ class CertificateService:
         cert = self.db.query(Certificate).filter(Certificate.verification_token == token).first()
         if not cert:
             return None
-            
+
         user = self.db.query(User).filter(User.id == cert.user_id).first()
         course = self.db.query(Course).filter(Course.id == cert.course_id).first()
-        
+        metadata = cert.metadata_json or {}
+
         return {
             "valid": True,
-            "issued_to": user.full_name if user else "Unknown User",
-            "course_name": course.name if course else "Unknown Course",
+            "verification_id": cert.id,
+            "issued_to": (user.full_name if user else None) or metadata.get("issued_to") or "Unknown User",
+            "course_name": (course.name if course else None) or metadata.get("course_name") or "Unknown Course",
             "issued_at": cert.issued_at.isoformat(),
             "hash": cert.certificate_hash,
-            "pdf_url": f"/uploads/certificates/{cert.pdf_s3_key}"
+            "pdf_url": f"/uploads/certificates/{cert.pdf_s3_key}",
+            "verification_token": cert.verification_token,
         }
 
     def _generate_hash(self, user: User, course: Course, token: str) -> str:

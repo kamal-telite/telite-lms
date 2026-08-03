@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, TokenData
@@ -133,32 +134,43 @@ def download_certificate(
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found or not earned yet")
     
-    # In production, this would fetch the PDF from S3
-    # For now, regenerate the PDF on-the-fly
+    from app.core.storage_paths import certificate_upload_root
     from app.services.certificate_service import CertificateService
+
     cert_service = CertificateService(db)
-    
     user = db.query(User).filter(User.id == cert.user_id).first()
     course = db.query(Course).filter(Course.id == cert.course_id).first()
-    
+
     if not user or not course:
         raise HTTPException(status_code=404, detail="User or course not found")
-    
+
+    file_path = (certificate_upload_root() / cert.pdf_s3_key).resolve()
+    disposition = "inline" if inline else "attachment"
+    file_name = f"certificate_{course_id}_{user.id}.pdf"
+
+    if file_path.is_file():
+        return FileResponse(
+            path=file_path,
+            media_type="application/pdf",
+            filename=file_name,
+            headers={
+                "Content-Disposition": f"{disposition}; filename={file_name}"
+            },
+        )
+
     from app.models.organization_branding import OrganizationBranding
     branding = db.query(OrganizationBranding).filter(
         OrganizationBranding.organization_id == cert.org_id
     ).first()
-    
+
     qr_url = cert.qr_code_url or f"https://telite.io/verify/{cert.verification_token}"
     pdf_bytes = cert_service._generate_pdf(user, course, branding, qr_url, cert.certificate_hash)
-    
-    disposition = "inline" if inline else "attachment"
-    
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"{disposition}; filename=certificate_{course_id}_{user.id}.pdf"
+            "Content-Disposition": f"{disposition}; filename={file_name}"
         }
     )
 

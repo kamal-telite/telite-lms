@@ -5,6 +5,8 @@ import { CourseSidebar } from "./CourseSidebar";
 import { BlockRenderer } from "./BlockRenderer";
 import { api, endLearningSession, heartbeatLearningSession, startLearningSession } from "../../services/client";
 import { useCountdownTimer } from "../../hooks/useCountdownTimer";
+import { fetchCertificatePdf } from "../../utils/certificateUrls";
+import { shouldShowSectionCountdown } from "./courseSidebarCountdown.js";
 
 function mergeSectionProgress(prev, incoming) {
   if (!incoming || typeof incoming !== "object") return prev || {};
@@ -284,6 +286,13 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     }
     return timeSpentSeconds >= minimumTimeSeconds;
   };
+
+  const shouldShowGlobalCountdown = shouldShowSectionCountdown({
+    isSectionLocked: !isSectionCompleted && !isSectionTimeRequirementMet(),
+    isSectionCompleted,
+    minimumTimeSeconds,
+    timeSpentSeconds,
+  });
 
   const timerSyncedSectionRef = useRef(null);
 
@@ -568,43 +577,51 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
     }
   };
 
-  const handleViewCertificate = () => {
-    if (certificate?.verification_token) {
-      const url = buildCertificateDownloadUrl(courseId, {
+  const handleViewCertificate = async () => {
+    if (!certificate?.verification_token) {
+      console.warn("Certificate or verification_token not available");
+      return;
+    }
+
+    try {
+      const { blob, url } = await fetchCertificatePdf(courseId, {
         inline: true,
         baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
       });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } else {
-      console.warn("Certificate or verification_token not available");
+      const objectUrl = window.URL.createObjectURL(blob);
+      const target = window.open(objectUrl, "_blank", "noopener,noreferrer");
+      if (!target) {
+        window.location.href = url;
+      }
+    } catch (error) {
+      console.error("Failed to view certificate", error);
+      showToast(error.message || "Unable to open certificate PDF.", "error");
     }
   };
 
   const handleDownloadCertificate = async () => {
-    if (certificate?.verification_token) {
-      try {
-        const downloadUrl = buildCertificateDownloadUrl(courseId, {
-          inline: false,
-          baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
-        });
-        const response = await api.get(downloadUrl, {
-          responseType: 'blob'
-        });
-
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `certificate_${courseId}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error("Failed to download certificate", error);
-        window.open(`/public/verify/${certificate.verification_token}`, "_blank");
-      }
-    } else {
+    if (!certificate?.verification_token) {
       console.warn("Certificate or verification_token not available");
+      return;
+    }
+
+    try {
+      const { blob, fileName } = await fetchCertificatePdf(courseId, {
+        inline: false,
+        baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
+      });
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.error("Failed to download certificate", error);
+      showToast(error.message || "Unable to download certificate PDF.", "error");
     }
   };
 
@@ -880,7 +897,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {/* Countdown Timer Display */}
-            {!loading && !isTimeMet && minimumTimeSeconds > 0 && (
+            {!loading && shouldShowGlobalCountdown && (
               <div className="learner-player__timer" style={{ 
                 display: "flex", 
                 alignItems: "center", 

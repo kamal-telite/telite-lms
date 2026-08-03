@@ -1,5 +1,5 @@
 import { Button, Panel, EmptyState, LoadingState } from "../../common/ui";
-import { buildCertificateDownloadUrl } from "../../../utils/certificateUrls";
+import { fetchCertificatePdf } from "../../../utils/certificateUrls";
 
 /**
  * CertificatesSection - View and download earned certificates
@@ -134,12 +134,17 @@ export function CertificatesSection({
                     <Button
                       tone="primary"
                       size="sm"
-                      onClick={() => {
-                        const url = buildCertificateDownloadUrl(courseId, {
-                          inline: true,
-                          baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
-                        });
-                        window.open(url, "_blank", "noopener,noreferrer");
+                      onClick={async () => {
+                        try {
+                          const { blob } = await fetchCertificatePdf(courseId, {
+                            inline: true,
+                            baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
+                          });
+                          const objectUrl = window.URL.createObjectURL(blob);
+                          window.open(objectUrl, "_blank", "noopener,noreferrer");
+                        } catch (error) {
+                          console.error("Failed to view certificate", error);
+                        }
                       }}
                       style={{ flex: 1 }}
                     >
@@ -148,12 +153,23 @@ export function CertificatesSection({
                     <Button
                       tone="ghost"
                       size="sm"
-                      onClick={() => {
-                        const url = buildCertificateDownloadUrl(courseId, {
-                          inline: false,
-                          baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
-                        });
-                        window.open(url, "_blank", "noopener,noreferrer");
+                      onClick={async () => {
+                        try {
+                          const { blob, fileName } = await fetchCertificatePdf(courseId, {
+                            inline: false,
+                            baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
+                          });
+                          const objectUrl = window.URL.createObjectURL(blob);
+                          const link = document.createElement("a");
+                          link.href = objectUrl;
+                          link.setAttribute("download", fileName);
+                          document.body.appendChild(link);
+                          link.click();
+                          link.remove();
+                          window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+                        } catch (error) {
+                          console.error("Failed to download certificate", error);
+                        }
                       }}
                       style={{ flex: 1 }}
                     >
