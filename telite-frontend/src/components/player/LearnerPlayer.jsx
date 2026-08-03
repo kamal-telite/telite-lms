@@ -880,7 +880,7 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {/* Countdown Timer Display */}
-            {minimumTimeSeconds > 0 && (
+            {!loading && !isTimeMet && minimumTimeSeconds > 0 && (
               <div className="learner-player__timer" style={{ 
                 display: "flex", 
                 alignItems: "center", 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { api } from "../../services/client";
 import { useCountdownTimer } from "../../hooks/useCountdownTimer";
+import { shouldShowSectionCountdown } from "./courseSidebarCountdown.js";
 
 function formatTime(seconds) {
   if (!seconds || seconds === 0) return null;
@@ -13,7 +14,7 @@ function formatTime(seconds) {
 }
 
 // Component to display live countdown timer for a section
-function SectionCountdownTimer({ minimumTimeSeconds, timeSpentSeconds, isActive, isCompleted, resetKey, liveTimer }) {
+export function SectionCountdownTimer({ minimumTimeSeconds, timeSpentSeconds, isActive, isCompleted, resetKey, liveTimer, visible = true }) {
   const countdown = useCountdownTimer({
     minimumTimeSeconds,
     timeSpentSeconds,
@@ -24,14 +25,8 @@ function SectionCountdownTimer({ minimumTimeSeconds, timeSpentSeconds, isActive,
   const formattedTime = liveTimer?.formattedTime ?? countdown.formattedTime;
   const isTimeMet = liveTimer?.isTimeMet ?? countdown.isTimeMet;
 
-  if (!minimumTimeSeconds || minimumTimeSeconds <= 0) {
+  if (!visible || !minimumTimeSeconds || minimumTimeSeconds <= 0 || isTimeMet) {
     return null;
-  }
-
-  if (isTimeMet) {
-    return <span style={{ fontSize: "10px", color: "var(--success)", fontWeight: 400, flexShrink: 0 }}>
-      ⏱ {formattedTime} ✓
-    </span>;
   }
 
   return <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 400, flexShrink: 0 }}>
@@ -319,6 +314,15 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
             const isExpanded = expandedSections[section.id] !== false;
             const isSectionLocked = sectionLocking[section.id];
             const isActiveSection = sectionModules.some((mod) => mod.id === activeModule?.id);
+            const sectionSpentSeconds = sectionProgress[String(section.id)]?.time_spent_seconds || sectionProgress[section.id]?.time_spent_seconds || 0;
+            const sectionStatus = sectionProgress[String(section.id)]?.status || sectionProgress[section.id]?.status;
+            const isSectionCompleted = sectionStatus === "completed";
+            const shouldRenderCountdown = shouldShowSectionCountdown({
+              isSectionLocked,
+              isSectionCompleted,
+              minimumTimeSeconds: section.minimum_time_seconds,
+              timeSpentSeconds: sectionSpentSeconds,
+            });
             
             return (
               <div key={section.id}>
@@ -354,11 +358,12 @@ export function CourseSidebar({ course, activeModule, onSelectModule, progressDa
                   </span>
                   <SectionCountdownTimer
                     minimumTimeSeconds={section.minimum_time_seconds}
-                    timeSpentSeconds={sectionProgress[String(section.id)]?.time_spent_seconds || sectionProgress[section.id]?.time_spent_seconds || 0}
-                    isActive={!isSectionLocked && isActiveSection}
-                    isCompleted={sectionProgress[String(section.id)]?.status === "completed" || sectionProgress[section.id]?.status === "completed"}
+                    timeSpentSeconds={sectionSpentSeconds}
+                    isActive={isSectionLocked && isActiveSection}
+                    isCompleted={isSectionCompleted}
                     resetKey={section.id}
                     liveTimer={isActiveSection ? activeSectionTimer : null}
+                    visible={shouldRenderCountdown}
                   />
                   {isSectionLocked && (
                     <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: 500 }}>
