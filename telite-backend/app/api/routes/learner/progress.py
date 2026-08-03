@@ -270,33 +270,35 @@ def update_progress(
             )
             from app.models.user import User
             from app.models.course import Course
-            
-            user = db.query(User).filter(User.id == current_user.id).first()
-            course = db.query(Course).filter(Course.id == req.course_id).first()
-            
-            if user and course:
-                cert_service = CertificateService(db)
-                cert, created = cert_service.generate_certificate(user, course, current_user.org_id, commit=False)
-                if created:
-                    metadata = certificate_awarded_metadata(
-                        course_id=cert.course_id,
-                        certificate_id=cert.id,
-                        verification_token=cert.verification_token,
-                    )
-                    NotificationRepository(db).create_once(
-                        user_id=cert.user_id,
-                        org_id=cert.org_id,
-                        title="Certificate Awarded",
-                        body=f"Your certificate for {course.name} is ready.",
-                        notif_type=NotificationType.CERTIFICATE_AWARDED,
-                        source_type="certificate",
-                        source_id=cert.id,
-                        metadata=metadata,
-                        idempotency_key=certificate_awarded_idempotency_key(
-                            user_id=cert.user_id,
+            try:
+                user = db.query(User).filter(User.id == current_user.id).first()
+                course = db.query(Course).filter(Course.id == req.course_id).first()
+                
+                if user and course:
+                    cert_service = CertificateService(db)
+                    cert, created = cert_service.generate_certificate(user, course, current_user.org_id, commit=False)
+                    if created:
+                        metadata = certificate_awarded_metadata(
+                            course_id=cert.course_id,
                             certificate_id=cert.id,
-                        ),
-                    )
+                            verification_token=cert.verification_token,
+                        )
+                        NotificationRepository(db).create_once(
+                            user_id=cert.user_id,
+                            org_id=cert.org_id,
+                            title="Certificate Awarded",
+                            body=f"Your certificate for {course.name} is ready.",
+                            notif_type=NotificationType.CERTIFICATE_AWARDED,
+                            source_type="certificate",
+                            source_id=cert.id,
+                            metadata=metadata,
+                            idempotency_key=certificate_awarded_idempotency_key(
+                                user_id=cert.user_id,
+                                certificate_id=cert.id,
+                            ),
+                        )
+            except Exception as e:
+                logger.exception("Failed to auto-generate certificate during progress update")
 
     progress_repo.upsert_course_progress(course_progress)
     PALScoreService(db).recompute_user(current_user.id, current_user.org_id)
