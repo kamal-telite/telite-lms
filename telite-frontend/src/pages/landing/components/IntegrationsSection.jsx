@@ -11,10 +11,10 @@ export default function IntegrationsSection({ activeIntegrationTab, setActiveInt
   return (
     <section id="integrations">
       <div className="inner">
-        <div className="integrations-header">
-          <span className="section-eyebrow">Ecosystem</span>
-          <h2 className="section-title">Seamless Integrations</h2>
-          <p className="section-sub">Connect your existing workflows, LMS platforms, and identity providers with one click.</p>
+        <div className="integrations-header" style={{ textAlign: 'center' }}>
+          <span className="section-eyebrow" style={{ textAlign: 'center' }}>Ecosystem</span>
+          <h2 className="section-title" style={{ textAlign: 'center' }}>Seamless Integrations</h2>
+          <p className="section-sub" style={{ textAlign: 'center', margin: '0 auto' }}>Connect your existing workflows, LMS platforms, and identity providers with one click.</p>
         </div>
         <div className="integrations-tabs-wrapper">
           <div className="integrations-tabs">

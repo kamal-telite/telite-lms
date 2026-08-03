@@ -473,7 +473,7 @@ def create_app() -> FastAPI:
         redis_healthy, redis_status = check_redis_health()
         checks["redis"] = redis_status
         
-        ready = db_healthy and redis_healthy in ("healthy", "skipped")
+        ready = db_healthy and redis_healthy
         return JSONResponse(
             status_code=200 if ready else 503,
             content={

@@ -35,10 +35,10 @@ export default function SecuritySection() {
   return (
     <section id="security-trust">
       <div className="inner">
-        <div className="security-header">
-          <span className="section-eyebrow">Enterprise Security</span>
-          <h2 className="section-title">Guardians of your learning data</h2>
-          <p className="section-sub">Telite is engineered with state-of-the-art security compliance to protect institutional privacy and intellectual assets.</p>
+        <div className="security-header" style={{ textAlign: 'center' }}>
+          <span className="section-eyebrow" style={{ textAlign: 'center' }}>Enterprise Security</span>
+          <h2 className="section-title" style={{ textAlign: 'center' }}>Guardians of your learning data</h2>
+          <p className="section-sub" style={{ textAlign: 'center', margin: '0 auto' }}>Telite is engineered with state-of-the-art security compliance to protect institutional privacy and intellectual assets.</p>
         </div>
         <div className="security-grid">
           {CARD_DATA.map((item) => (
