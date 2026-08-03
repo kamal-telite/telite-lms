@@ -12,6 +12,22 @@
   padding: 32px;
 }
 
+@media (max-width: 768px) {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-page__glow--violet {
+    top: -60px;
+    left: -60px;
+  }
+
+  .login-page__glow--blue {
+    right: -60px;
+    bottom: -60px;
+  }
+}
+
 .login-page__glow {
   position: absolute;
   width: 460px;
@@ -19,6 +35,13 @@
   border-radius: 50%;
   filter: blur(100px);
   opacity: 0.4;
+}
+
+@media (max-width: 768px) {
+  .login-page__glow {
+    width: 300px;
+    height: 300px;
+  }
 }
 
 .login-page__glow--violet {
@@ -46,8 +69,23 @@
   align-items: center;
 }
 
+@media (max-width: 768px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    min-height: auto;
+    padding: 16px 0;
+  }
+}
+
 .login-hero {
   padding-right: 24px;
+}
+
+@media (max-width: 768px) {
+  .login-hero {
+    display: none;
+  }
 }
 
 .login-brand {
@@ -137,9 +175,32 @@
   padding: 26px;
 }
 
+.login-card--auth {
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .login-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .login-card--auth {
+    max-width: 100%;
+  }
+}
+
 .login-card__header h2 {
   margin: 0;
   font-size: 24px;
+}
+
+@media (max-width: 768px) {
+  .login-card__header h2 {
+    font-size: 20px;
+  }
 }
 
 .login-card__header p {
@@ -198,4 +259,15 @@
   background: var(--red-light);
   border: 1px solid var(--red-mid);
   color: var(--red);
+}
+
+@media (max-width: 768px) {
+  .form-alert {
+    font-size: 13px;
+    padding: 12px;
+  }
+
+  .login-card[style*="margin-top"] {
+    margin-top: 8vh !important;
+  }
 }

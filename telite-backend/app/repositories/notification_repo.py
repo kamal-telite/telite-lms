@@ -8,6 +8,7 @@ _insert_notification, list_platform_notifications.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Sequence
 
 from sqlalchemy import select, update
@@ -15,7 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
 from app.core.notification_payloads import ACTIVE_NOTIFICATION_TYPES, validate_notification_payload
+from app.core.observability import log_background_task_failure
 from app.repositories.base_repo import BaseRepository
+
+logger = logging.getLogger("telite.notifications")
 
 
 class NotificationRepository(BaseRepository[Notification]):
@@ -52,26 +56,39 @@ class NotificationRepository(BaseRepository[Notification]):
         source_type: str | None = None,
         source_id: str | None = None,
     ) -> Notification:
-        notif_type_value = getattr(notif_type, "value", notif_type)
-        source_id_value = str(source_id) if source_id is not None else None
-        if notif_type_value in ACTIVE_NOTIFICATION_TYPES:
-            if not source_type or source_id is None:
-                raise ValueError("active notification producers must include source_type and source_id")
-            validate_notification_payload(metadata)
-        notif = Notification(
-            user_id=user_id,
-            org_id=org_id,
-            title=title,
-            body=body,
-            type=notif_type_value,
-            is_read=False,
-            metadata_json=json.dumps(metadata) if metadata else None,
-            source_type=source_type,
-            source_id=source_id_value,
-        )
-        self.session.add(notif)
-        self.session.flush()
-        return notif
+        try:
+            notif_type_value = getattr(notif_type, "value", notif_type)
+            source_id_value = str(source_id) if source_id is not None else None
+            if notif_type_value in ACTIVE_NOTIFICATION_TYPES:
+                if not source_type or source_id is None:
+                    raise ValueError("active notification producers must include source_type and source_id")
+                validate_notification_payload(metadata)
+            notif = Notification(
+                user_id=user_id,
+                org_id=org_id,
+                title=title,
+                body=body,
+                type=notif_type_value,
+                is_read=False,
+                metadata_json=json.dumps(metadata) if metadata else None,
+                source_type=source_type,
+                source_id=source_id_value,
+            )
+            self.session.add(notif)
+            self.session.flush()
+            return notif
+        except Exception as exc:
+            log_background_task_failure(
+                task_name="notification_creation",
+                exception=exc,
+                context={
+                    "user_id": user_id,
+                    "org_id": org_id,
+                    "notif_type": notif_type,
+                    "source_type": source_type,
+                },
+            )
+            raise
 
     def create_once(
         self,

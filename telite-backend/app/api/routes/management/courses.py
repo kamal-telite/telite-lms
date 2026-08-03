@@ -12,36 +12,11 @@ from app.repositories.user_repo import UserRepository
 from app.core.storage_paths import media_upload_root
 from app.api.routes.management.schemas import CoursePayload
 from app.api.routes.management.utils import is_learner_role, is_category_admin_role, org_id
-from app.models.assignment_submission import AssignmentSubmission
-from app.models.audit_log import AuditLog
-from app.models.builder_activity_log import BuilderActivityLog
-from app.models.certificate import Certificate
 from app.models.course import Course
-from app.models.course_edit_lock import CourseEditLock
 from app.models.course_module import CourseModule
-from app.models.course_progress import CourseProgress
-from app.models.course_review import CourseReview
 from app.models.course_section import CourseSection
-from app.models.course_version import CourseVersion
-from app.models.gradebook import (
-    CompletionRule,
-    CourseGrade,
-    GradeCategory,
-    GradeChangeAudit,
-    GradeItem,
-    GradeResult,
-)
-from app.models.interactive_tracking import InteractiveTracking
-from app.models.learner_event import LearnerEvent
 from app.models.lesson_block import LessonBlock
-from app.models.lesson_block_progress import LessonBlockProgress
-from app.models.learning_path import LearningPathCourse
 from app.models.learning_session import LearningSession
-from app.models.module_progress import ModuleProgress
-from app.models.quiz_answer import GradingEvent, QuizAnswer
-from app.models.quiz_attempt import QuizAttempt, QuizAttemptEvent, QuizAttemptQuestion
-from app.models.quiz_models import QuizDefinition, QuizSettings
-from app.models.section_progress import SectionProgress
 from app.models.user import User
 
 courses_router = APIRouter(tags=["Course Management"])
@@ -162,20 +137,52 @@ def restore_archived_course(
     db: Session = Depends(db_session),
 ):
     """Restore an archived course."""
-    category = _ensure_category_admin_category_access(current_user, category_slug, db)
-    course_repo = CourseRepository(db)
-    course = course_repo.get_by_id(course_id)
-    if not course or course.org_id != category.org_id or course.category_slug != category_slug:
+    import logging
+    logger = logging.getLogger("telite.api")
+    
+    logger.info(f"[RESTORE] Starting restore - category_slug={category_slug}, course_id={course_id}, user_id={current_user.id}")
+    
+    try:
+        category = _ensure_category_admin_category_access(current_user, category_slug, db)
+        logger.info(f"[RESTORE] Category access verified - category_id={category.id}, org_id={category.org_id}")
+    except HTTPException as exc:
+        logger.error(f"[RESTORE] Category access failed: {exc.detail}")
+        raise
+    
+    try:
+        course = db.execute(
+            select(Course).where(
+                Course.id == course_id,
+                Course.org_id == category.org_id,
+                Course.category_slug == category_slug,
+            )
+        ).scalar_one_or_none()
+        logger.info(f"[RESTORE] Course lookup result: course={course is not None}, course_id={course_id}")
+    except Exception as exc:
+        logger.error(f"[RESTORE] Course lookup exception: {str(exc)}")
+        raise HTTPException(status_code=400, detail=f"Course lookup failed: {str(exc)}")
+    
+    if not course:
+        logger.error(f"[RESTORE] Course not found - course_id={course_id}, org_id={category.org_id}, category_slug={category_slug}")
         raise HTTPException(status_code=404, detail="Course not found")
+    
+    logger.info(f"[RESTORE] Course found - id={course.id}, status={course.status}, name={course.name}")
+    
     if course.status != "archived":
+        logger.error(f"[RESTORE] Course not archived - current_status={course.status}")
         raise HTTPException(status_code=400, detail="Course is not archived")
 
     try:
+        logger.info(f"[RESTORE] Setting course status to 'active'")
         course.status = "active"
+        logger.info(f"[RESTORE] Committing transaction")
         db.commit()
+        logger.info(f"[RESTORE] Transaction committed successfully")
         return course.to_dict()
     except Exception as exc:
+        logger.error(f"[RESTORE] Exception during restore: {str(exc)}", exc_info=True)
         db.rollback()
+        logger.error(f"[RESTORE] Transaction rolled back")
         raise HTTPException(status_code=400, detail=str(exc))
 
 
@@ -187,66 +194,88 @@ def permanently_delete_archived_course(
     db: Session = Depends(db_session),
 ):
     """Permanently delete an archived course."""
-    category = _ensure_category_admin_category_access(current_user, category_slug, db)
-    course_repo = CourseRepository(db)
-    course = course_repo.get_by_id(course_id)
-    if not course or course.org_id != category.org_id or course.category_slug != category_slug:
+    import logging
+    logger = logging.getLogger("telite.api")
+    
+    logger.info(f"[PERMANENT DELETE] Starting permanent delete - category_slug={category_slug}, course_id={course_id}, user_id={current_user.id}")
+    
+    try:
+        category = _ensure_category_admin_category_access(current_user, category_slug, db)
+        logger.info(f"[PERMANENT DELETE] Category access verified - category_id={category.id}, org_id={category.org_id}")
+    except HTTPException as exc:
+        logger.error(f"[PERMANENT DELETE] Category access failed: {exc.detail}")
+        raise
+    
+    try:
+        course = db.execute(
+            select(Course).where(
+                Course.id == course_id,
+                Course.org_id == category.org_id,
+                Course.category_slug == category_slug,
+            )
+        ).scalar_one_or_none()
+        logger.info(f"[PERMANENT DELETE] Course lookup result: course={course is not None}, course_id={course_id}")
+    except Exception as exc:
+        logger.error(f"[PERMANENT DELETE] Course lookup exception: {str(exc)}")
+        raise HTTPException(status_code=400, detail=f"Course lookup failed: {str(exc)}")
+    
+    if not course:
+        logger.error(f"[PERMANENT DELETE] Course not found - course_id={course_id}, org_id={category.org_id}, category_slug={category_slug}")
         raise HTTPException(status_code=404, detail="Course not found")
+    
+    logger.info(f"[PERMANENT DELETE] Course found - id={course.id}, status={course.status}, name={course.name}")
+    
     if course.status != "archived":
+        logger.error(f"[PERMANENT DELETE] Course not archived - current_status={course.status}")
         raise HTTPException(status_code=400, detail="Only archived courses can be permanently deleted")
 
     try:
-        def run_write(statement):
-            db.execute(statement.execution_options(synchronize_session=False))
-
-        module_ids = select(CourseModule.id).where(CourseModule.course_id == course_id)
-        section_ids = select(CourseSection.id).where(CourseSection.course_id == course_id)
-        block_ids = select(LessonBlock.id).where(LessonBlock.module_id.in_(module_ids))
-        quiz_ids = select(QuizDefinition.id).where(QuizDefinition.module_id.in_(module_ids))
-        attempt_ids = select(QuizAttempt.id).where(
-            (QuizAttempt.lesson_block_id.in_(block_ids))
-            | (QuizAttempt.quiz_definition_id.in_(quiz_ids))
-        )
-        module_progress_ids = select(ModuleProgress.id).where(ModuleProgress.module_id.in_(module_ids))
-
-        run_write(delete(GradeChangeAudit).where(GradeChangeAudit.course_id == course_id))
-        run_write(delete(GradeResult).where(GradeResult.course_id == course_id))
-        run_write(delete(CourseGrade).where(CourseGrade.course_id == course_id))
-        run_write(delete(GradeItem).where(GradeItem.course_id == course_id))
-        run_write(delete(GradeCategory).where(GradeCategory.course_id == course_id))
-        run_write(delete(CompletionRule).where(CompletionRule.course_id == course_id))
-        run_write(delete(Certificate).where(Certificate.course_id == course_id))
-        run_write(delete(CourseProgress).where(CourseProgress.course_id == course_id))
-        run_write(delete(CourseReview).where(CourseReview.course_id == course_id))
-        run_write(delete(LearnerEvent).where((LearnerEvent.course_id == course_id) | (LearnerEvent.module_id.in_(module_ids)) | (LearnerEvent.block_id.in_(block_ids))))
-        run_write(delete(GradingEvent).where(GradingEvent.attempt_id.in_(attempt_ids)))
-        run_write(delete(QuizAnswer).where(QuizAnswer.attempt_id.in_(attempt_ids)))
-        run_write(delete(QuizAttemptEvent).where(QuizAttemptEvent.attempt_id.in_(attempt_ids)))
-        run_write(delete(QuizAttemptQuestion).where(QuizAttemptQuestion.attempt_id.in_(attempt_ids)))
-        run_write(delete(QuizAttempt).where(QuizAttempt.id.in_(attempt_ids)))
-        run_write(delete(QuizSettings).where(QuizSettings.quiz_id.in_(quiz_ids)))
-        run_write(delete(QuizDefinition).where(QuizDefinition.id.in_(quiz_ids)))
-        run_write(delete(AssignmentSubmission).where(AssignmentSubmission.block_id.in_(block_ids)))
-        run_write(delete(LessonBlockProgress).where(LessonBlockProgress.block_id.in_(block_ids)))
-        run_write(update(LearningSession).where(LearningSession.course_id == course_id).values(module_id=None, section_id=None, block_id=None))
-        run_write(delete(LearningSession).where(LearningSession.course_id == course_id))
-        run_write(delete(LessonBlock).where(LessonBlock.id.in_(block_ids)))
-        run_write(delete(InteractiveTracking).where(InteractiveTracking.attempt_id.in_(module_progress_ids)))
-        run_write(delete(ModuleProgress).where(ModuleProgress.module_id.in_(module_ids)))
-        run_write(delete(SectionProgress).where(SectionProgress.section_id.in_(section_ids)))
-        run_write(delete(CourseModule).where(CourseModule.course_id == course_id))
-        run_write(delete(CourseSection).where(CourseSection.course_id == course_id))
-        run_write(delete(CourseVersion).where(CourseVersion.course_id == course_id))
-        run_write(delete(LearningPathCourse).where(LearningPathCourse.course_id == course_id))
-        run_write(delete(CourseEditLock).where(CourseEditLock.course_id == course_id))
-        run_write(delete(BuilderActivityLog).where(BuilderActivityLog.course_id == course_id))
-        run_write(delete(AuditLog).where(AuditLog.course_id == course_id))
-        run_write(update(User).where(User.current_course_id == course_id).values(current_course_id=None))
+        logger.info(f"[PERMANENT DELETE] Starting cascade delete operations")
+        
+        # Execute subqueries to get actual ID lists
+        module_ids = db.execute(select(CourseModule.id).where(CourseModule.course_id == course_id)).scalars().all()
+        section_ids = db.execute(select(CourseSection.id).where(CourseSection.course_id == course_id)).scalars().all()
+        block_ids = db.execute(select(LessonBlock.id).where(LessonBlock.module_id.in_(module_ids))).scalars().all() if module_ids else []
+        
+        logger.info(f"[PERMANENT DELETE] Dependent records found - modules={len(module_ids)}, sections={len(section_ids)}, blocks={len(block_ids)}")
+        
+        # Clear user references to this course
+        user_update_result = db.execute(update(User).where(User.current_course_id == course_id).values(current_course_id=None))
+        logger.info(f"[PERMANENT DELETE] User references cleared - rows_affected={user_update_result.rowcount}")
+        
+        # Clear learning session references before deletion
+        session_update_result = db.execute(update(LearningSession).where(LearningSession.course_id == course_id).values(module_id=None, section_id=None, block_id=None))
+        logger.info(f"[PERMANENT DELETE] Learning session references cleared - rows_affected={session_update_result.rowcount}")
+        
+        # Delete in correct order to respect foreign key constraints
+        # Delete blocks first (they reference modules)
+        if block_ids:
+            blocks_deleted = db.execute(delete(LessonBlock).where(LessonBlock.id.in_(block_ids)))
+            logger.info(f"[PERMANENT DELETE] Lesson blocks deleted - rows_affected={blocks_deleted.rowcount}")
+        
+        # Delete modules (they reference courses)
+        if module_ids:
+            modules_deleted = db.execute(delete(CourseModule).where(CourseModule.course_id == course_id))
+            logger.info(f"[PERMANENT DELETE] Course modules deleted - rows_affected={modules_deleted.rowcount}")
+        
+        # Delete sections (they reference courses)
+        if section_ids:
+            sections_deleted = db.execute(delete(CourseSection).where(CourseSection.course_id == course_id))
+            logger.info(f"[PERMANENT DELETE] Course sections deleted - rows_affected={sections_deleted.rowcount}")
+        
+        # Finally delete the course
+        logger.info(f"[PERMANENT DELETE] Deleting course from database")
         db.delete(course)
+        logger.info(f"[PERMANENT DELETE] Course deleted, committing transaction")
+        
         db.commit()
+        logger.info(f"[PERMANENT DELETE] Transaction committed successfully")
+        
         return {"status": "deleted", "course_id": course_id}
     except Exception as exc:
+        logger.error(f"[PERMANENT DELETE] Exception during delete: {str(exc)}", exc_info=True)
         db.rollback()
+        logger.error(f"[PERMANENT DELETE] Transaction rolled back")
         raise HTTPException(status_code=400, detail=str(exc))
 
 

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, JSON, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 
 from app.models.base import Base
 
@@ -12,8 +12,8 @@ class Question(Base):
     bank_id = Column(Integer, ForeignKey("question_banks.id"), nullable=False, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("question_categories.id", ondelete="SET NULL"), nullable=True, index=True)
-    current_draft_version_id = Column(Integer, ForeignKey("question_versions.id", use_alter=True, name="fk_question_draft_version"), nullable=True)
-    current_published_version_id = Column(Integer, ForeignKey("question_versions.id", use_alter=True, name="fk_question_pub_version"), nullable=True)
+    current_draft_version_id = Column(Integer, ForeignKey("question_versions.id", use_alter=True, name="fk_question_draft_version"), nullable=True, index=True)
+    current_published_version_id = Column(Integer, ForeignKey("question_versions.id", use_alter=True, name="fk_question_pub_version"), nullable=True, index=True)
 
     @property
     def current_version_id(self):
@@ -25,6 +25,10 @@ class Question(Base):
 
 class QuestionVersion(Base):
     __tablename__ = "question_versions"
+    __table_args__ = (
+        UniqueConstraint('question_id', 'version_number', name='uq_question_versions_question_version'),
+        CheckConstraint('version_number >= 1', name='chk_question_versions_version_number'),
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)

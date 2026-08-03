@@ -194,9 +194,8 @@ class EnrollmentService:
             },
         )
 
-        self.db.flush()
-
         # ── Note: Enrollment hook dispatch moved to API layer to prevent race condition ──
+        # ── Note: Transaction management moved to caller (bulk enrollment or API layer)
 
         return ManualEnrollmentResult(
             user=learner,

@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 from typing import List
 from uuid import uuid4
@@ -194,9 +195,15 @@ def create_upload_url(
         json.dumps({"asset_id": asset.id, "filename": asset.filename})
     )
     AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.uploaded")
-    db.commit()
     
-    # Generate Presigned URL
+    # Commit database transaction before generating presigned URL
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    
+    # Generate Presigned URL (only after successful database commit)
     upload_url = generate_presigned_upload_url(object_key, request.mime_type)
     
     return {
@@ -233,56 +240,88 @@ async def upload_asset(
     stored_name = f"{uuid4().hex}_{filename}"
     target = org_dir / stored_name
     h5p_metadata = None
-    if h5p_upload:
-        mime_type = "application/x-h5p"
-        h5p_metadata = install_h5p_package(
-            target,
-            contents=contents,
-            filename=filename,
-            mime_type=mime_type,
-            extract_root=org_dir / "h5p_extracted" / stored_name,
-        )
-    else:
-        target.write_bytes(contents)
+    
+    # Track files created for cleanup on database failure
+    files_to_cleanup: list[Path] = []
+    dirs_to_cleanup: list[Path] = []
+    
+    try:
+        if h5p_upload:
+            mime_type = "application/x-h5p"
+            extract_root = org_dir / "h5p_extracted" / stored_name
+            h5p_metadata = install_h5p_package(
+                target,
+                contents=contents,
+                filename=filename,
+                mime_type=mime_type,
+                extract_root=extract_root,
+            )
+            files_to_cleanup.append(target)
+            dirs_to_cleanup.append(extract_root)
+        else:
+            target.write_bytes(contents)
+            files_to_cleanup.append(target)
 
-    object_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
-    asset = MediaAsset(
-        org_id=current_user.org_id,
-        file_name=file.filename or filename,
-        storage_key=object_key,
-        file_size=size_bytes,
-        file_type=mime_type,
-        storage_provider="local",
-        url=object_key,
-        folder=_clean_folder(folder),
-        tags_json=json.dumps(_merge_tags(_clean_tags(tags), ["h5p"] if h5p_upload else [])),
-        metadata_json=json.dumps(_h5p_metadata_payload(h5p_metadata, 1)) if h5p_metadata else None,
-        uploaded_by=current_user.id
-    )
-    media_repo.save_asset(asset)
-    if h5p_upload:
-        update_h5p_version_manifest(
-            org_dir,
-            asset_id=asset.id,
-            asset_version=asset.asset_version or 1,
-            stored_name=stored_name,
-            metadata=h5p_metadata,
+        object_key = f"/uploads/media/{current_user.org_id}/{stored_name}"
+        asset = MediaAsset(
+            org_id=current_user.org_id,
+            file_name=file.filename or filename,
+            storage_key=object_key,
+            file_size=size_bytes,
+            file_type=mime_type,
+            storage_provider="local",
+            url=object_key,
+            folder=_clean_folder(folder),
+            tags_json=json.dumps(_merge_tags(_clean_tags(tags), ["h5p"] if h5p_upload else [])),
+            metadata_json=json.dumps(_h5p_metadata_payload(h5p_metadata, 1)) if h5p_metadata else None,
+            uploaded_by=current_user.id
         )
-    media_repo.log_activity(
-        current_user.id,
-        current_user.org_id,
-        "MEDIA_UPLOADED",
-        json.dumps({"asset_id": asset.id, "filename": asset.filename})
-    )
-    AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.uploaded")
-    if h5p_upload:
-        AuditService.log(db, current_user.org_id, current_user.id, "h5p", asset.id, "h5p.uploaded")
-    response = _asset_response(db, asset)
-    db.commit()
+        media_repo.save_asset(asset)
+        if h5p_upload:
+            manifest_path = org_dir / "h5p_versions.json"
+            update_h5p_version_manifest(
+                org_dir,
+                asset_id=asset.id,
+                asset_version=asset.asset_version or 1,
+                stored_name=stored_name,
+                metadata=h5p_metadata,
+            )
+            files_to_cleanup.append(manifest_path)
+        media_repo.log_activity(
+            current_user.id,
+            current_user.org_id,
+            "MEDIA_UPLOADED",
+            json.dumps({"asset_id": asset.id, "filename": asset.filename})
+        )
+        AuditService.log(db, current_user.org_id, current_user.id, "media", asset.id, "media.uploaded")
+        if h5p_upload:
+            AuditService.log(db, current_user.org_id, current_user.id, "h5p", asset.id, "h5p.uploaded")
+        response = _asset_response(db, asset)
+        
+        # Commit database transaction
+        try:
+            db.commit()
+        except Exception:
+            # Database commit failed - cleanup files to prevent orphans
+            for file_path in files_to_cleanup:
+                file_path.unlink(missing_ok=True)
+            for dir_path in dirs_to_cleanup:
+                shutil.rmtree(dir_path, ignore_errors=True)
+            db.rollback()
+            raise
 
-    return {
-        "asset": response
-    }
+        return {
+            "asset": response
+        }
+    except Exception:
+        # Filesystem operation failed - database will rollback naturally
+        # Clean up any partially created files
+        for file_path in files_to_cleanup:
+            file_path.unlink(missing_ok=True)
+        for dir_path in dirs_to_cleanup:
+            shutil.rmtree(dir_path, ignore_errors=True)
+        db.rollback()
+        raise
 
 @media_router.get("", dependencies=[Depends(require_admin)])
 def list_assets(

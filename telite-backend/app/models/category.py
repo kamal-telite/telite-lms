@@ -31,6 +31,7 @@ class Category(Base, TenantMixin, TimestampMixin):
         Integer,
         ForeignKey("organizations.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
 
     # Relationships

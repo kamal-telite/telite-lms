@@ -29,6 +29,7 @@ import { TasksSection } from "../../components/learner/sections/TasksSection";
 import { LeaderboardSection } from "../../components/learner/sections/LeaderboardSection";
 import { CertificatesSection } from "../../components/learner/sections/CertificatesSection";
 import { AnnouncementsSection } from "../../components/learner/sections/AnnouncementsSection";
+import { SettingsSection } from "../../components/learner/sections/SettingsSection";
 
 export default function LearnerPage({ session, onLogout }) {
   const navigate = useNavigate();
@@ -474,6 +475,10 @@ export default function LearnerPage({ session, onLogout }) {
             announcements={announcementState}
             onMarkRead={handleReadAnnouncement}
           />
+        )}
+
+        {activeNav === "section-settings" && (
+          <SettingsSection />
         )}
       </div>
     </DashboardShell>

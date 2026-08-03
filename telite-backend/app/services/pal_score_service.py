@@ -97,8 +97,10 @@ class PALScoreService:
         }
 
     def recompute_user(self, user_id: str, org_id: int, *, commit: bool = False) -> dict[str, Any]:
+        # Use SELECT FOR UPDATE to lock the user row for the duration of the transaction
+        # This prevents concurrent recomputations for the same learner
         user = self.session.execute(
-            select(User).where(User.id == user_id, User.org_id == org_id)
+            select(User).where(User.id == user_id, User.org_id == org_id).with_for_update()
         ).scalar_one_or_none()
         if not user:
             return self.empty_metrics()

@@ -170,7 +170,7 @@ class TeliteQuizEngineTests(unittest.TestCase):
         self.client.put("/quiz-authoring/quizzes/100/settings", json={
             "passing_score": 15,
             "time_limit": 600,
-            "attempt_limit": 3,
+            "attempt_limit": 0,  # Unlimited for concurrent test
             "review_mode": "answers_after_submit",
         }, headers=headers)
 
@@ -558,6 +558,132 @@ class TeliteQuizEngineTests(unittest.TestCase):
             if attempt:
                 self.assertEqual(attempt.org_id, 1, f"Pending attempt {item['id']} leaked from another org")
         db.close()
+
+    # 7.9 — Attempt limit enforcement
+    def test_7_9_attempt_limit_enforcement(self):
+        """Quiz with attempt_limit blocks new attempts after limit is reached."""
+        headers = self.auth_headers("globaladmin", TEST_ADMIN_PASSWORD)
+        ids = self._seed_quiz_with_questions(headers)
+
+        # Set attempt limit to 2
+        self.client.put(f"/quiz-authoring/quizzes/{ids['quiz_id']}/settings", json={
+            "attempt_limit": 2,
+        }, headers=headers)
+
+        # First attempt should succeed
+        attempt1_res = self.client.post(
+            f"/quiz-execution/quizzes/{ids['quiz_id']}/attempts", headers=headers
+        )
+        self.assertEqual(attempt1_res.status_code, 200, "First attempt should succeed")
+        attempt1_id = attempt1_res.json()["attempt_id"]
+
+        # Submit first attempt
+        self.client.put(f"/quiz-execution/attempts/{attempt1_id}/answers", json={
+            "question_version_id": ids["q1_version_id"],
+            "response_json": {"answer": "4"},
+        }, headers=headers)
+        submit1_res = self.client.post(f"/quiz-execution/attempts/{attempt1_id}/submit", headers=headers)
+        self.assertEqual(submit1_res.status_code, 200, "First attempt submission should succeed")
+
+        # Second attempt should succeed
+        attempt2_res = self.client.post(
+            f"/quiz-execution/quizzes/{ids['quiz_id']}/attempts", headers=headers
+        )
+        self.assertEqual(attempt2_res.status_code, 200, "Second attempt should succeed")
+        attempt2_id = attempt2_res.json()["attempt_id"]
+
+        # Submit second attempt
+        self.client.put(f"/quiz-execution/attempts/{attempt2_id}/answers", json={
+            "question_version_id": ids["q1_version_id"],
+            "response_json": {"answer": "4"},
+        }, headers=headers)
+        submit2_res = self.client.post(f"/quiz-execution/attempts/{attempt2_id}/submit", headers=headers)
+        self.assertEqual(submit2_res.status_code, 200, "Second attempt submission should succeed")
+
+        # Third attempt should be blocked
+        attempt3_res = self.client.post(
+            f"/quiz-execution/quizzes/{ids['quiz_id']}/attempts", headers=headers
+        )
+        self.assertEqual(attempt3_res.status_code, 403, "Third attempt should be blocked")
+        self.assertEqual(
+            attempt3_res.json()["detail"], 
+            "You have reached the maximum number of allowed attempts.",
+            "Should return attempt limit error message"
+        )
+
+    # 7.10 — Unlimited attempts (null/zero attempt_limit)
+    def test_7_10_unlimited_attempts(self):
+        """Quiz with no attempt_limit or attempt_limit=0 allows unlimited attempts."""
+        headers = self.auth_headers("globaladmin", TEST_ADMIN_PASSWORD)
+        ids = self._seed_quiz_with_questions(headers)
+
+        # Set attempt limit to 0 (unlimited)
+        self.client.put(f"/quiz-authoring/quizzes/{ids['quiz_id']}/settings", json={
+            "attempt_limit": 0,
+        }, headers=headers)
+
+        # Multiple attempts should all succeed
+        for i in range(5):
+            attempt_res = self.client.post(
+                f"/quiz-execution/quizzes/{ids['quiz_id']}/attempts", headers=headers
+            )
+            self.assertEqual(attempt_res.status_code, 200, f"Attempt {i+1} should succeed with unlimited attempts")
+            attempt_id = attempt_res.json()["attempt_id"]
+
+            # Submit the attempt
+            self.client.put(f"/quiz-execution/attempts/{attempt_id}/answers", json={
+                "question_version_id": ids["q1_version_id"],
+                "response_json": {"answer": "4"},
+            }, headers=headers)
+            submit_res = self.client.post(f"/quiz-execution/attempts/{attempt_id}/submit", headers=headers)
+            self.assertEqual(submit_res.status_code, 200, f"Submission {i+1} should succeed")
+
+    # 7.11 — In-progress attempts don't count toward limit
+    def test_7_11_in_progress_attempts_dont_count(self):
+        """Only submitted/graded attempts count toward the limit, not in-progress ones."""
+        headers = self.auth_headers("globaladmin", TEST_ADMIN_PASSWORD)
+        ids = self._seed_quiz_with_questions(headers)
+
+        # Set attempt limit to 2
+        self.client.put(f"/quiz-authoring/quizzes/{ids['quiz_id']}/settings", json={
+            "attempt_limit": 2,
+        }, headers=headers)
+
+        # Start first attempt but don't submit
+        attempt1_res = self.client.post(
+            f"/quiz-execution/quizzes/{ids['quiz_id']}/attempts", headers=headers
+        )
+        self.assertEqual(attempt1_res.status_code, 200)
+        attempt1_id = attempt1_res.json()["attempt_id"]
+
+        # Start second attempt but don't submit
+        attempt2_res = self.client.post(
+            f"/quiz-execution/quizzes/{ids['quiz_id']}/attempts", headers=headers
+        )
+        self.assertEqual(attempt2_res.status_code, 200, "Second in-progress attempt should be allowed")
+        attempt2_id = attempt2_res.json()["attempt_id"]
+
+        # Submit first attempt
+        self.client.put(f"/quiz-execution/attempts/{attempt1_id}/answers", json={
+            "question_version_id": ids["q1_version_id"],
+            "response_json": {"answer": "4"},
+        }, headers=headers)
+        submit1_res = self.client.post(f"/quiz-execution/attempts/{attempt1_id}/submit", headers=headers)
+        self.assertEqual(submit1_res.status_code, 200)
+
+        # Submit second attempt
+        self.client.put(f"/quiz-execution/attempts/{attempt2_id}/answers", json={
+            "question_version_id": ids["q1_version_id"],
+            "response_json": {"answer": "4"},
+        }, headers=headers)
+        submit2_res = self.client.post(f"/quiz-execution/attempts/{attempt2_id}/submit", headers=headers)
+        self.assertEqual(submit2_res.status_code, 200)
+
+        # Third attempt should now be blocked (both previous attempts submitted)
+        attempt3_res = self.client.post(
+            f"/quiz-execution/quizzes/{ids['quiz_id']}/attempts", headers=headers
+        )
+        self.assertEqual(attempt3_res.status_code, 403, "Third attempt should be blocked after 2 submitted")
 
 
 if __name__ == "__main__":

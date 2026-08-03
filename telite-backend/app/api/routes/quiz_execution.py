@@ -24,10 +24,11 @@ def start_attempt(
     db: Session = Depends(db_session),
     current_user: TokenData = Depends(get_current_user)
 ):
+    # Lock the quiz row for this transaction to prevent concurrent attempt creation
     quiz = db.query(QuizDefinition).filter(
         QuizDefinition.id == quiz_id,
         QuizDefinition.org_id == current_user.org_id,
-    ).first()
+    ).with_for_update().first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
 
@@ -36,6 +37,30 @@ def start_attempt(
     settings.setdefault("time_limit", quiz.time_limit)
     settings.setdefault("attempt_limit", quiz.attempt_limit)
     settings.setdefault("review_mode", quiz.review_mode)
+
+    # Extract attempt limit using same logic as learner/quiz.py
+    raw = settings.get("max_attempts", settings.get("attempt_limit", 0))
+    try:
+        max_attempts = int(raw or 0)
+    except (TypeError, ValueError):
+        max_attempts = 0
+    max_attempts = max_attempts if max_attempts > 0 else None
+
+    # Count valid previous attempts (submitted or graded) using same business rules
+    # This count happens within the same transaction as the row lock, preventing race conditions
+    if max_attempts is not None:
+        prior_attempts = db.query(QuizAttempt).filter(
+            QuizAttempt.quiz_definition_id == quiz.id,
+            QuizAttempt.user_id == current_user.id,
+            QuizAttempt.org_id == current_user.org_id,
+            QuizAttempt.status.in_(("submitted", "graded", "needs_manual_grading"))
+        ).count()
+        
+        if prior_attempts >= max_attempts:
+            raise HTTPException(
+                status_code=403, 
+                detail="You have reached the maximum number of allowed attempts."
+            )
 
     attempt = QuizAttempt(
         quiz_definition_id=quiz.id,

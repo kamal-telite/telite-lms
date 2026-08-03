@@ -60,8 +60,12 @@ EXPOSE ${BACKEND_INTERNAL_PORT}
 
 USER telite
 
+# Health check using the new operational endpoints
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD python -c "import os, urllib.request; port=os.getenv('BACKEND_INTERNAL_PORT','8001'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health/liveness', timeout=5)" || exit 1
+  CMD python -c "import os, urllib.request; port=os.getenv('BACKEND_INTERNAL_PORT','8001'); urllib.request.urlopen(f'http://127.0.0.1:{port}/ops/health', timeout=5)" || exit 1
+
+# Use STOPSIGNAL for graceful shutdown
+STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_INTERNAL_PORT:-8001}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_INTERNAL_PORT:-8001} --timeout-graceful-shutdown 30"]

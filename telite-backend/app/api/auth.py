@@ -43,6 +43,7 @@ from app.core.security import (
     validate_csrf_token,
 )
 from app.core.rate_limiter import clear_attempts, is_limited, record_attempt
+from app.core.request_context import set_org_id, set_user_id
 from app.services.email import send_password_reset_email
 from app.core.password_utils import verify_password
 from sqlalchemy import or_, select, update, text
@@ -314,6 +315,10 @@ def get_current_user(
     user = repo.get_by_id(payload["sub"])
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User is inactive or not found")
+
+    # Set logging context for observability
+    set_user_id(user.id)
+    set_org_id(user.org_id)
 
     return TokenData(
         id=user.id,

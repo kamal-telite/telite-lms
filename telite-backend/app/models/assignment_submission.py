@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -40,9 +41,9 @@ class AssignmentSubmission(Base, TenantMixin):
     course_time_seconds_at_submission = Column(Integer, nullable=False, default=0)
     course_progress_pct_at_submission = Column(Float, nullable=False, default=0.0)
     
-    graded_by = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    graded_by = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     graded_at = Column(DateTime(timezone=True), nullable=True)
-    reviewed_by = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     submitted_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     
@@ -51,10 +52,13 @@ class AssignmentSubmission(Base, TenantMixin):
 
     __table_args__ = (
         UniqueConstraint('block_id', 'user_id', name='uq_assignment_submission_block_user'),
+        Index('ix_assignment_submissions_org_block_user', 'org_id', 'block_id', 'user_id'),
         CheckConstraint(
             "status IN ('draft', 'submitted', 'graded', 'returned', 'resubmitted', 'pending_verification', 'approved', 'rejected')",
             name="chk_assignment_submissions_status",
         ),
+        CheckConstraint('attempt_number >= 1', name='chk_assignment_submissions_attempt_number'),
+        CheckConstraint('course_progress_pct_at_submission >= 0 AND course_progress_pct_at_submission <= 100', name='chk_assignment_submissions_course_progress_pct'),
     )
 
     @property

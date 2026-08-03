@@ -276,7 +276,7 @@ def update_progress(
             
             if user and course:
                 cert_service = CertificateService(db)
-                cert, created = cert_service.generate_certificate(user, course, current_user.org_id)
+                cert, created = cert_service.generate_certificate(user, course, current_user.org_id, commit=False)
                 if created:
                     metadata = certificate_awarded_metadata(
                         course_id=cert.course_id,
@@ -300,7 +300,6 @@ def update_progress(
 
     progress_repo.upsert_course_progress(course_progress)
     PALScoreService(db).recompute_user(current_user.id, current_user.org_id)
-    db.commit()
 
     if evaluation.completed_now:
         from app.models.learning_path import LearningPathCourse
@@ -309,6 +308,9 @@ def update_progress(
         path_courses = db.query(LearningPathCourse).filter_by(course_id=req.course_id).all()
         for pc in path_courses:
             unlock_svc.evaluate_unlocks(current_user.id, pc.path_id, current_user.org_id)
+
+    # Single atomic commit for all progress updates
+    db.commit()
 
     return {"status": "success", "course_status": course_progress.status}
 
@@ -421,6 +423,7 @@ def heartbeat(
             sp.last_left_at = now
             progress_repo.upsert_section_progress(sp)
 
+    # Single atomic commit for all heartbeat updates
     db.commit()
     return {"status": "success"}
 

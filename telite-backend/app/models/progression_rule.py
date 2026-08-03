@@ -30,10 +30,10 @@ class ProgressionRule(Base, TenantMixin, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_by: Mapped[str | None] = mapped_column(
-        String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     updated_by: Mapped[str | None] = mapped_column(
-        String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

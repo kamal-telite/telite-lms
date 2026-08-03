@@ -1,9 +1,0 @@
-# TruffleHog ignore file
-# Excludes files and paths from secret scanning that contain known false positives.
-# See: https://docs.trufflesecurity.com/docs/scanning/
-
-# moodledata.tar.gz contains sample Moodle configuration data with LDAP URLs
-# (e.g., ldap://ldap.myorg.com) that are false positives, not real credentials.
-# This archive was historically committed but should not be in the repository.
-# The file is now properly excluded via .gitignore to prevent future commits.
-moodledata.tar.gz

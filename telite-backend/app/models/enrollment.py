@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, String, Text
+from sqlalchemy import Boolean, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -10,6 +10,10 @@ from app.models.base import Base, TenantMixin, TimestampMixin
 
 class EnrollmentRequest(Base, TenantMixin, TimestampMixin):
     __tablename__ = "enrollment_requests"
+    __table_args__ = (
+        Index('ix_enrollment_requests_org_email_category', 'org_id', 'email', 'category_slug'),
+        Index('ix_enrollment_requests_org_status_category', 'org_id', 'status', 'category_slug'),
+    )
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)

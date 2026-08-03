@@ -56,7 +56,7 @@ export default function ResetPasswordPage() {
     return (
       <div className="login-page" data-auth-variant="brand">
         <div className="login-shell">
-          <section className="login-card" style={{ marginTop: "10vh", marginInline: "auto" }}>
+          <section className="login-card login-card--auth" style={{ marginTop: "10vh" }}>
             <div className="login-card__header">
               <h2>Invalid Link</h2>
               <p>The password reset link is missing or invalid.</p>
@@ -92,7 +92,7 @@ export default function ResetPasswordPage() {
           </div>
         </section>
 
-        <section className="login-card">
+        <section className="login-card login-card--auth">
           <div className="login-card__header">
             <h2>Reset Password</h2>
             <p>Please provide your new password.</p>

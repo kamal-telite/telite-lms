@@ -221,7 +221,7 @@ def submit_course(
     PALScoreService(db).recompute_user(current_user.id, current_user.org_id)
     db.commit()
     
-    # Auto-generate certificate
+    # Auto-generate certificate (separate transaction to not fail submission on error)
     cert = None
     try:
         user = db.query(User).filter(User.id == current_user.id).first()
@@ -232,7 +232,7 @@ def submit_course(
         
         if user and course:
             cert_service = CertificateService(db)
-            cert, created = cert_service.generate_certificate(user, course, current_user.org_id)
+            cert, created = cert_service.generate_certificate(user, course, current_user.org_id, commit=True)
             
             logger.info(f"Certificate generation result: created={created}, cert={cert is not None}")
             if cert:

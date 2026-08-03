@@ -19,10 +19,10 @@ class MediaAsset(Base):
     folder = Column(String(120), nullable=True)
     tags_json = Column(Text, nullable=True)
     metadata_json = Column(Text, nullable=True)
-    uploaded_by = Column(String(50), ForeignKey("users.id"), nullable=False)
+    uploaded_by = Column(String(50), ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True)
+    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True, index=True)
 
     # --- Compatibility properties ---
     # Many parts of the codebase reference the old attribute names.

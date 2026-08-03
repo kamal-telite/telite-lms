@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 
 from app.models.base import Base
 
 
 class QuizSettings(Base):
     __tablename__ = "quiz_settings"
+    __table_args__ = (
+        UniqueConstraint('quiz_id', 'org_id', name='uq_quiz_settings_quiz_org'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     quiz_id = Column(Integer, ForeignKey("quiz_definitions.id"), nullable=False, index=True)
@@ -36,7 +39,7 @@ class QuizDefinition(Base):
     review_mode = Column(String(50), nullable=True)
     settings_json = Column(JSON, nullable=True)
     status = Column(String(50), nullable=False, default="draft")
-    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True)
+    deleted_by = Column(String(50), ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=True)
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Float, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -20,6 +20,17 @@ class Course(Base, TenantMixin, TimestampMixin):
     __tablename__ = "courses"
     __table_args__ = (
         UniqueConstraint("org_id", "slug", name="uq_courses_org_id_slug"),
+        Index('ix_courses_org_category_status', 'org_id', 'category_slug', 'status'),
+        CheckConstraint('module_count >= 0', name='chk_courses_module_count'),
+        CheckConstraint('lessons_count >= 0', name='chk_courses_lessons_count'),
+        CheckConstraint('hours >= 0', name='chk_courses_hours'),
+        CheckConstraint('enrolled_count >= 0', name='chk_courses_enrolled_count'),
+        CheckConstraint('completion_count >= 0', name='chk_courses_completion_count'),
+        CheckConstraint('completion_rate >= 0 AND completion_rate <= 100', name='chk_courses_completion_rate'),
+        CheckConstraint('avg_quiz_score >= 0 AND avg_quiz_score <= 100', name='chk_courses_avg_quiz_score'),
+        CheckConstraint('price_paise >= 0', name='chk_courses_price_paise'),
+        CheckConstraint("status IN ('draft', 'active', 'published', 'archived')", name='chk_courses_status'),
+        CheckConstraint("tier IN ('Basic', 'Premium', 'Enterprise')", name='chk_courses_tier'),
     )
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -73,6 +84,7 @@ class Course(Base, TenantMixin, TimestampMixin):
             "hours": self.hours,
             "enrolled_count": self.enrolled_count,
             "completion_rate": self.completion_rate,
+            "completion_count": self.completion_count,
             "avg_quiz_score": self.avg_quiz_score,
             "price_paise": self.price_paise,
             "org_id": self.org_id,

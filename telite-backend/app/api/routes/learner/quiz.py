@@ -131,18 +131,53 @@ def get_category_quiz_statistics(
         CourseModule.deleted_at.is_(None),
     ).all()
 
+    # Collect all learner IDs, block IDs, and course IDs for batch query
+    learner_ids = [learner.id for learner in learners]
+    block_info = {(block.id, course.id): (block, module, course) for block, module, course in quiz_blocks}
+    course_ids = {course.id for _, _, course in quiz_blocks}
+    
+    # Batch fetch all LearnerEvent records for all (learner, block, course) combinations
+    # This preserves all original filters: user_id, org_id, course_id, block_id, event_type
+    all_events = db.query(LearnerEvent).filter(
+        LearnerEvent.user_id.in_(learner_ids),
+        LearnerEvent.org_id == current_user.org_id,
+        LearnerEvent.course_id.in_(course_ids),
+        LearnerEvent.event_type == "QUIZ_SUBMITTED",
+        LearnerEvent.block_id.in_(block_info.keys())
+    ).order_by(LearnerEvent.created_at.asc(), LearnerEvent.id.asc()).all()
+    
+    # Group events by (user_id, block_id, course_id) to preserve course boundaries
+    events_by_user_block_course = {}
+    for event in all_events:
+        key = (event.user_id, event.block_id, event.course_id)
+        if key not in events_by_user_block_course:
+            events_by_user_block_course[key] = []
+        events_by_user_block_course[key].append(event)
+    
     rows = []
     for learner in learners:
         learner_attempts = []
-        for block, module, course in quiz_blocks:
+        for (block_id, course_id), (block, module, course) in block_info.items():
+            # Retrieve events for specific (user_id, block_id, course_id) combination
+            # This is equivalent to quiz_attempt_history() with specific course_id
+            events = events_by_user_block_course.get((learner.id, block_id, course_id), [])
+            history = []
+            for index, event in enumerate(events, start=1):
+                payload = event.payload_json or {}
+                score = float(payload.get("score") or 0)
+                history.append({
+                    "attempt_id": event.id,
+                    "attempt_number": int(payload.get("attempt_number") or index),
+                    "attempt_date": event.created_at.isoformat() if event.created_at else None,
+                    "score": score,
+                    "status": "passed" if payload.get("passed") else "failed",
+                    "passed": bool(payload.get("passed")),
+                    "correct": payload.get("correct"),
+                    "total": payload.get("total"),
+                    "points_awarded": payload.get("points_awarded"),
+                    "points_total": payload.get("points_total"),
+                })
             settings = block.metadata_json or {}
-            history = quiz_attempt_history(
-                db,
-                user_id=learner.id,
-                org_id=current_user.org_id,
-                course_id=course.id,
-                block_id=block.id,
-            )
             stats = quiz_stats_payload(settings, history)
             learner_attempts.append({
                 "course_id": course.id,

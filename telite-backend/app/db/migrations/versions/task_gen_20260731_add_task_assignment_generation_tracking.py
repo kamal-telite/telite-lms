@@ -1,7 +1,7 @@
 """add_task_assignment_generation_tracking
 
 Revision ID: task_gen_20260731
-Revises: theme_pref_20260619
+Revises: b702777ec0df
 Create Date: 2026-07-31 13:00:00.000000
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 
 revision: str = "task_gen_20260731"
-down_revision: Union[str, None] = "theme_pref_20260619"
+down_revision: Union[str, None] = "b702777ec0df"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

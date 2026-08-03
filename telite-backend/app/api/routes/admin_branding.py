@@ -138,6 +138,7 @@ async def upload_branding_asset(
         if not org:
             raise HTTPException(status_code=404, detail="Organization not found")
 
+        file_url = None
         try:
             file_url = await save_branding_asset(file, org.slug, asset_type)
         except Exception as e:
@@ -156,7 +157,20 @@ async def upload_branding_asset(
         elif asset_type == "certificate":
             update_kwargs["certificate_template_url"] = file_url
 
-        repo.update_branding(org_id=org_id, **update_kwargs)
+        try:
+            repo.update_branding(org_id=org_id, **update_kwargs)
+            session.commit()
+        except Exception:
+            # Database update failed - cleanup the uploaded file
+            if file_url:
+                import os
+                from app.services.upload_service import UPLOAD_DIR
+                file_path = file_url.replace("/uploads/branding/", "")
+                full_path = os.path.join(UPLOAD_DIR, file_path)
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+            session.rollback()
+            raise
 
         return {
             "status": "success",

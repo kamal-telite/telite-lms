@@ -9,14 +9,14 @@ class CourseVersion(Base):
     __tablename__ = "course_versions"
 
     id = Column(String(50), primary_key=True, index=True)
-    course_id = Column(String(50), ForeignKey("courses.id"), nullable=False)
+    course_id = Column(String(50), ForeignKey("courses.id"), nullable=False, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     version_number = Column(Integer, nullable=False)
-    parent_version_id = Column(String(50), ForeignKey("course_versions.id"), nullable=True)
+    parent_version_id = Column(String(50), ForeignKey("course_versions.id"), nullable=True, index=True)
     status = Column(String(20), nullable=False, default="draft")
-    published_by = Column(String(50), ForeignKey("users.id"), nullable=True)
+    published_by = Column(String(50), ForeignKey("users.id"), nullable=True, index=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
-    created_by = Column(String(50), ForeignKey("users.id"), nullable=False)
+    created_by = Column(String(50), ForeignKey("users.id"), nullable=False, index=True)
     snapshot_json = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 

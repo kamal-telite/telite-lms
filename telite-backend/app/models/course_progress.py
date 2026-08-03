@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -12,6 +12,11 @@ from app.models.base import Base, TenantMixin, TimestampMixin
 
 class CourseProgress(Base, TenantMixin, TimestampMixin):
     __tablename__ = "course_progress"
+    __table_args__ = (
+        Index('ix_course_progress_org_user_course_created', 'org_id', 'user_id', 'course_id', 'created_at'),
+        CheckConstraint('completion_percentage >= 0 AND completion_percentage <= 100', name='chk_course_progress_completion_percentage'),
+        CheckConstraint('time_spent_seconds >= 0', name='chk_course_progress_time_spent_seconds'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

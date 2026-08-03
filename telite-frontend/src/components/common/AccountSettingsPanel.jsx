@@ -1,11 +1,20 @@
 import { useState, useEffect } from "react";
-import { Panel, Button, Badge } from "./ui";
-import { useAuth } from "../../contexts/AuthContext";
-import api from "../../services/client";
-import { toast } from "../../utils/toast";
+import { Panel, Button, Badge, useToast } from "./ui";
+import { getSession } from "../../context/session";
+import { fetchMe, api } from "../../services/client";
 
 export function AccountSettingsPanel() {
-  const { user, refetchUser } = useAuth();
+  const { showToast } = useToast();
+  const [user, setUser] = useState(null);
+  
+  const refetchUser = async () => {
+    try {
+      const userData = await fetchMe();
+      setUser(userData);
+    } catch (err) {
+      console.error("Failed to refetch user:", err);
+    }
+  };
   
   const [profileForm, setProfileForm] = useState({
     full_name: "",
@@ -20,6 +29,14 @@ export function AccountSettingsPanel() {
   
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  
+  useEffect(() => {
+    // Initialize user from session
+    const session = getSession();
+    if (session?.user) {
+      setUser(session.user);
+    }
+  }, []);
   
   useEffect(() => {
     if (user) {
@@ -43,10 +60,10 @@ export function AccountSettingsPanel() {
     setIsSavingProfile(true);
     try {
       await api.patch("/auth/me", profileForm);
-      toast.success("Profile updated successfully");
+      showToast("Profile updated successfully", "success");
       await refetchUser();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to update profile");
+      showToast(err.response?.data?.detail || "Failed to update profile", "error");
     } finally {
       setIsSavingProfile(false);
     }
@@ -54,11 +71,11 @@ export function AccountSettingsPanel() {
 
   const savePassword = async () => {
     if (passwordForm.new_password !== passwordForm.confirm_password) {
-      toast.error("New passwords do not match");
+      showToast("New passwords do not match", "error");
       return;
     }
     if (passwordForm.new_password.length < 8) {
-      toast.error("Password must be at least 8 characters long");
+      showToast("Password must be at least 8 characters long", "error");
       return;
     }
     
@@ -68,7 +85,7 @@ export function AccountSettingsPanel() {
         current_password: passwordForm.current_password,
         new_password: passwordForm.new_password,
       });
-      toast.success(res.data.message || "Password updated successfully");
+      showToast(res.data.message || "Password updated successfully", "success");
       setPasswordForm({
         current_password: "",
         new_password: "",
@@ -77,7 +94,7 @@ export function AccountSettingsPanel() {
       // The API clears cookies, so refetching user should ideally trigger a 401 and redirect to login
       await refetchUser();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to update password");
+      showToast(err.response?.data?.detail || "Failed to update password", "error");
     } finally {
       setIsSavingPassword(false);
     }

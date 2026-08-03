@@ -1,6 +1,6 @@
 """Learner-specific analytics queries."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -23,11 +23,48 @@ from app.repositories.analytics.utils import (
 from app.repositories.analytics.global_analytics import get_cohort_rankings
 
 
+def calculate_learner_streak(session: Session, user_id: str) -> int:
+    """Calculates active learning streak based on consecutive days of activity."""
+    events_stmt = select(LearnerEvent.created_at).where(LearnerEvent.user_id == user_id)
+    event_dates = {dt.date() for dt in session.execute(events_stmt).scalars().all() if dt}
+
+    sessions_stmt = select(LearningSession.started_at).where(LearningSession.user_id == user_id)
+    session_dates = {dt.date() for dt in session.execute(sessions_stmt).scalars().all() if dt}
+
+    all_dates = event_dates.union(session_dates)
+    if not all_dates:
+        return 0
+
+    today = datetime.now(timezone.utc).date()
+    yesterday = today - timedelta(days=1)
+
+    if today in all_dates:
+        current_date = today
+    elif yesterday in all_dates:
+        current_date = yesterday
+    else:
+        return 0
+
+    streak = 0
+    check_date = current_date
+    while check_date in all_dates:
+        streak += 1
+        check_date = check_date - timedelta(days=1)
+
+    return streak
+
+
 def get_learner_summary(session: Session, user_id: str) -> dict[str, Any]:
     """Provides metrics for Learner Dashboard."""
     user = session.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if not user:
         raise ValueError("User not found.")
+        
+    # Recalculate streak in real-time and update db user column
+    calculated_streak = calculate_learner_streak(session, user_id)
+    if user.streak_days != calculated_streak:
+        user.streak_days = calculated_streak
+        session.commit()
     pal_metrics = PALScoreService(session).recompute_user(user.id, user.org_id)
         
     progress = session.execute(
@@ -218,6 +255,7 @@ def get_learner_summary(session: Session, user_id: str) -> dict[str, Any]:
             "subtext": "Keep your streak alive.",
             "pal_score": pal_metrics["pal_score"],
             "time_spent_hours": round(total_time_seconds / 3600, 1),
+            "total_time_seconds": total_time_seconds,
             "today_time_seconds": today_time_seconds,
             "last_session": last_session.to_dict() if last_session else None,
             "assignment_status": latest_assignment.status if latest_assignment else None,

@@ -1,6 +1,6 @@
 """RolePermission model for dynamic capability matrices."""
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -8,6 +8,9 @@ from app.models.base import Base, TimestampMixin
 
 class RolePermission(Base, TimestampMixin):
     __tablename__ = "role_permissions"
+    __table_args__ = (
+        UniqueConstraint('org_id', 'role', 'permission_key', name='uq_role_permissions_org_role_permission'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     org_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)

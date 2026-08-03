@@ -59,10 +59,15 @@ def create_question(
     db.add(question)
     db.flush()
     
+    from app.repositories.question_repo import QuestionVersionRepository
+    version_repo = QuestionVersionRepository(db)
+    latest_version_num = version_repo.get_latest_version_number(question.id, current_user.org_id)
+    new_version_num = latest_version_num + 1
+    
     version = QuestionVersion(
         question_id=question.id,
         org_id=current_user.org_id,
-        version_number=1,
+        version_number=new_version_num,
         question_type=request.question_type,
         question_text=request.question_text,
         options_json=request.options_json,

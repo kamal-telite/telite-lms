@@ -234,7 +234,9 @@ export function ProfileDropdown({ profile, onLogout, onNavigate }) {
             <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{profile?.roleLabel || "System Admin"}</div>
           </div>
           <div style={{ padding: "8px" }}>
-            <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('profile'); }}>👤 Profile</button>
+            {profile?.roleLabel !== "learner" && (
+              <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('profile'); }}>👤 Profile</button>
+            )}
             <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('settings'); }}>⚙️ Settings</button>
             <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('notifications'); }}>🔔 Notifications</button>
             <button type="button" className="dropdown-item" onClick={() => { setOpen(false); onNavigate?.('help'); }}>❓ Help & Support</button>

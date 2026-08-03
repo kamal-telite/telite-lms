@@ -1,8 +1,10 @@
 from typing import List, Optional
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import DatabaseError
 
 from app.api.auth import TokenData
 from app.core.rbac import Permission, require_permission
@@ -42,6 +44,7 @@ from app.features.question_bank.schemas import (
 )
 from app.features.question_bank.validation import validate_bank
 
+logger = logging.getLogger(__name__)
 question_bank_router = APIRouter(tags=["Question Bank"])
 
 
@@ -51,11 +54,35 @@ def create_question_bank(
     current_user: TokenData = Depends(require_permission(Permission.ORG_MANAGE_BANKS)),
     db: Session = Depends(db_session),
 ):
-    bank = QuestionBank(org_id=current_user.org_id, name=req.name)
-    db.add(bank)
-    db.commit()
-    db.refresh(bank)
-    return bank
+    try:
+        bank = QuestionBank(org_id=current_user.org_id, name=req.name)
+        db.add(bank)
+        db.commit()
+        db.refresh(bank)
+        logger.info(
+            "Question bank created successfully",
+            extra={
+                "bank_id": bank.id,
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "bank_name": req.name,
+                "operation": "create_question_bank"
+            }
+        )
+        return bank
+    except Exception as e:
+        db.rollback()
+        logger.error(
+            "Unexpected error creating question bank",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "bank_name": req.name,
+                "operation": "create_question_bank",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to create question bank") from e
 
 
 @question_bank_router.get("/question-banks", response_model=List[QuestionBankResponse])
@@ -63,8 +90,31 @@ def list_question_banks(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    stmt = select(QuestionBank).where(QuestionBank.org_id == current_user.org_id)
-    return db.execute(stmt).scalars().all()
+    try:
+        stmt = select(QuestionBank).where(QuestionBank.org_id == current_user.org_id)
+        return db.execute(stmt).scalars().all()
+    except DatabaseError as e:
+        logger.error(
+            "Database error listing question banks",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_question_banks",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list question banks due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error listing question banks",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_question_banks",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list question banks") from e
 
 
 @question_bank_router.get("/question-banks/questions")
@@ -83,23 +133,50 @@ def list_all_questions(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    if bank_id is not None:
-        validate_bank(db, bank_id, current_user.org_id)
-    return crud_list_questions(
-        db,
-        current_user.org_id,
-        bank_id=bank_id,
-        category_id=category_id,
-        tag_id=tag_id,
-        question_type=question_type,
-        search=search,
-        status_filter=status,
-        version_state=version_state,
-        page=page,
-        page_size=page_size,
-        sort_by=sort_by,
-        sort_order=sort_order,
-    )
+    try:
+        if bank_id is not None:
+            validate_bank(db, bank_id, current_user.org_id)
+        return crud_list_questions(
+            db,
+            current_user.org_id,
+            bank_id=bank_id,
+            category_id=category_id,
+            tag_id=tag_id,
+            question_type=question_type,
+            search=search,
+            status_filter=status,
+            version_state=version_state,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+    except HTTPException:
+        raise
+    except DatabaseError as e:
+        logger.error(
+            "Database error listing questions",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "bank_id": bank_id,
+                "operation": "list_all_questions",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list questions due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error listing questions",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "bank_id": bank_id,
+                "operation": "list_all_questions",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list questions") from e
 
 
 @question_bank_router.get("/question-banks/categories")
@@ -108,7 +185,30 @@ def list_categories_route(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    return list_categories(db, current_user.org_id, tree)
+    try:
+        return list_categories(db, current_user.org_id, tree)
+    except DatabaseError as e:
+        logger.error(
+            "Database error listing categories",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_categories",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list categories due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error listing categories",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_categories",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list categories") from e
 
 
 @question_bank_router.post("/question-banks/categories")
@@ -144,7 +244,30 @@ def list_tags_route(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    return list_tags(db, current_user.org_id)
+    try:
+        return list_tags(db, current_user.org_id)
+    except DatabaseError as e:
+        logger.error(
+            "Database error listing tags",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_tags",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list tags due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error listing tags",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_tags",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list tags") from e
 
 
 @question_bank_router.post("/question-banks/tags")
@@ -181,11 +304,47 @@ def get_question_bank(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    stmt = select(QuestionBank).where(QuestionBank.id == bank_id, QuestionBank.org_id == current_user.org_id)
-    bank = db.execute(stmt).scalar_one_or_none()
-    if not bank:
-        raise HTTPException(status_code=404, detail="Question bank not found")
-    return bank
+    try:
+        stmt = select(QuestionBank).where(QuestionBank.id == bank_id, QuestionBank.org_id == current_user.org_id)
+        bank = db.execute(stmt).scalar_one_or_none()
+        if not bank:
+            logger.warning(
+                "Question bank not found",
+                extra={
+                    "bank_id": bank_id,
+                    "org_id": current_user.org_id,
+                    "user_id": current_user.id,
+                    "operation": "get_question_bank"
+                }
+            )
+            raise HTTPException(status_code=404, detail="Question bank not found")
+        return bank
+    except HTTPException:
+        raise
+    except DatabaseError as e:
+        logger.error(
+            "Database error getting question bank",
+            extra={
+                "bank_id": bank_id,
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "get_question_bank",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to get question bank due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error getting question bank",
+            extra={
+                "bank_id": bank_id,
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "get_question_bank",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to get question bank") from e
 
 
 @question_bank_router.get("/question-banks/{bank_id}/questions")
@@ -204,22 +363,49 @@ def list_questions(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    validate_bank(db, bank_id, current_user.org_id)
-    return crud_list_questions(
-        db,
-        current_user.org_id,
-        bank_id=bank_id,
-        category_id=category_id,
-        tag_id=tag_id,
-        question_type=question_type,
-        search=search,
-        status_filter=status,
-        version_state=version_state,
-        page=page,
-        page_size=page_size,
-        sort_by=sort_by,
-        sort_order=sort_order,
-    )
+    try:
+        validate_bank(db, bank_id, current_user.org_id)
+        return crud_list_questions(
+            db,
+            current_user.org_id,
+            bank_id=bank_id,
+            category_id=category_id,
+            tag_id=tag_id,
+            question_type=question_type,
+            search=search,
+            status_filter=status,
+            version_state=version_state,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+    except HTTPException:
+        raise
+    except DatabaseError as e:
+        logger.error(
+            "Database error listing bank questions",
+            extra={
+                "bank_id": bank_id,
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_questions",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list questions due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error listing bank questions",
+            extra={
+                "bank_id": bank_id,
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "list_questions",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to list questions") from e
 
 
 @question_bank_router.post("/question-banks/{bank_id}/questions")
@@ -281,7 +467,36 @@ def get_question_versions_route(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    return get_question_versions(db, current_user.org_id, bank_id, q_id)
+    try:
+        return get_question_versions(db, current_user.org_id, bank_id, q_id)
+    except HTTPException:
+        raise
+    except DatabaseError as e:
+        logger.error(
+            "Database error getting question versions",
+            extra={
+                "bank_id": bank_id,
+                "question_id": q_id,
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "get_question_versions",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to get question versions due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error getting question versions",
+            extra={
+                "bank_id": bank_id,
+                "question_id": q_id,
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "get_question_versions",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to get question versions") from e
 
 
 @question_bank_router.post("/question-banks/imports")
@@ -299,4 +514,27 @@ def check_stale_versions_route(
     current_user: TokenData = Depends(require_permission(Permission.AUTHORING_MANAGE_QUESTIONS)),
     db: Session = Depends(db_session),
 ):
-    return crud_check_stale_versions(db, current_user.org_id, req)
+    try:
+        return crud_check_stale_versions(db, current_user.org_id, req)
+    except DatabaseError as e:
+        logger.error(
+            "Database error checking stale versions",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "check_stale_versions",
+                "error_type": "DatabaseError"
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to check stale versions due to database error") from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error checking stale versions",
+            extra={
+                "org_id": current_user.org_id,
+                "user_id": current_user.id,
+                "operation": "check_stale_versions",
+                "error_type": type(e).__name__
+            }
+        )
+        raise HTTPException(status_code=500, detail="Failed to check stale versions") from e

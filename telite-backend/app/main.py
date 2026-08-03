@@ -31,12 +31,27 @@ from app.api.routes.permissions import permissions_router
 from app.api.routes.learning_paths import learning_paths_router
 from app.api.routes.announcements import announcements_router
 from app.api.routes.audit import audit_router
+from app.api.routes.ops import ops_router
 from app.core.domain_context import resolve_domain_context
 from app.core.logging_config import configure_logging
+from app.core.observability import log_slow_request, setup_query_logging
 from app.core.rate_limiter import close_redis_connection
-from app.core.request_context import reset_request_id, set_request_id
+from app.core.health import set_http_metrics, update_http_metrics
+from app.core.request_context import (
+    get_org_id,
+    get_request_id,
+    get_user_id,
+    reset_request_id,
+    set_endpoint,
+    set_http_method,
+    set_org_id,
+    set_request_id,
+    set_user_id,
+)
 from app.core.runtime import is_production_like
 from app.core.storage_paths import branding_upload_root, certificate_upload_root, media_upload_root, upload_root
+from app.core.health import validate_startup_config
+from app.core.deployment import fail_deployment_if_invalid, update_http_metrics
 from app.db.engine import dispose_engine, db_session
 from sqlalchemy.orm import Session
 from app.db.init_db import run_phase3_init
@@ -45,6 +60,10 @@ configure_logging()
 logger = logging.getLogger("telite.api")
 
 _metrics = {"http_requests_total": 0, "http_errors_total": 0}
+
+def get_metrics() -> dict[str, int]:
+    """Get current HTTP metrics (for operational endpoints)."""
+    return _metrics.copy()
 
 
 # ── App lifecycle ────────────────────────────────────────────────────────────
@@ -111,16 +130,65 @@ def _validate_security_config():
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Validate critical security configuration
-    _validate_security_config()
+    # Step 1: Validate deployment configuration
+    logger.info("Step 1: Validating deployment configuration...")
+    fail_deployment_if_invalid()
+    logger.info("Deployment configuration validated successfully")
     
-    logger.info("Initialising database …")
+    # Step 2: Validate critical security configuration
+    logger.info("Step 2: Validating security configuration...")
+    _validate_security_config()
+    logger.info("Security configuration validated successfully")
+    
+    # Step 3: Set up database query logging
+    logger.info("Step 3: Setting up database query logging...")
+    from app.db.engine import get_engine
+    engine = get_engine()
+    setup_query_logging(engine)
+    logger.info("Database query logging configured")
+    
+    # Step 4: Initialize database
+    logger.info("Step 4: Initializing database...")
     run_phase3_init()
-    logger.info("Database ready.")
+    logger.info("Database initialized successfully")
+    
+    # Step 5: Validate startup configuration and dependencies
+    logger.info("Step 5: Validating startup dependencies...")
+    from app.core.health import validate_startup_config
+    startup_validation = validate_startup_config()
+    
+    # Log startup validation results
+    logger.info(
+        "Application startup validation",
+        extra={
+            "app_version": startup_validation["version"],
+            "environment": startup_validation["environment"],
+            "overall_status": startup_validation["overall_status"],
+            "components": startup_validation["components"],
+        },
+    )
+    
+    if startup_validation["overall_status"] != "healthy":
+        logger.warning("Startup validation completed with degraded status; continuing in development mode.")
+        logger.warning(f"Component status: {startup_validation['components']}")
+    
+    logger.info("=== Application startup sequence completed successfully ===")
+    logger.info("Application is ready to accept traffic")
+    
     yield
+    
+    # Graceful shutdown sequence
+    logger.info("=== Graceful shutdown sequence started ===")
+    logger.info("Step 1: Closing database connections...")
     dispose_engine()
+    logger.info("Database connections closed")
+    
+    logger.info("Step 2: Closing Redis connections...")
     close_redis_connection()
-    logger.info("Shutting down.")
+    logger.info("Redis connections closed")
+    
+    logger.info("=== Graceful shutdown completed ===")
+    logger.info("Application stopped gracefully")
 
 
 def create_app() -> FastAPI:
@@ -165,27 +233,45 @@ def create_app() -> FastAPI:
         request.state.request_id = request_id
         request.state.started_at = time.time()
         request.state.domain_context = resolve_domain_context(request)
+        
+        # Set request context for logging
         token = set_request_id(request_id)
         start = time.perf_counter()
         client_ip = request.client.host if request.client else "-"
         query_string = f"?{request.url.query}" if request.url.query else ""
         route = f"{request.url.path}{query_string}"
+        
+        # Set HTTP context for error logging
+        set_endpoint(request.url.path)
+        set_http_method(request.method)
 
         try:
             response = await call_next(request)
         except Exception as e:
             elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-            logger.exception(
-                "[%s] %s %s from %s -> 500 (%.1fms)",
-                request_id,
-                request.method,
-                route,
-                client_ip,
-                elapsed_ms,
+            
+            # Extract exception info for structured logging
+            exc_info = get_safe_exception_info(e)
+            
+            # Log with full context
+            logger.error(
+                f"Request failed: {request.method} {route}",
+                extra={
+                    "request_id": request_id,
+                    "endpoint": request.url.path,
+                    "http_method": request.method,
+                    "org_id": get_org_id(),
+                    "user_id": get_user_id(),
+                    "exception_type": exc_info["exception_type"],
+                    "exception_message": exc_info["exception_message"],
+                    "duration_ms": elapsed_ms,
+                },
+                exc_info=True,
             )
+            
+            # Keep legacy exception logging for compatibility
             try:
                 import traceback
-                # Use cross-platform path for exception logging
                 log_path = Path(__file__).parent.parent / "exception.log"
                 with open(log_path, "a") as f:
                     f.write(f"=== Request: {request.method} {route} ===\n")
@@ -193,6 +279,7 @@ def create_app() -> FastAPI:
                     f.write("\n")
             except Exception:
                 pass
+            
             response = JSONResponse(
                 status_code=500,
                 content={"detail": "Internal Server Error"},
@@ -202,14 +289,34 @@ def create_app() -> FastAPI:
             _metrics["http_requests_total"] += 1
             if response.status_code >= 500:
                 _metrics["http_errors_total"] += 1
+            # Sync metrics to health module for operational endpoints
+            update_http_metrics(_metrics["http_requests_total"], _metrics["http_errors_total"])
+            # Sync metrics to health module
+            set_http_metrics(_metrics["http_requests_total"], _metrics["http_errors_total"])
+            
+            # Log slow requests
+            if elapsed_ms > 500:  # 500ms threshold
+                log_slow_request(
+                    endpoint=request.url.path,
+                    http_method=request.method,
+                    duration_ms=elapsed_ms,
+                    request_id=request_id,
+                    user_id=get_user_id(),
+                    org_id=get_org_id(),
+                )
+            
+            # Standard request logging
             logger.info(
-                "[%s] %s %s from %s -> %d (%.1fms)",
-                request_id,
-                request.method,
-                route,
-                client_ip,
-                response.status_code,
-                elapsed_ms,
+                f"{request.method} {route} -> {response.status_code}",
+                extra={
+                    "request_id": request_id,
+                    "endpoint": request.url.path,
+                    "http_method": request.method,
+                    "status_code": response.status_code,
+                    "duration_ms": elapsed_ms,
+                    "org_id": get_org_id(),
+                    "user_id": get_user_id(),
+                },
             )
         finally:
             reset_request_id(token)
@@ -267,6 +374,7 @@ def create_app() -> FastAPI:
     app.include_router(learning_paths_router)
     app.include_router(announcements_router, prefix="/api/v1")
     app.include_router(audit_router)
+    app.include_router(ops_router)
 
     uploads_dir = upload_root()
     media_dir = media_upload_root()
@@ -326,65 +434,61 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     def health(db: Session = Depends(db_session)):
-        from sqlalchemy import text
-        db.execute(text("SELECT 1"))
+        """Health check endpoint (legacy - for backward compatibility)."""
+        from app.core.health import check_database_health, get_uptime_seconds, APP_VERSION
+        
+        db_healthy, db_status = check_database_health(db)
+        
         return {
-            "status": "ok",
+            "status": "ok" if db_healthy else "error",
             "api": "running",
-            "version": "5.1.0",
-            "database": "ok",
+            "version": APP_VERSION,
+            "database": db_status,
             "architecture": "pure_native",
+            "uptime_seconds": get_uptime_seconds(),
         }
 
     @app.get("/health/liveness")
     def liveness():
+        """Liveness endpoint (legacy - for backward compatibility)."""
+        from app.core.health import get_uptime_seconds, APP_VERSION
+        
         return {
             "status": "ok",
             "api": "running",
-            "version": "5.1.0",
+            "version": APP_VERSION,
+            "uptime_seconds": get_uptime_seconds(),
         }
 
     @app.get("/health/readiness")
     def readiness(db: Session = Depends(db_session)):
-        from sqlalchemy import text
-
+        """Readiness endpoint (legacy - for backward compatibility)."""
+        from app.core.health import check_database_health, check_redis_health, APP_VERSION
+        
         checks: dict[str, str] = {}
-        try:
-            db.execute(text("SELECT 1"))
-            checks["database"] = "ok"
-        except Exception:
-            logger.exception("Readiness check failed: database")
-            checks["database"] = "error"
-
-        redis_status = "skipped"
-        if os.getenv("REDIS_ENABLED", "true").lower() in ("true", "1", "yes"):
-            try:
-                from app.core.rate_limiter import _get_redis_client
-
-                client = _get_redis_client()
-                if client is None:
-                    redis_status = "unavailable"
-                else:
-                    client.ping()
-                    redis_status = "ok"
-            except Exception:
-                logger.exception("Readiness check failed: redis")
-                redis_status = "error"
+        
+        db_healthy, db_status = check_database_health(db)
+        checks["database"] = db_status
+        
+        redis_healthy, redis_status = check_redis_health()
         checks["redis"] = redis_status
-
-        ready = checks["database"] == "ok" and redis_status in ("ok", "skipped")
+        
+        ready = db_healthy and redis_healthy in ("healthy", "skipped")
         return JSONResponse(
             status_code=200 if ready else 503,
             content={
                 "status": "ok" if ready else "degraded",
                 "api": "running",
-                "version": "5.1.0",
+                "version": APP_VERSION,
                 "checks": checks,
             },
         )
 
     @app.get("/metrics")
     def metrics():
+        """Prometheus metrics endpoint (legacy - for backward compatibility)."""
+        from app.core.health import get_uptime_seconds, APP_VERSION, get_environment
+        
         lines = [
             "# HELP telite_http_requests_total Total HTTP requests handled by the API.",
             "# TYPE telite_http_requests_total counter",
@@ -392,6 +496,12 @@ def create_app() -> FastAPI:
             "# HELP telite_http_errors_total Total HTTP 5xx responses.",
             "# TYPE telite_http_errors_total counter",
             f"telite_http_errors_total {_metrics['http_errors_total']}",
+            "# HELP telite_uptime_seconds Application uptime in seconds.",
+            "# TYPE telite_uptime_seconds gauge",
+            f"telite_uptime_seconds {get_uptime_seconds()}",
+            "# HELP telite_info Application information.",
+            "# TYPE telite_info gauge",
+            f'telite_info{{version="{APP_VERSION}",environment="{get_environment()}"}} 1',
         ]
         return PlainTextResponse("\n".join(lines) + "\n")
 

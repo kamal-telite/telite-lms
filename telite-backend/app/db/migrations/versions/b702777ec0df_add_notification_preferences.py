@@ -1,7 +1,7 @@
 """add_notification_preferences
 
 Revision ID: b702777ec0df
-Revises: a9508dcd5889
+Revises: b91f4e7a2c10
 Create Date: 2026-07-31 16:42:13.358422
 
 """
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'b702777ec0df'
-down_revision: Union[str, None] = 'a9508dcd5889'
+down_revision: Union[str, None] = 'b91f4e7a2c10'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

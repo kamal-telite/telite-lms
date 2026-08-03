@@ -570,7 +570,11 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
 
   const handleViewCertificate = () => {
     if (certificate?.verification_token) {
-      window.open(`/api/certificates/${courseId}/download?inline=true`, "_blank");
+      const url = buildCertificateDownloadUrl(courseId, {
+        inline: true,
+        baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
     } else {
       console.warn("Certificate or verification_token not available");
     }
@@ -579,12 +583,14 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
   const handleDownloadCertificate = async () => {
     if (certificate?.verification_token) {
       try {
-        // Use the new download endpoint
-        const response = await api.get(`/api/certificates/${courseId}/download`, {
+        const downloadUrl = buildCertificateDownloadUrl(courseId, {
+          inline: false,
+          baseUrl: import.meta.env?.VITE_API_BASE_URL || "",
+        });
+        const response = await api.get(downloadUrl, {
           responseType: 'blob'
         });
-        
-        // Create a blob URL and trigger download
+
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
@@ -595,7 +601,6 @@ export function LearnerPlayer({ courseId, onExit, onCertificateIssued }) {
         window.URL.revokeObjectURL(url);
       } catch (error) {
         console.error("Failed to download certificate", error);
-        // Fallback to verification page
         window.open(`/public/verify/${certificate.verification_token}`, "_blank");
       }
     } else {

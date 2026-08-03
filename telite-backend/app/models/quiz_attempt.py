@@ -29,7 +29,7 @@ class QuizAttemptQuestion(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     attempt_id = Column(Integer, ForeignKey("quiz_attempts.id"), nullable=False, index=True)
-    question_version_id = Column(Integer, ForeignKey("question_versions.id"), nullable=False)
+    question_version_id = Column(Integer, ForeignKey("question_versions.id"), nullable=False, index=True)
     display_order = Column(Integer, nullable=False)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 

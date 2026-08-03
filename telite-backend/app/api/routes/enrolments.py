@@ -225,6 +225,8 @@ def bulk_enroll_execute(
     try:
         service = BulkEnrollmentService(db)
         result = service.execute_batch(body.rows, current_user)
+        # No overall commit needed - each enrollment is committed individually
+        # This implements best-effort batch processing (Option B)
         return result
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
