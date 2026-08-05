@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone, timedelta
 from typing import Any
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.user import User
@@ -207,20 +207,44 @@ def get_learner_summary(session: Session, user_id: str) -> dict[str, Any]:
 
     task_stmt = (
         select(Task, TaskAssignment, User)
-        .join(TaskAssignment, TaskAssignment.task_id == Task.id)
+        .outerjoin(
+            TaskAssignment,
+            and_(
+                TaskAssignment.task_id == Task.id,
+                TaskAssignment.learner_id == user_id,
+            ),
+        )
         .outerjoin(User, User.id == Task.assigned_by)
-        .where(TaskAssignment.learner_id == user_id)
         .where(Task.org_id == user.org_id)
+        .where(
+            or_(
+                TaskAssignment.learner_id == user_id,
+                Task.assignment_scope == "all",
+            )
+        )
         .order_by(
             TaskAssignment.updated_at.desc().nullslast(),
-            TaskAssignment.assigned_at.desc()
+            TaskAssignment.assigned_at.desc().nullslast(),
+            Task.created_at.desc(),
         )
     )
+    accessible_task_categories = {slug for slug in approved_categories if slug}
+    if user.category_scope:
+        accessible_task_categories.add(user.category_scope)
+    if accessible_task_categories:
+        task_stmt = task_stmt.where(
+            or_(
+                Task.category_slug.in_(accessible_task_categories),
+                Task.is_cross_category.is_(True),
+            )
+        )
+
     task_rows = []
     for task, assignment, assigner in session.execute(task_stmt).all():
+        status = assignment.status if assignment else "assigned"
         task_rows.append({
             "id": task.id,
-            "assignment_id": assignment.id,
+            "assignment_id": assignment.id if assignment else None,
             "title": task.title,
             "description": task.description,
             "instructions": task.notes or task.description or "",
@@ -230,11 +254,11 @@ def get_learner_summary(session: Session, user_id: str) -> dict[str, Any]:
             "assigned_to_user_id": task.assigned_to_user_id,
             "category_slug": task.category_slug,
             "due_at": task.due_at,
-            "status": assignment.status,
-            "assigned_at": assignment.assigned_at.isoformat() if assignment.assigned_at else None,
-            "started_at": assignment.started_at.isoformat() if assignment.started_at else None,
-            "submitted_at": assignment.submitted_at.isoformat() if assignment.submitted_at else None,
-            "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
+            "status": status,
+            "assigned_at": assignment.assigned_at.isoformat() if assignment and assignment.assigned_at else None,
+            "started_at": assignment.started_at.isoformat() if assignment and assignment.started_at else None,
+            "submitted_at": assignment.submitted_at.isoformat() if assignment and assignment.submitted_at else None,
+            "completed_at": assignment.completed_at.isoformat() if assignment and assignment.completed_at else None,
         })
 
     # Get leaderboard and calculate user's rank

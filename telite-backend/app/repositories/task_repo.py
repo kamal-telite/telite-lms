@@ -138,13 +138,40 @@ class TaskRepository(BaseRepository[Task]):
         assigned_to: str | None = None,
         status: str | None = None,
     ) -> list[dict[str, Any]]:
-        stmt = select(Task, TaskAssignment).join(TaskAssignment, TaskAssignment.task_id == Task.id).where(Task.org_id == org_id)
+        from sqlalchemy import and_
+
+        if assigned_to:
+            stmt = select(Task, TaskAssignment).outerjoin(
+                TaskAssignment,
+                and_(TaskAssignment.task_id == Task.id, TaskAssignment.learner_id == assigned_to)
+            ).where(Task.org_id == org_id)
+        else:
+            stmt = select(Task, TaskAssignment).join(
+                TaskAssignment, TaskAssignment.task_id == Task.id
+            ).where(Task.org_id == org_id)
+
         if category_slug:
             stmt = stmt.where(or_(Task.category_slug == category_slug, Task.is_cross_category.is_(True)))
+            
         if assigned_to:
-            stmt = stmt.where(TaskAssignment.learner_id == assigned_to)
+            stmt = stmt.where(
+                or_(
+                    TaskAssignment.learner_id == assigned_to,
+                    Task.assignment_scope == "all"
+                )
+            )
+            
         if status:
-            stmt = stmt.where(TaskAssignment.status == status)
+            if status == "assigned":
+                stmt = stmt.where(
+                    or_(
+                        TaskAssignment.status == status,
+                        and_(Task.assignment_scope == "all", TaskAssignment.id.is_(None))
+                    )
+                )
+            else:
+                stmt = stmt.where(TaskAssignment.status == status)
+                
         stmt = stmt.order_by(desc(Task.created_at))
         return [self.task_payload(task, assignment) for task, assignment in self.session.execute(stmt).all()]
 

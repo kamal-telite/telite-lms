@@ -33,10 +33,17 @@ class NotificationRepository(BaseRepository[Notification]):
         unread_only: bool = False,
         limit: int = 50,
     ) -> Sequence[Notification]:
+        from sqlalchemy import or_
         stmt = (
             select(Notification)
             .where(Notification.user_id == user_id)
             .where(Notification.org_id == org_id)
+            .where(
+                or_(
+                    Notification.metadata_json.is_(None),
+                    ~Notification.metadata_json.like('%"hidden_in_app": true%')
+                )
+            )
             .order_by(Notification.created_at.desc())
             .limit(limit)
         )
@@ -145,12 +152,18 @@ class NotificationRepository(BaseRepository[Notification]):
         return result.rowcount
 
     def count_unread(self, user_id: str, org_id: int) -> int:
-        from sqlalchemy import func
+        from sqlalchemy import func, or_
         stmt = (
             select(func.count())
             .select_from(Notification)
             .where(Notification.user_id == user_id)
             .where(Notification.org_id == org_id)
             .where(Notification.is_read.is_(False))
+            .where(
+                or_(
+                    Notification.metadata_json.is_(None),
+                    ~Notification.metadata_json.like('%"hidden_in_app": true%')
+                )
+            )
         )
         return self.session.execute(stmt).scalar_one()

@@ -260,8 +260,11 @@ def dispatch_fanout_task(
     """
     Dispatches a single domain event to a large audience using batched inserts.
     """
+    import os
     from app.db.engine import get_tenant_session
     from app.services.notification_service import NotificationService
+    from app.services.preference_resolver import PreferenceResolver
+    from app.services.notification_category_mapper import event_to_category
     from sqlalchemy import select
     from app.models.user import User
 
@@ -269,6 +272,7 @@ def dispatch_fanout_task(
     
     with get_tenant_session(org_id) as db:
         service = NotificationService(db)
+        resolver = PreferenceResolver(db)
         payload = service._build_payload(event_name, context)
         
         if not payload:
@@ -280,7 +284,6 @@ def dispatch_fanout_task(
         recipient_ids = []
         
         if audience_type == "org_all":
-            # Fetch all active users in the org
             stmt = select(User.id).where(User.org_id == org_id, User.is_active == True)
             recipient_ids = db.execute(stmt).scalars().all()
         elif audience_type == "course_enrolled":
@@ -329,9 +332,27 @@ def dispatch_fanout_task(
         if not recipient_ids:
             return
 
+        category_str = event_to_category(event_name)
+        
+        # Batch resolution to avoid N+1
+        prefs_batch = resolver.resolve_for_users_batch(recipient_ids, org_id, category_str)
+
         count = 0
+        batch_size = int(os.getenv("NOTIFICATION_BULK_BATCH_SIZE", "500"))
         notif_type = getattr(payload["type"], "value", payload["type"])
+        
         for uid in recipient_ids:
+            prefs = prefs_batch.get(uid, {"in_app": True, "email": True})
+            
+            if not prefs["in_app"] and not prefs["email"]:
+                continue
+                
+            metadata = dict(payload.get("metadata", {}))
+            if prefs["email"]:
+                metadata["delivery_channel"] = "email"
+            if not prefs["in_app"]:
+                metadata["hidden_in_app"] = True
+                
             service.repo.create_once(
                 user_id=str(uid),
                 org_id=org_id,
@@ -339,12 +360,12 @@ def dispatch_fanout_task(
                 message=payload["message"],
                 notif_type=notif_type,
                 idempotency_key=payload["idempotency_key"],
-                metadata=payload.get("metadata", {}),
+                metadata=metadata,
                 source_type=payload["source_type"],
                 source_id=payload["source_id"]
             )
             count += 1
-            if count % 100 == 0:
+            if count % batch_size == 0:
                 db.flush()
                 
         db.commit()

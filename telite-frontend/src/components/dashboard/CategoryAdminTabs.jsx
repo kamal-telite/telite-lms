@@ -4,6 +4,7 @@ import autoTable from "jspdf-autotable";
 import { Avatar, Badge, Button, EmptyState, Modal, Panel, useToast } from "../common/ui";
 import { TaskBoardKanban } from "./TaskBoard";
 import { AccountSettingsPanel } from "../common/AccountSettingsPanel";
+import { NotificationPreferencesPanel } from "../common/NotificationPreferencesPanel";
 import { ChartCanvas } from "../common/charts";
 import { Icon } from "../common/icons";
 import { formatDateTime, titleize, getScoreColor, getInitials, formatPercent, getRankColor } from "../../utils/formatters";
@@ -849,25 +850,7 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab, slug, onC
           )}
 
           {selectedTab === "notifications" && (
-            <div className="profile-settings__form">
-              {[
-                { title: "Enrollment Requests", desc: "Get notified when a user requests enrollment to a course." },
-                { title: "Assignment Alerts", desc: "Get notified about new submission reviews and pending grade actions." },
-                { title: "Task Deadlines", desc: "Receive reminders for upcoming or overdue tasks." },
-                { title: "PAL Alerts", desc: "Weekly digests and immediate alerts for at-risk students." }
-              ].map((item, idx) => (
-                <div className="profile-settings__preference-row" key={idx}>
-                  <div>
-                    <div className="profile-settings__section-title">{item.title}</div>
-                    <div className="profile-settings__section-subtitle">{item.desc}</div>
-                  </div>
-                  <label className="chip"><input type="checkbox" defaultChecked /> Enabled</label>
-                </div>
-              ))}
-              <div className="profile-settings__actions">
-                <Button tone="primary" icon="save">Save Changes</Button>
-              </div>
-            </div>
+            <NotificationPreferencesPanel />
           )}
 
           {selectedTab === "personalization" && (

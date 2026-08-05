@@ -3,6 +3,7 @@ import { Panel, Button, Badge, Avatar, useToast, Icon } from "../../common/ui";
 import { getSession } from "../../../context/session";
 import { fetchMe, api } from "../../../services/client";
 import { getInitials } from "../../../utils/formatters";
+import { NotificationPreferencesPanel } from "../../common/NotificationPreferencesPanel";
 
 export function SettingsSection() {
   const { showToast } = useToast();
@@ -522,47 +523,7 @@ export function SettingsSection() {
           </Panel>
 
           {/* Card 4 - Notification Preferences */}
-          <Panel title="Notification Preferences" subtitle="Adjust how and when you receive portal communications.">
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.6 }}>
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text-primary)" }}>Course Announcements</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Receive email updates when instructors post updates</div>
-                </div>
-                <input type="checkbox" disabled checked style={{ pointerEvents: "none" }} />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.6 }}>
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text-primary)" }}>Assignment Reminders</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Get alerts about upcoming tasks and deadlines</div>
-                </div>
-                <input type="checkbox" disabled checked style={{ pointerEvents: "none" }} />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.6 }}>
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text-primary)" }}>Certificate Notifications</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Receive messages when you unlock a new certificate</div>
-                </div>
-                <input type="checkbox" disabled checked style={{ pointerEvents: "none" }} />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.6 }}>
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text-primary)" }}>System Notifications</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Important security alerts and system updates</div>
-                </div>
-                <input type="checkbox" disabled checked style={{ pointerEvents: "none" }} />
-              </div>
-            </div>
-            
-            <div style={{ borderTop: "1px solid var(--border)", marginTop: "16px", paddingTop: "12px" }}>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0, fontStyle: "italic" }}>
-                Notification preferences will be available in a future update.
-              </p>
-            </div>
-          </Panel>
+          <NotificationPreferencesPanel />
 
           {/* Card 5 - Preferences */}
           <Panel title="Preferences" subtitle="Personalize language, dark theme and timezone.">

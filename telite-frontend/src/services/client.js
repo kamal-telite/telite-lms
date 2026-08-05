@@ -553,6 +553,14 @@ export async function markAllNotificationsRead() {
   return unwrap(await api.post("/api/v1/notifications/read-all"));
 }
 
+export async function fetchNotificationPreferences() {
+  return unwrap(await api.get("/api/v1/notifications/preferences"));
+}
+
+export async function updateNotificationPreference(category, payload) {
+  return unwrap(await api.patch(`/api/v1/notifications/preferences/${category}`, payload));
+}
+
 export async function fetchMyAnnouncements() {
   return unwrap(await api.get("/api/v1/announcements/my"));
 }
