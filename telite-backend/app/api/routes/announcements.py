@@ -45,11 +45,8 @@ def _require_org(current_user: TokenData) -> int:
 
 def _create_announcement_notifications(db: Session, announcement, org_id: int) -> None:
     """Create notifications for all users targeted by the announcement."""
-    from app.models.user import User
     from app.models.announcement import AnnouncementAudience
-    
-    user_repo = UserRepository(db)
-    notification_repo = NotificationRepository(db)
+    from app.services.notification_service import NotificationService
     
     # Get the audience for this announcement
     audience_stmt = select(AnnouncementAudience).where(
@@ -57,57 +54,20 @@ def _create_announcement_notifications(db: Session, announcement, org_id: int) -
     )
     audience_rows = db.execute(audience_stmt).scalars().all()
     
+    service = NotificationService(db)
+    
+    context = {
+        "announcement_id": announcement.id,
+        "title": announcement.title,
+        "body": announcement.body
+    }
+    
     for audience in audience_rows:
-        # Determine target users based on audience type
-        if audience.audience_type == "all":
-            # Notify all active users in the org
-            users_stmt = select(User).where(
-                User.org_id == org_id,
-                User.is_active == True
-            )
-            users = db.execute(users_stmt).scalars().all()
-        elif audience.audience_type == "role":
-            # Notify all users with this role in the org
-            users_stmt = select(User).where(
-                User.org_id == org_id,
-                User.role == audience.audience_value,
-                User.is_active == True
-            )
-            users = db.execute(users_stmt).scalars().all()
-        elif audience.audience_type == "category":
-            # Notify all users with this category scope in the org
-            users_stmt = select(User).where(
-                User.org_id == org_id,
-                User.category_scope == audience.audience_value,
-                User.is_active == True
-            )
-            users = db.execute(users_stmt).scalars().all()
-        elif audience.audience_type == "user":
-            # Notify specific user
-            user = user_repo.get_by_id(audience.audience_value)
-            users = [user] if user and user.is_active else []
-        else:
-            continue
-        
-        # Create notification for each target user
-        for user in users:
-            try:
-                notification_repo.create(
-                    user_id=user.id,
-                    org_id=org_id,
-                    title=f"New Announcement: {announcement.title}",
-                    body=announcement.body[:200] + "..." if len(announcement.body) > 200 else announcement.body,
-                    notif_type=NotificationType.ANNOUNCEMENT_PUBLISHED,
-                    source_type="announcement",
-                    source_id=str(announcement.id),
-                    metadata=announcement_notification_metadata(announcement_id=announcement.id),
-                )
-            except Exception as e:
-                # Log but continue with other users
-                import logging
-                logging.getLogger(__name__).error(
-                    f"Failed to create notification for user {user.id} for announcement {announcement.id}: {e}"
-                )
+        audience_dict = {
+            "type": audience.audience_type,
+            "value": audience.audience_value
+        }
+        service.fanout_event("announcement.published", org_id, context, audience_dict)
 
 
 @announcements_router.get("/my")

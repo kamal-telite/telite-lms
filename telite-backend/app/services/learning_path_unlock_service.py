@@ -73,19 +73,12 @@ class LearningPathUnlockService:
         if completed == len(path_courses):
             completed_now = self.path_progress_repo.mark_completed(progress)
             if completed_now:
-                self.notification_repo.create_once(
-                    user_id=user_id,
-                    org_id=org_id,
-                    title="Learning Path Completed",
-                    body="You completed a learning path.",
-                    notif_type=NotificationType.LEARNING_PATH_COMPLETED,
-                    source_type="learning_path",
-                    source_id=path_id,
-                    metadata=learning_path_completed_metadata(path_id=path_id),
-                    idempotency_key=learning_path_completed_idempotency_key(
-                        user_id=user_id,
-                        path_id=path_id,
-                    ),
+                from app.services.notification_service import NotificationService
+                NotificationService(self.session).emit_event(
+                    "learning_path.completed",
+                    org_id,
+                    {"path_id": path_id},
+                    user_id
                 )
             return progress, completed_now
 
@@ -135,20 +128,12 @@ class LearningPathUnlockService:
                 org_id=org_id
             )
             self.session.add(event)
-            self.notification_repo.create_once(
-                user_id=user_id,
-                org_id=org_id,
-                title="Course Unlocked",
-                body="A new course is available in your learning path.",
-                notif_type=NotificationType.LEARNING_PATH_UNLOCKED,
-                source_type="learning_path",
-                source_id=path_id,
-                metadata=learning_path_unlocked_metadata(path_id=path_id, course_id=c_id),
-                idempotency_key=learning_path_unlocked_idempotency_key(
-                    user_id=user_id,
-                    path_id=path_id,
-                    course_id=c_id,
-                ),
+            from app.services.notification_service import NotificationService
+            NotificationService(self.session).emit_event(
+                "learning_path.course_unlocked",
+                org_id,
+                {"path_id": path_id, "course_id": c_id},
+                user_id
             )
             self.evaluate_completion(user_id, path_id, org_id)
             self.session.flush()

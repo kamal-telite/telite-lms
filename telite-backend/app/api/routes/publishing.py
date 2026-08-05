@@ -152,7 +152,8 @@ def execute_workflow_action(
     from app.core.notification_payloads import course_authoring_metadata, course_published_idempotency_key
     
     if action in ["publish", "reject"]:
-        notif_repo = NotificationRepository(db)
+        from app.services.notification_service import NotificationService
+        notif_service = NotificationService(db)
         
         # Determine the author: Look for the most recent "submit_for_review" action
         # If not found, fall back to the current user (if they are self-publishing/self-rejecting)
@@ -164,42 +165,42 @@ def execute_workflow_action(
         author_id = submit_action.reviewed_by if submit_action else current_user.id
         
         if action == "publish":
-            metadata = course_authoring_metadata(
-                category_slug=course.category_slug,
-                course_id=course_id,
-                course_version_id=version.id if version else None,
-                version_number=version.version_number if version else None,
-            )
-            idempotency_key = course_published_idempotency_key(
-                user_id=author_id,
-                course_version_id=version.id if version else None,
-                course_id=course_id,
-                version_number=version.version_number if version else None,
-            )
-            notif_repo.create_once(
-                user_id=author_id,
+            notif_service.emit_event(
+                event_name="course.published",
                 org_id=current_user.org_id,
-                title="Course Published",
-                body=f"Your course '{course.name}' has been published.",
-                notif_type=NotificationType.COURSE_PUBLISHED,
-                source_type="course",
-                source_id=course_id,
-                metadata=metadata,
-                idempotency_key=idempotency_key,
+                context={
+                    "course_id": course_id,
+                    "course_name": course.name,
+                    "version": version.version_number if version else None
+                },
+                recipient_id=author_id
+            )
+            # Notify everyone in the category
+            from app.workers.notification_tasks import dispatch_fanout_task
+            dispatch_fanout_task.delay(
+                event_name="course.published",
+                org_id=current_user.org_id,
+                context={
+                    "course_id": course_id,
+                    "course_name": course.name,
+                    "version": version.version_number if version else None
+                },
+                audience={
+                    "type": "category_enrolled",
+                    "category_slug": course.category_slug
+                }
             )
         elif action == "reject":
-            notif_repo.create(
-                user_id=author_id,
+            import time
+            notif_service.emit_event(
+                event_name="course.rejected",
                 org_id=current_user.org_id,
-                title="Course Requires Changes",
-                body=f"Your course '{course.name}' was returned for revision.",
-                notif_type=NotificationType.COURSE_REJECTED,
-                source_type="course",
-                source_id=course_id,
-                metadata=course_authoring_metadata(
-                    category_slug=course.category_slug,
-                    course_id=course_id,
-                ),
+                context={
+                    "course_id": course_id,
+                    "course_name": course.name,
+                    "timestamp": str(time.time())
+                },
+                recipient_id=author_id
             )
     
     db.commit()

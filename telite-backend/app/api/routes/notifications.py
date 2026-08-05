@@ -13,12 +13,13 @@ class NotificationResponse(BaseModel):
     id: int
     user_id: str
     title: str
-    body: str
+    message: str
     type: str
     is_read: bool
     org_id: int
     source_type: Optional[str] = None
     source_id: Optional[str] = None
+    action_url: Optional[str] = None
     created_at: Optional[str] = None
     metadata_json: Dict[str, Any] = Field(default_factory=dict)
 

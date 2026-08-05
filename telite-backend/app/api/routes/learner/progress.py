@@ -99,6 +99,26 @@ def update_progress(
                 org_id=current_user.org_id
             ))
             
+            from app.models.course import Course
+            from app.models.course_module import CourseModule
+            from app.services.notification_service import NotificationService
+            
+            course = db.query(Course).filter(Course.id == req.course_id).first()
+            module = db.query(CourseModule).filter(CourseModule.id == mod_upd.module_id).first()
+            if course and module:
+                notif_context = {
+                    "course_slug": course.slug,
+                    "module_id": module.id,
+                    "module_title": module.title
+                }
+                NotificationService(db).emit_event(
+                    "module.completed",
+                    current_user.org_id,
+                    notif_context,
+                    current_user.id
+                )
+            
+            
         progress_repo.upsert_module_progress(mp)
 
     # Update section progress based on module completion
@@ -254,6 +274,23 @@ def update_progress(
             org_id=current_user.org_id
         ))
         
+        from app.models.course import Course
+        from app.services.notification_service import NotificationService
+        
+        course = db.query(Course).filter(Course.id == req.course_id).first()
+        if course:
+            notif_context = {
+                "course_slug": course.slug,
+                "course_id": course.id,
+                "course_title": course.name
+            }
+            NotificationService(db).emit_event(
+                "course.completed",
+                current_user.org_id,
+                notif_context,
+                current_user.id
+            )
+        
         # Automatically generate certificate if eligible
         eligibility = CompletionPolicyService(db).is_certificate_eligible(
             user_id=current_user.id,
@@ -278,25 +315,20 @@ def update_progress(
                     cert_service = CertificateService(db)
                     cert, created = cert_service.generate_certificate(user, course, current_user.org_id, commit=False)
                     if created:
-                        metadata = certificate_awarded_metadata(
-                            course_id=cert.course_id,
-                            certificate_id=cert.id,
-                            verification_token=cert.verification_token,
+                        from app.services.notification_service import NotificationService
+                        cert_context = {
+                            "course_slug": course.slug,
+                            "course_id": course.id,
+                            "course_title": course.name,
+                            "certificate_id": cert.id
+                        }
+                        NotificationService(db).emit_event(
+                            "certificate.generated",
+                            current_user.org_id,
+                            cert_context,
+                            current_user.id
                         )
-                        NotificationRepository(db).create_once(
-                            user_id=cert.user_id,
-                            org_id=cert.org_id,
-                            title="Certificate Awarded",
-                            body=f"Your certificate for {course.name} is ready.",
-                            notif_type=NotificationType.CERTIFICATE_AWARDED,
-                            source_type="certificate",
-                            source_id=cert.id,
-                            metadata=metadata,
-                            idempotency_key=certificate_awarded_idempotency_key(
-                                user_id=cert.user_id,
-                                certificate_id=cert.id,
-                            ),
-                        )
+                        logger.info(f"Auto-generated certificate {cert.id} for user {user.id}, course {course.id}")
             except Exception as e:
                 logger.exception("Failed to auto-generate certificate during progress update")
 

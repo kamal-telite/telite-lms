@@ -43,15 +43,10 @@ def _metadata(route: NotificationRoute, **values: Any) -> dict[str, Any]:
 
 
 def validate_notification_payload(metadata: dict[str, Any] | None) -> None:
+    if metadata is None:
+        return
     if not isinstance(metadata, dict):
         raise ValueError("notification metadata_json must be an object")
-    route = metadata.get("route")
-    route_name = metadata.get("route_name")
-    if not isinstance(route, str) or not route:
-        raise ValueError("notification metadata_json.route is required")
-    if not isinstance(route_name, str) or not route_name:
-        raise ValueError("notification metadata_json.route_name is required")
-    validate_notification_route(route)
 
 
 def task_notification_metadata(task_id: str, assignment_id: int | str | None = None) -> dict[str, Any]:

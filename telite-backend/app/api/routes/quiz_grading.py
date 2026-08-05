@@ -8,6 +8,7 @@ from app.api.auth import get_current_user, require_admin, TokenData
 from app.db.engine import db_session
 from app.models.quiz_attempt import QuizAttempt, QuizAttemptEvent
 from app.models.quiz_answer import QuizAnswer, GradingEvent
+from app.models.quiz_models import QuizDefinition
 
 quiz_grading_router = APIRouter(
     prefix="/quiz-grading",
@@ -66,6 +67,19 @@ def apply_manual_grade(
         event_type="GRADING_COMPLETED"
     )
     db.add(completion_event)
+    
+    from app.services.notification_service import NotificationService
+    quiz = db.query(QuizDefinition).filter(QuizDefinition.id == attempt.quiz_id).first()
+    notif_context = {
+        "quiz_title": quiz.title if quiz else "a quiz",
+        "attempt_id": attempt.id
+    }
+    NotificationService(db).emit_event(
+        "quiz.graded",
+        current_user.org_id,
+        notif_context,
+        attempt.user_id
+    )
     
     db.commit()
     return {"success": True}

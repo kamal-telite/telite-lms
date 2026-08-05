@@ -14,7 +14,7 @@ function formatTimestamp(isoString) {
 }
 
 export default function NotificationCard({ notification, onClick, onMarkRead }) {
-  const { is_read, title, body, created_at, type } = notification;
+  const { is_read, title, message, created_at, type } = notification;
 
   return (
     <div
@@ -76,7 +76,7 @@ export default function NotificationCard({ notification, onClick, onMarkRead }) 
           WebkitBoxOrient: "vertical",
           overflow: "hidden"
         }}>
-          {body}
+          {message}
         </p>
         
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "var(--space-8)" }}>

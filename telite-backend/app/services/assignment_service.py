@@ -247,15 +247,19 @@ class AssignmentService:
                 course_progress_pct_at_submission=progress.completion_percentage if progress else 0.0,
             )
             self._mark_assignment_complete(user=user, block_id=block_id, module_id=module.id, course_id=course.id, files_count=len(all_files))
-            NotificationRepository(self.db).create(
-                user_id=user.id,
-                org_id=user.org_id,
-                title="Assignment Submitted",
-                body="Your assignment is pending verification.",
-                notif_type=NotificationType.INFO,
-                source_type="assignment",
-                source_id=str(submission.id),
+            from app.services.notification_service import NotificationService
+            notif_context = {
+                "course_slug": course.slug,
+                "block_id": block.id,
+                "submission_id": submission.id
+            }
+            NotificationService(self.db).emit_event(
+                "assignment.submitted",
+                user.org_id,
+                notif_context,
+                user.id
             )
+            
             self.db.commit()
             return {"message": "Assignment submitted successfully", "submission": submission.to_dict()}
         except IntegrityError as e:
@@ -447,19 +451,20 @@ class AssignmentService:
                     "returned": returned,
                 },
             )
-        NotificationRepository(self.db).create(
-            user_id=updated.user_id,
-            org_id=updated.org_id,
-            title="Assignment Graded",
-            body="Your assignment has been graded.",
-            notif_type=NotificationType.ASSIGNMENT_GRADED,
-            source_type="assignment",
-            source_id=str(updated.id),
-            metadata=assignment_graded_metadata(
+        from app.services.notification_service import NotificationService
+        notif_context = {
+            "submission_id": updated.id,
+            "metadata": assignment_graded_metadata(
                 course_id=course.id,
                 block_id=block.id,
                 submission_id=updated.id,
-            ),
+            )
+        }
+        NotificationService(self.db).emit_event(
+            "assignment.graded",
+            updated.org_id,
+            notif_context,
+            updated.user_id
         )
         PALScoreService(self.db).recompute_user(updated.user_id, updated.org_id)
         self.db.commit()
@@ -492,14 +497,17 @@ class AssignmentService:
             before_dict={"status": previous_status},
             after_dict={"status": next_status, "feedback": feedback},
         )
-        NotificationRepository(self.db).create(
-            user_id=updated.user_id,
-            org_id=updated.org_id,
-            title="Assignment Approved" if approved else "Assignment Rejected",
-            body="Your assignment has been approved." if approved else (feedback or "Your assignment was rejected. Please review the feedback."),
-            notif_type=NotificationType.INFO,
-            source_type="assignment",
-            source_id=str(updated.id),
+        from app.services.notification_service import NotificationService
+        notif_context = {
+            "submission_id": updated.id,
+            "feedback": feedback
+        }
+        event_type = "assignment.approved" if approved else "assignment.rejected"
+        NotificationService(self.db).emit_event(
+            event_type,
+            updated.org_id,
+            notif_context,
+            updated.user_id
         )
         PALScoreService(self.db).recompute_user(updated.user_id, updated.org_id)
         self.db.commit()

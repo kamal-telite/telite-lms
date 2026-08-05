@@ -21,6 +21,7 @@ import {
   uploadCourseCover,
 } from "../../services/client";
 import { DashboardShell, TabBar, ProfileDropdown } from "../../layouts/DashboardLayout";
+import NotificationBell from "../../components/common/NotificationBell";
 import {
   Avatar,
   Button,
@@ -538,16 +539,19 @@ function CategoryAdminPageContent({ session, onLogout, children }) {
             <Button tone="primary" icon="plus" onClick={() => setLearnerModal({ open: true, seed: null })}>
               Add learner
             </Button>
-            <ProfileDropdown profile={{
-              initials: getInitials(session?.user?.name || "Category Admin"),
-              gradient: ["#2563EB", "#059669"],
-              name: session?.user?.name || "Category Admin",
-              roleLabel: "category-admin",
-            }} onLogout={onLogout} onNavigate={(path) => {
-              if (path === "profile" || path === "settings") {
-                navigate(`/categories/${slug}/admin/profile?tab=general`);
-              }
-            }} />
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <NotificationBell />
+              <ProfileDropdown profile={{
+                initials: getInitials(session?.user?.name || "Category Admin"),
+                gradient: ["#2563EB", "#059669"],
+                name: session?.user?.name || "Category Admin",
+                roleLabel: "category-admin",
+              }} onLogout={onLogout} onNavigate={(path) => {
+                if (path === "profile" || path === "settings") {
+                  navigate(`/categories/${slug}/admin/profile?tab=general`);
+                }
+              }} />
+            </div>
           </>
         }
         tabBar={

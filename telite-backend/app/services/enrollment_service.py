@@ -76,7 +76,8 @@ class EnrollmentService:
         self.progress_repo = ProgressRepository(db)
         self.user_repo = UserRepository(db)
         self.audit_repo = AuditRepository(db)
-        self.notification_repo = NotificationRepository(db)
+        from app.services.notification_service import NotificationService
+        self.notification_service = NotificationService(db)
         self.provisioning = UserProvisioningService(db)
 
     def manual_enroll(
@@ -165,16 +166,14 @@ class EnrollmentService:
             self.progress_repo.upsert_course_progress(progress)
             course.enrolled_count = (course.enrolled_count or 0) + 1
             enrolled_course_ids.append(course.id)
-
-            self.notification_repo.create(
-                user_id=learner.id,
+            self.notification_service.emit_event(
+                event_name="enrollment.manual",
                 org_id=actor_token.org_id,
-                title="Course Enrollment",
-                body=f"You have been enrolled in '{course.name}'.",
-                notif_type=NotificationType.ENROLLMENT_CREATED,
-                source_type="course",
-                source_id=course.id,
-                metadata=enrollment_notification_metadata(course.id),
+                context={
+                    "course_id": course.id,
+                    "course_title": course.name
+                },
+                recipient_id=learner.id
             )
 
         self.audit_repo.write(

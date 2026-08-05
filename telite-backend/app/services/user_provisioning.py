@@ -246,6 +246,20 @@ class UserProvisioningService:
                     message=f"Activated organization '{org.name}' after first Super Admin invitation acceptance",
                 )
 
+        from app.services.notification_service import NotificationService
+        if inv.invited_by:
+            notif_context = {
+                "invited_email": user.email,
+                "role": user.role,
+                "user_id": user.id
+            }
+            NotificationService(self.db).emit_event(
+                "user.joined",
+                user.org_id,
+                notif_context,
+                inv.invited_by
+            )
+
         self.db.commit()
         return user
 

@@ -1,5 +1,6 @@
 """Admin management endpoints."""
 
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -66,6 +67,7 @@ def post_admin(
                 raise HTTPException(status_code=403, detail="Cannot modify an archived or inactive user")
             
             # Update existing
+            old_role = existing.role
             update_kwargs = {
                 "role": body.role,
                 "full_name": body.full_name,
@@ -77,6 +79,20 @@ def post_admin(
             
             if body.password:
                 user_repo.update_password(existing, body.password)
+                
+            if old_role != body.role:
+                from app.services.notification_service import NotificationService
+                notif_context = {
+                    "new_role": body.role,
+                    "user_id": existing.id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                NotificationService(db).emit_event(
+                    "user.role_changed",
+                    scoped_org_id,
+                    notif_context,
+                    existing.id
+                )
                 
             db.commit()
             return existing.to_dict()

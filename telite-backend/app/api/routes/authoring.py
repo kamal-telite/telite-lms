@@ -131,7 +131,7 @@ def publish_course(
             user_id=author_id,
             org_id=current_user.org_id,
             title="Course Published",
-            body=f"Your course '{course.name}' has been published.",
+            message=f"Your course '{course.name}' has been published.",
             notif_type=NotificationType.COURSE_PUBLISHED,
             source_type="course",
             source_id=course_id,

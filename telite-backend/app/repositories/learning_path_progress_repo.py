@@ -41,19 +41,12 @@ class LearningPathProgressRepository:
         )
         self.session.add(progress)
         self.session.flush()
-        NotificationRepository(self.session).create_once(
-            user_id=user_id,
-            org_id=org_id,
-            title="Learning Path Assigned",
-            body="A new learning path has been assigned to you.",
-            notif_type=NotificationType.LEARNING_PATH_ASSIGNED,
-            source_type="learning_path",
-            source_id=path_id,
-            metadata=learning_path_assigned_metadata(path_id=path_id),
-            idempotency_key=learning_path_assigned_idempotency_key(
-                user_id=user_id,
-                path_id=path_id,
-            ),
+        from app.services.notification_service import NotificationService
+        NotificationService(self.session).emit_event(
+            "learning_path.assigned",
+            org_id,
+            {"path_id": path_id},
+            user_id
         )
         return progress, True
 

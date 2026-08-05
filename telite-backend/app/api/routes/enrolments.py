@@ -91,7 +91,7 @@ def _approve_request(db: Session, request_id: str, actor):
             full_name=req.full_name,
             role="learner",
             org_id=req_org_id,
-            password=get_default_learner_password(),
+            password_hash=hash_password(get_default_learner_password()),
             category_scope=req.category_slug,
             invited_via="self_enrollment",
             enrollment_type=req.request_type,
@@ -112,8 +112,8 @@ def _approve_request(db: Session, request_id: str, actor):
     
     req = enrol_repo.approve(req, reviewed_by=actor.id)
     
-    AuditRepository(db).log_action(
-        actor_id=actor.id,
+    AuditRepository(db).write(
+        actor_user_id=actor.id,
         actor_name=actor.full_name,
         action="enrollment.approve",
         target_type="enrollment_request",
@@ -294,20 +294,32 @@ def approve_request(
     request_id: str,
     current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session),
 ):
-    # DEPRECATED Phase O-1: legacy approval helper path is superseded by
-    # EnrollmentService/UserProvisioningService-backed workflows.
-    actor = fetch_user_by_id(current_user.id)
+    actor = UserRepository(db).get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
 
-    # Validate that the request belongs to the actor's org
-    enrol_req = fetch_enrollment_request_by_id(request_id)
+    enrol_repo = EnrollmentRepository(db)
+    enrol_req = enrol_repo.get_by_id(request_id)
     if not enrol_req:
         raise HTTPException(status_code=404, detail="Enrollment request not found")
-    validate_enrollment_access(current_user, enrol_req.get("org_id") or actor.get("org_id"))
+    validate_enrollment_access(current_user, enrol_req.org_id or actor.org_id)
 
     try:
-        return approve_enrollment_request(request_id, actor)
+        result = _approve_request(db, request_id, actor)
+        
+        # Emit notification
+        from app.services.notification_service import NotificationService
+        NotificationService(db).emit_event(
+            event_name="enrollment.approved",
+            org_id=enrol_req.org_id,
+            context={
+                "category_slug": enrol_req.category_slug,
+                "request_id": enrol_req.id
+            },
+            recipient_id=result["user_id"]
+        )
+        db.commit()
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -318,20 +330,50 @@ def reject_request(
     body: RejectPayload,
     current_user: TokenData = Depends(require_admin), db: Session = Depends(db_session),
 ):
-    # DEPRECATED Phase O-1: legacy rejection helper path is retained only until
-    # pending enrollment request management is migrated to native repositories.
-    actor = fetch_user_by_id(current_user.id)
+    actor = UserRepository(db).get_by_id(current_user.id)
     if not actor:
         raise HTTPException(status_code=404, detail="Actor not found")
 
-    # Validate that the request belongs to the actor's org
-    enrol_req = fetch_enrollment_request_by_id(request_id)
+    enrol_repo = EnrollmentRepository(db)
+    enrol_req = enrol_repo.get_by_id(request_id)
     if not enrol_req:
         raise HTTPException(status_code=404, detail="Enrollment request not found")
-    validate_enrollment_access(current_user, enrol_req.get("org_id") or actor.get("org_id"))
+    validate_enrollment_access(current_user, enrol_req.org_id or actor.org_id)
 
     try:
-        return reject_enrollment_request(request_id, actor, body.reason)
+        if enrol_req.status != "pending":
+            raise ValueError("Only pending requests can be rejected.")
+            
+        req = enrol_repo.reject(enrol_req, reviewed_by=actor.id, reason=body.reason)
+        
+        AuditRepository(db).write(
+            actor_user_id=actor.id,
+            actor_name=actor.full_name,
+            action="enrollment.reject",
+            target_type="enrollment_request",
+            target_id=req.id,
+            org_id=req.org_id,
+            message=f"Rejected enrollment request for {req.email}",
+        )
+        
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_email(req.email)
+        
+        if user:
+            from app.services.notification_service import NotificationService
+            NotificationService(db).emit_event(
+                event_name="enrollment.rejected",
+                org_id=req.org_id,
+                context={
+                    "category_slug": req.category_slug,
+                    "request_id": req.id,
+                    "reason": body.reason or "No reason provided."
+                },
+                recipient_id=user.id
+            )
+            
+        db.commit()
+        return {"status": "rejected", "request_id": req.id}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

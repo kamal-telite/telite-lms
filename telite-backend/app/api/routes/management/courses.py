@@ -265,6 +265,20 @@ def permanently_delete_archived_course(
         
         # Finally delete the course
         logger.info(f"[PERMANENT DELETE] Deleting course from database")
+        
+        # -------------------------------------------------------------
+        # NOTIFICATION: Course Deleted
+        # -------------------------------------------------------------
+        from app.services.notification_service import NotificationService
+        notif_service = NotificationService(db)
+        context = {
+            "course_id": course.id,
+            "course_name": course.name
+        }
+        
+        # Notify the user performing the deletion
+        notif_service.emit_event("course.deleted", course.org_id, context, current_user.id)
+        
         db.delete(course)
         logger.info(f"[PERMANENT DELETE] Course deleted, committing transaction")
         
@@ -302,6 +316,38 @@ def post_course(
         payload["category_slug"] = category_slug
         payload["org_id"] = category.org_id
         course = course_repo.create_course(**payload)
+        
+        # -------------------------------------------------------------
+        # NOTIFICATION: Course Created
+        # -------------------------------------------------------------
+        from app.services.notification_service import NotificationService
+        from app.models.user import User
+        from sqlalchemy import or_
+        
+        notif_service = NotificationService(db)
+        context = {
+            "course_id": course.id,
+            "course_name": course.name,
+            "creator_name": current_user.full_name
+        }
+        
+        # Notify Author
+        notif_service.emit_event("course.created", course.org_id, context, current_user.id)
+        
+        # Notify Admins (Super Admins + this category's Category Admins)
+        from sqlalchemy import select
+        stmt = select(User.id).where(
+            User.org_id == course.org_id,
+            User.is_active == True,
+            User.id != current_user.id,
+            or_(User.role == "super_admin", 
+                (User.role == "category_admin") & (User.category_scope == category_slug))
+        )
+        admin_ids = db.scalars(stmt).all()
+        
+        for uid in admin_ids:
+            notif_service.emit_event("course.created", course.org_id, context, uid)
+            
         db.commit()
         return course.to_dict()
     except DuplicateResourceError as dre:
@@ -332,7 +378,47 @@ def patch_course(
         
     ensure_org_access(current_user, course.org_id)
     try:
-        updated = course_repo.update_course(course, **body.model_dump(exclude_unset=True))
+        payload = body.model_dump(exclude_unset=True)
+        
+        # Determine if learner-visible changes are made
+        learner_visible_fields = ["name", "description", "tier", "cover_image_url", "prerequisite_course_id", "price_paise"]
+        has_visible_changes = any(
+            field in payload and getattr(course, field) != payload[field]
+            for field in learner_visible_fields
+        )
+        
+        updated = course_repo.update_course(course, **payload)
+        
+        # -------------------------------------------------------------
+        # NOTIFICATION: Course Updated
+        # -------------------------------------------------------------
+        import time
+        from app.services.notification_service import NotificationService
+        notif_service = NotificationService(db)
+        context = {
+            "course_id": updated.id,
+            "course_name": updated.name,
+            "timestamp": str(time.time())
+        }
+        
+        # Notify the author (the user who submitted it for review / originally created it)
+        # To simplify, we can notify the current_user if they are not the only one, or find the course creator.
+        # Let's just notify current_user as an acknowledgment for now.
+        notif_service.emit_event("course.updated", updated.org_id, context, current_user.id)
+        
+        # Notify learners if published and visible changes occurred
+        if updated.status == "published" and has_visible_changes:
+            from app.workers.notification_tasks import dispatch_fanout_task
+            dispatch_fanout_task.delay(
+                event_name="course.updated",
+                org_id=updated.org_id,
+                context=context,
+                audience={
+                    "type": "course_enrolled",
+                    "course_id": updated.id
+                }
+            )
+            
         db.commit()
         return updated.to_dict()
     except Exception as exc:
@@ -356,6 +442,32 @@ def delete_course(
     ensure_org_access(current_user, course.org_id)
     try:
         course.status = "archived"
+        
+        # -------------------------------------------------------------
+        # NOTIFICATION: Course Archived
+        # -------------------------------------------------------------
+        from app.services.notification_service import NotificationService
+        notif_service = NotificationService(db)
+        context = {
+            "course_id": course.id,
+            "course_name": course.name
+        }
+        
+        # Notify author
+        notif_service.emit_event("course.archived", course.org_id, context, current_user.id)
+        
+        # Notify enrolled learners via fanout
+        from app.workers.notification_tasks import dispatch_fanout_task
+        dispatch_fanout_task.delay(
+            event_name="course.archived",
+            org_id=course.org_id,
+            context=context,
+            audience={
+                "type": "course_enrolled",
+                "course_id": course.id
+            }
+        )
+        
         db.commit()
         return course.to_dict()
     except Exception as exc:

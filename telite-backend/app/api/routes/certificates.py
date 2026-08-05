@@ -69,24 +69,18 @@ def issue_certificate(
     cert_service = CertificateService(db)
     cert, created = cert_service.generate_certificate(user, course, current_user.org_id)
     if created:
-        metadata = certificate_awarded_metadata(
-            course_id=cert.course_id,
-            certificate_id=cert.id,
-            verification_token=cert.verification_token,
-        )
-        NotificationRepository(db).create_once(
-            user_id=cert.user_id,
-            org_id=cert.org_id,
-            title="Certificate Awarded",
-            body=f"Your certificate for {course.name} is ready.",
-            notif_type=NotificationType.CERTIFICATE_AWARDED,
-            source_type="certificate",
-            source_id=cert.id,
-            metadata=metadata,
-            idempotency_key=certificate_awarded_idempotency_key(
-                user_id=cert.user_id,
-                certificate_id=cert.id,
-            ),
+        from app.services.notification_service import NotificationService
+        cert_context = {
+            "course_slug": course.slug,
+            "course_id": course.id,
+            "course_title": course.name,
+            "certificate_id": cert.id
+        }
+        NotificationService(db).emit_event(
+            "certificate.generated",
+            current_user.org_id,
+            cert_context,
+            current_user.id
         )
         db.commit()
     

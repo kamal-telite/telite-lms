@@ -12,7 +12,7 @@ const UNSUPPORTED_NOTIFICATION_ROUTE_PREFIXES = [
 ];
 
 export function getNotificationRoute(notification) {
-  const route = notification?.metadata_json?.route;
+  const route = notification?.action_url;
   if (typeof route !== "string" || !route.trim()) return "";
   return route.trim();
 }

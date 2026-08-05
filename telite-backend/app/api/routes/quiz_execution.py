@@ -159,6 +159,31 @@ def submit_attempt(
     db.add(QuizAttemptEvent(attempt_id=attempt.id, org_id=current_user.org_id, event_type="QUIZ_SUBMITTED"))
     db.add(QuizAttemptEvent(attempt_id=attempt.id, org_id=current_user.org_id, event_type="MANUAL_SUBMIT"))
     
+    from app.services.notification_service import NotificationService
+    # Fetch course slug if available
+    course_slug = ""
+    if quiz.module_id:
+        from app.models.course_module import CourseModule
+        from app.models.course import Course
+        module = db.query(CourseModule).filter(CourseModule.id == quiz.module_id).first()
+        if module:
+            course = db.query(Course).filter(Course.id == module.course_id).first()
+            if course:
+                course_slug = course.slug
+
+    notif_context = {
+        "course_slug": course_slug,
+        "quiz_id": quiz.id,
+        "quiz_title": quiz.title or "a quiz",
+        "attempt_id": attempt.id
+    }
+    NotificationService(db).emit_event(
+        "quiz.submitted",
+        current_user.org_id,
+        notif_context,
+        current_user.id
+    )
+    
     answers = db.query(QuizAnswer).filter(QuizAnswer.attempt_id == attempt.id).all()
     total_score = 0
     all_auto_graded = True
@@ -229,6 +254,17 @@ def submit_attempt(
                     feedback=None,
                     metadata={"attempt_id": attempt.id}
                 )
+
+        notif_context = {
+            "quiz_title": quiz.title or "a quiz",
+            "attempt_id": attempt.id
+        }
+        NotificationService(db).emit_event(
+            "quiz.graded",
+            current_user.org_id,
+            notif_context,
+            current_user.id
+        )
 
     else:
         attempt.status = "needs_manual_grading"

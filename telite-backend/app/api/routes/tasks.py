@@ -136,15 +136,12 @@ def post_task(
             task.assignment_generation_status = "pending"
         elif body.assigned_to_user_id:
             assignment = task_repo.create_assignment(task=task, learner_id=body.assigned_to_user_id)
-            NotificationRepository(db).create(
-                user_id=body.assigned_to_user_id,
-                org_id=actor.org_id,
-                title="New task assigned",
-                body=f"New task assigned: {task.title}",
-                notif_type=NotificationType.TASK_ASSIGNED,
-                source_type="task",
-                source_id=task.id,
-                metadata=task_notification_metadata(task.id, assignment.id),
+            from app.services.notification_service import NotificationService
+            NotificationService(db).emit_event(
+                "task.assigned",
+                actor.org_id,
+                {"task_id": task.id, "title": task.title, "assignment_id": assignment.id},
+                body.assigned_to_user_id
             )
         response_payload = task_repo.task_payload(task, assignment)
         db.commit()
@@ -407,17 +404,12 @@ def review_task(
     )
     task.status = task_repo.task_status(assignment.status)
     if assignment.learner_id:
-        title = "Task approved" if review_status == "approved" else "Revision requested" if review_status == "revision_requested" else "Task rejected"
-        body_text = "Your task has been approved." if review_status == "approved" else f"Revision requested on your task: {task.title}" if review_status == "revision_requested" else f"Your task was rejected: {task.title}"
-        NotificationRepository(db).create(
-            user_id=assignment.learner_id,
-            org_id=task.org_id,
-            title=title,
-            body=body_text,
-            notif_type=f"task_{review_status}",
-            source_type="task",
-            source_id=task.id,
-            metadata=task_notification_metadata(task.id, assignment.id),
+        from app.services.notification_service import NotificationService
+        NotificationService(db).emit_event(
+            f"task.{review_status}",
+            task.org_id,
+            {"task_id": task.id, "title": task.title, "assignment_id": assignment.id},
+            assignment.learner_id
         )
         if review_status == "approved":
             db.add(LearnerEvent(

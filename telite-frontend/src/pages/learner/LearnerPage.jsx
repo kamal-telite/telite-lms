@@ -20,7 +20,7 @@ import { useLearnerStore } from "../../store/learnerStore";
 import { LearnerPlayer } from "../../components/player/LearnerPlayer";
 
 // Extracted Components
-import { NotificationDrawer } from "../../components/learner/NotificationDrawer";
+import NotificationBell from "../../components/common/NotificationBell";
 import { DashboardSection } from "../../components/learner/sections/DashboardSection";
 import { CoursesSection } from "../../components/learner/sections/CoursesSection";
 import { PalProgressSection } from "../../components/learner/sections/PalProgressSection";
@@ -50,7 +50,6 @@ export default function LearnerPage({ session, onLogout }) {
   // Section filters and visibility
   const [courseFilter, setCourseFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState("all");
-  const [showNotifications, setShowNotifications] = useState(false);
   const [animateProgress, setAnimateProgress] = useState(false);
 
   // Announcements state
@@ -281,9 +280,7 @@ export default function LearnerPage({ session, onLogout }) {
   const stats = data.stats || {};
   const courses = Array.isArray(data.courses) ? data.courses : [];
   const tasks = Array.isArray(data.tasks) ? data.tasks : [];
-  const notifications = Array.isArray(data.notifications)
-    ? data.notifications
-    : [];
+
   const leaderboard = Array.isArray(data.leaderboard)
     ? data.leaderboard
     : Array.isArray(data.recommendation?.leaderboard)
@@ -348,16 +345,8 @@ export default function LearnerPage({ session, onLogout }) {
       }
       subtitle={undefined}
       topbarActions={
-        <>
-          <button
-            className="icon-btn"
-            title="Notifications"
-            onClick={() => setShowNotifications(true)}
-          >
-            <span role="img" aria-label="bell">
-              🔔
-            </span>
-          </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <NotificationBell />
           <ProfileDropdown
             profile={{
               initials: getInitials(session?.user?.name || "Learner"),
@@ -368,15 +357,10 @@ export default function LearnerPage({ session, onLogout }) {
             onLogout={onLogout}
             onNavigate={(path) => navigate(`/learner/${path}`)}
           />
-        </>
+        </div>
       }
       scrollRef={scrollRef}
     >
-      <NotificationDrawer
-        open={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        notifications={notifications}
-      />
 
       {activeCourseId && (
         <div

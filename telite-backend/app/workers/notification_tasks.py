@@ -247,3 +247,105 @@ def send_email_notification(
                 metadata={"error": str(exc)}
             )
         raise self.retry(exc=exc)
+
+
+@celery_app.task(name="notifications.dispatch_fanout", bind=True, max_retries=3)
+def dispatch_fanout_task(
+    self,
+    event_name: str,
+    org_id: int,
+    context: dict,
+    audience: dict
+):
+    """
+    Dispatches a single domain event to a large audience using batched inserts.
+    """
+    from app.db.engine import get_tenant_session
+    from app.services.notification_service import NotificationService
+    from sqlalchemy import select
+    from app.models.user import User
+
+    logger.info("Starting fanout for event %s to org %d", event_name, org_id)
+    
+    with get_tenant_session(org_id) as db:
+        service = NotificationService(db)
+        payload = service._build_payload(event_name, context)
+        
+        if not payload:
+            logger.warning("Fanout aborted: event %s produced no payload", event_name)
+            return
+
+        # Resolve audience
+        audience_type = audience.get("type")
+        recipient_ids = []
+        
+        if audience_type == "org_all":
+            # Fetch all active users in the org
+            stmt = select(User.id).where(User.org_id == org_id, User.is_active == True)
+            recipient_ids = db.execute(stmt).scalars().all()
+        elif audience_type == "course_enrolled":
+            course_id = audience.get("course_id")
+            from app.models.course_progress import CourseProgress
+            stmt = select(CourseProgress.user_id).where(
+                CourseProgress.course_id == course_id,
+                CourseProgress.org_id == org_id,
+                CourseProgress.status != "dropped"
+            )
+            recipient_ids = db.execute(stmt).scalars().all()
+        elif audience_type == "category_enrolled":
+            category_slug = audience.get("category_slug")
+            stmt = select(User.id).where(
+                User.org_id == org_id,
+                User.is_active == True,
+                User.category_scope == category_slug
+            )
+            recipient_ids = db.execute(stmt).scalars().all()
+        elif audience_type == "all":
+            stmt = select(User.id).where(User.org_id == org_id, User.is_active == True)
+            recipient_ids = db.execute(stmt).scalars().all()
+        elif audience_type == "role":
+            stmt = select(User.id).where(
+                User.org_id == org_id,
+                User.role == audience.get("value"),
+                User.is_active == True
+            )
+            recipient_ids = db.execute(stmt).scalars().all()
+        elif audience_type == "category":
+            stmt = select(User.id).where(
+                User.org_id == org_id,
+                User.category_scope == audience.get("value"),
+                User.is_active == True
+            )
+            recipient_ids = db.execute(stmt).scalars().all()
+        elif audience_type == "user":
+            uid = audience.get("value")
+            stmt = select(User.id).where(User.id == uid, User.org_id == org_id, User.is_active == True)
+            recipient_ids = db.execute(stmt).scalars().all()
+        else:
+            logger.error("Unknown audience type: %s", audience_type)
+            return
+
+        logger.info("Resolved %d recipients for %s", len(recipient_ids), event_name)
+        if not recipient_ids:
+            return
+
+        count = 0
+        notif_type = getattr(payload["type"], "value", payload["type"])
+        for uid in recipient_ids:
+            service.repo.create_once(
+                user_id=str(uid),
+                org_id=org_id,
+                title=payload["title"],
+                message=payload["message"],
+                notif_type=notif_type,
+                idempotency_key=payload["idempotency_key"],
+                metadata=payload.get("metadata", {}),
+                source_type=payload["source_type"],
+                source_id=payload["source_id"]
+            )
+            count += 1
+            if count % 100 == 0:
+                db.flush()
+                
+        db.commit()
+        logger.info("Fanout complete for %s. Inserted %d notifications.", event_name, count)

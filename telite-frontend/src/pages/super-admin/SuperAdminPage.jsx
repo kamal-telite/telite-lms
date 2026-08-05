@@ -20,6 +20,7 @@ import {
   updateCategory,
 } from "../../services/client";
 import { ChartCanvas } from "../../components/common/charts";
+import NotificationBell from "../../components/common/NotificationBell";
 import { DashboardShell, SectionTitle, ProfileDropdown } from "../../layouts/DashboardLayout";
 import { ProfileSettingsTab } from "../../components/dashboard/CategoryAdminTabs";
 
@@ -527,13 +528,16 @@ export default function SuperAdminPage({ session, onLogout }) {
             <Button tone="primary" icon="plus" onClick={() => setCategoryModal({ open: true, item: null })}>
               New category
             </Button>
-            <ProfileDropdown profile={{
-              initials: getInitials(session?.user?.name || "Rajan Mehra"),
-              gradient: ["#7C3AED", "#2563EB"],
-              name: session?.user?.name || "Rajan Mehra",
-              email: session?.user?.email || "rajan@telite.io",
-              roleLabel: "super-admin",
-            }} onNavigate={(tab) => navigate(`/super-admin/profile?tab=${tab}`)} onLogout={onLogout} />
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <NotificationBell />
+              <ProfileDropdown profile={{
+                initials: getInitials(session?.user?.name || "Rajan Mehra"),
+                gradient: ["#7C3AED", "#2563EB"],
+                name: session?.user?.name || "Rajan Mehra",
+                email: session?.user?.email || "rajan@telite.io",
+                roleLabel: "super-admin",
+              }} onNavigate={(tab) => navigate(`/super-admin/profile?tab=${tab}`)} onLogout={onLogout} />
+            </div>
           </>
         }
         scrollRef={scrollRef}
