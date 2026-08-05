@@ -7,6 +7,7 @@ import "./styles/themes/dark.css";
 import "./styles/themes/light.css";
 import "./styles/global.css";
 import "./styles/dashboard-variants.css";
+import "./styles/components/notifications.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

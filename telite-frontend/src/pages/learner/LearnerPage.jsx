@@ -300,9 +300,7 @@ export default function LearnerPage({ session, onLogout }) {
           label: "Tasks",
           icon: "task",
           badge: String(
-            tasks.filter(
-              (t) => t.status === "pending" || t.status === "overdue"
-            ).length || 0
+            tasks.filter((t) => ["assigned", "in_progress", "revision_requested", "overdue"].includes(t.status)).length || 0
           ),
           badgeTone: "warn",
         },

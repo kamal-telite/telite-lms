@@ -374,7 +374,7 @@ function TaskAssignModal({ open, item, learners, onClose, onSubmit, categorySlug
         description: form.description,
         assigned_label: learner?.full_name || "All learners",
         assigned_to_user_id: learner?.id || null,
-        assignment_scope: learner ? "individual" : "all_learners",
+        assignment_scope: learner ? "individual" : "all",
         category_slug: categorySlug,
         due_at: form.due_at,
         status: item?.status || "pending",

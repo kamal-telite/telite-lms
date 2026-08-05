@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.repositories.notification_repo import NotificationRepository
 from app.models.user import User
+from app.services.preference_resolver import PreferenceResolver
+from app.services.notification_category_mapper import event_to_category
 
 logger = logging.getLogger("telite.notifications")
 
@@ -12,6 +14,7 @@ class NotificationService:
     def __init__(self, session: Session):
         self.session = session
         self.repo = NotificationRepository(session)
+        self.resolver = PreferenceResolver(session)
 
     def emit_event(
         self,
@@ -33,6 +36,19 @@ class NotificationService:
         if not payload:
             return
             
+        category_str = event_to_category(event_name)
+        prefs = self.resolver.resolve_for_user(recipient_id, org_id, category_str)
+        
+        if not prefs["in_app"] and not prefs["email"]:
+            logger.info("Notification skipped for user %s due to preferences (in_app=False, email=False)", recipient_id)
+            return
+
+        metadata = payload.get("metadata", {})
+        if prefs["email"]:
+            metadata["delivery_channel"] = "email"
+        if not prefs["in_app"]:
+            metadata["hidden_in_app"] = True
+            
         self.repo.create_once(
             user_id=recipient_id,
             org_id=org_id,
@@ -40,7 +56,7 @@ class NotificationService:
             message=payload["message"],
             notif_type=payload["type"],
             idempotency_key=payload["idempotency_key"],
-            metadata=payload.get("metadata", {}),
+            metadata=metadata,
             source_type=payload["source_type"],
             source_id=payload["source_id"]
         )

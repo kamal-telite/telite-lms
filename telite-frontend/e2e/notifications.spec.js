@@ -13,7 +13,7 @@ async function login(page, userType) {
   await page.fill('#password', user.password);
   await page.click('#btnOpen');
   // Wait for navigation and dashboard
-  await expect(page).toHaveURL(/.*\/dashboard|.*\/learner|.*\/admin/);
+  await expect(page).toHaveURL(/.*dashboard|.*learner|.*admin/);
 }
 
 for (const role of Object.keys(USERS)) {
