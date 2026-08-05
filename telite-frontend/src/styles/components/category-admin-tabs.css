@@ -558,7 +558,7 @@
 }
 
 .profile-settings__body {
-  padding: 26px 40px 92px;
+  padding: 26px 40px 40px;
 }
 
 .profile-settings__form {
@@ -640,15 +640,15 @@
 }
 
 .profile-settings__actions {
-  position: absolute;
-  right: 40px;
-  bottom: 26px;
+  position: sticky;
+  bottom: 0;
   display: flex;
   justify-content: flex-end;
   gap: var(--space-12);
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
+  margin-top: auto;
+  padding: 20px 0 4px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
   z-index: 1;
 }
 
@@ -932,9 +932,6 @@
   }
 
   .profile-settings__actions {
-    right: var(--space-20);
-    bottom: var(--space-20);
-    left: var(--space-20);
     align-items: stretch;
   }
 

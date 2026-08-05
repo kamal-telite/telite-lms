@@ -4,9 +4,9 @@ export const COURSE_INITIAL = {
   description: "",
   tier: "Basic",
   status: "draft",
-  module_count: 4,
-  lessons_count: 8,
-  hours: 12,
+  module_count: 0,
+  lessons_count: 0,
+  hours: 0,
   modules: [],
   cover_image_url: "",
 };

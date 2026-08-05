@@ -84,10 +84,6 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
           description: form.description,
           tier: form.tier,
           status: form.status,
-          module_count: form.module_count,
-          lessons_count: form.lessons_count,
-          hours: form.hours,
-          modules: form.modules,
           cover_image_url: form.cover_image_url,
         },
         isEdit,
@@ -115,11 +111,11 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
       footer={
         <>
           <Button tone="ghost" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" onClick={handleSubmit}>{isEdit ? "Save Changes" : "Create Course"}</Button>
+          <Button tone="primary" type="submit" form="course-editor-form">{isEdit ? "Save Changes" : "Create Course"}</Button>
         </>
       }
     >
-      <form onSubmit={handleSubmit}>
+      <form id="course-editor-form" onSubmit={handleSubmit}>
         <div className="form-section">
           <h3 className="form-section__title">1. Basic Information</h3>
           <div className="form-stack">
@@ -195,16 +191,16 @@ function CourseEditorModal({ open, item, onClose, onSubmit, onOpenBuilder }) {
             <div className="form-section">
               <h3 className="form-section__title">2. Course Statistics</h3>
               <div className="grid-4">
-                <div style={{ height: "80px" }}>
+                <div>
                   <StatCard label="Modules" value={item?.module_count || 0} />
                 </div>
-                <div style={{ height: "80px" }}>
+                <div>
                   <StatCard label="Lessons" value={item?.lessons_count || 0} />
                 </div>
-                <div style={{ height: "80px" }}>
+                <div>
                   <StatCard label="Blocks" value={item?.blocks_count || 0} />
                 </div>
-                <div style={{ height: "80px" }}>
+                <div>
                   <StatCard label="Enrollments" value={item?.enrolled_count || 0} />
                 </div>
               </div>
@@ -281,11 +277,11 @@ function LearnerEditorModal({ open, seed, courses, onClose, onSubmit }) {
       footer={
         <>
           <Button tone="ghost" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" onClick={handleSubmit}>Add Learner</Button>
+          <Button tone="primary" type="submit" form="learner-editor-form">Add Learner</Button>
         </>
       }
     >
-      <form className="form-stack" onSubmit={handleSubmit}>
+      <form id="learner-editor-form" className="form-stack" onSubmit={handleSubmit}>
         <label className="field">
           <span className="field__label">Full name</span>
           <input className={`field__input ${errors.full_name ? "is-invalid" : ""}`} value={form.full_name} onChange={(event) => updateField("full_name", event.target.value)} />
@@ -398,11 +394,11 @@ function TaskAssignModal({ open, item, learners, onClose, onSubmit, categorySlug
       footer={
         <>
           <Button tone="ghost" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" onClick={handleSubmit}>{isEdit ? "Save changes" : "Assign Task"}</Button>
+          <Button tone="primary" type="submit" form="task-editor-form">{isEdit ? "Save changes" : "Assign Task"}</Button>
         </>
       }
     >
-      <form className="form-stack" onSubmit={handleSubmit}>
+      <form id="task-editor-form" className="form-stack" onSubmit={handleSubmit}>
         <label className="field">
           <span className="field__label">Task title</span>
           <input className={`field__input ${errors.title ? "is-invalid" : ""}`} value={form.title} onChange={(event) => { setForm((current) => ({ ...current, title: event.target.value })); setErrors((current) => ({ ...current, title: "" })); }} />

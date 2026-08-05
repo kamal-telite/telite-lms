@@ -47,10 +47,10 @@ class CoursePayload(BaseModel):
     description: str
     tier: str
     status: str = "draft"
-    module_count: int = Field(default=4, ge=0)
+    module_count: int = Field(default=0, ge=0)
     modules: list[str] = Field(default_factory=list)
-    lessons_count: int = Field(default=8, ge=0)
-    hours: float = Field(default=12, ge=0)
+    lessons_count: int = Field(default=0, ge=0)
+    hours: float = Field(default=0, ge=0)
     prerequisite_course_id: str | None = None
     cover_image_url: str | None = None
 

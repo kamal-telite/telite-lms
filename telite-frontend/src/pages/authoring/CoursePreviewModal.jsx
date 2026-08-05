@@ -171,9 +171,9 @@ export function CoursePreviewModal({ open, onClose, courseId, courseName }) {
                   );
                 })}
                 {modules.length === 0 ? (
-                  <div style={{ padding: "16px", color: "var(--text-secondary)", fontSize: "13px", textAlign: "center" }}>
-                    No modules available to preview.
-                  </div>
+                    <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)", background: "var(--surface)", border: "1px dashed var(--border)", borderRadius: "8px" }}>
+                      Nothing to preview yet. Add a module to see the learner experience.
+                    </div>
                 ) : null}
               </div>
             </aside>

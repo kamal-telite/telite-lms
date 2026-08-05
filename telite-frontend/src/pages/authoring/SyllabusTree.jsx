@@ -494,9 +494,9 @@ export function SyllabusTree({
           })}
       </SortableContext>
       {sections.length === 0 && (
-        <div style={{ color: "var(--text-secondary)", fontSize: "14px", textAlign: "center", marginTop: "20px" }}>
-          No sections yet.
-        </div>
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)", background: "var(--surface)", border: "1px dashed var(--border)", borderRadius: "8px" }}>
+            Your course is empty. Create your first section to start building.
+          </div>
       )}
     </DndContext>
   );

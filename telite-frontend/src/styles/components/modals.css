@@ -43,7 +43,7 @@
 
 .modal-card__content {
   margin-top: 18px;
-  padding: 0 24px;
+  padding: 0 24px 24px 24px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -55,7 +55,8 @@
   gap: 10px;
   flex-shrink: 0;
   z-index: 10;
-  padding: 16px 24px 24px 24px;
+  padding: 16px 24px;
   background: var(--surface);
   border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
 }

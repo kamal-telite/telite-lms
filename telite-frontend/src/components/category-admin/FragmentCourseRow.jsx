@@ -32,15 +32,6 @@ export default function FragmentCourseRow({
             <IconButton label="Edit course metadata" icon="pencil" onClick={onEdit} />
             <IconButton label="Delete course" icon="trash" onClick={onDelete} />
           </div>
-          {deleteOpen ? (
-            <div className="inline-confirm">
-              <span>Archive this course?</span>
-              <div className="split-actions">
-                <Button tone="danger" onClick={onConfirmDelete}>Confirm delete</Button>
-                <Button tone="ghost" onClick={onCancelDelete}>Cancel</Button>
-              </div>
-            </div>
-          ) : null}
         </td>
       </tr>
       {expanded ? (

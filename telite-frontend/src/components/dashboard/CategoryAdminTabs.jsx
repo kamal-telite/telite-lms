@@ -403,7 +403,7 @@ export function PalTrackerTab({ dashboard, labels, palExpanded, setPalExpanded }
                   </div>
                   <div className="row-subtitle">Score: <span style={{ color: "var(--danger)", fontWeight: "bold" }}>{formatPercent(learner.pal_score)}</span> · Last active recently</div>
                 </div>
-                <Button tone="ghost" size="sm">Send reminder</Button>
+                <Button tone="ghost" size="sm" disabled title="Coming soon">Send reminder</Button>
               </div>
             )) : (
               <EmptyState title="No at-risk students" body="All students are currently maintaining a PAL score above 60%." />
@@ -871,26 +871,12 @@ export function ProfileSettingsTab({ session, activeTab, setActiveTab, slug, onC
           )}
 
           {selectedTab === "personalization" && (
-            <div className="profile-settings__form">
-              <div className="profile-settings__section">
-                <div className="profile-settings__section-title">Default Tab on Login</div>
-                <div className="profile-settings__option-group">
-                  <label className="chip"><input type="radio" name="default_tab" defaultChecked /> Overview</label>
-                  <label className="chip"><input type="radio" name="default_tab" /> Tasks</label>
-                  <label className="chip"><input type="radio" name="default_tab" /> Activity</label>
-                </div>
-              </div>
-
-              <div className="profile-settings__section">
-                <div className="profile-settings__section-title">Dashboard Density</div>
-                <div className="profile-settings__option-group">
-                  <label className="chip"><input type="radio" name="density" /> Compact</label>
-                  <label className="chip"><input type="radio" name="density" defaultChecked /> Comfortable</label>
-                </div>
-              </div>
-              <div className="profile-settings__actions">
-                <Button tone="primary" icon="save">Save Changes</Button>
-              </div>
+            <div className="profile-settings__form" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px" }}>
+              <EmptyState 
+                icon="dashboard" 
+                title="Personalization" 
+                body="Coming Soon - Personalization will be available in an upcoming release." 
+              />
             </div>
           )}
 

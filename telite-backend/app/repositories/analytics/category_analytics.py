@@ -200,7 +200,7 @@ def get_category_metrics(
             "price_paise": course.price_paise,
             "org_id": course.org_id,
             "created_at": iso_format(course.created_at),
-            "module_count": len(module_titles) or course.module_count,
+            "module_count": len(module_titles),
             "modules": module_titles,
             "enrolled_count": enrolled_count,
             "completion_count": completed_count,
