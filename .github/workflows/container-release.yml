@@ -59,7 +59,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: telite-local/${{ matrix.image }}:${{ github.sha }}
           format: table
@@ -68,7 +68,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Generate CycloneDX SBOM
-        uses: aquasecurity/trivy-action@0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: telite-local/${{ matrix.image }}:${{ github.sha }}
           format: cyclonedx
